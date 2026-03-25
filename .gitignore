@@ -35,6 +35,7 @@ client/*.apk
 backend/build/
 .gradle/
 .gradle-tmp/
+backend/
 
 # IDE
 .vscode/
