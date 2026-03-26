@@ -1,6 +1,7 @@
 # Dependencies
 node_modules/
 package-lock.json
+!client/package-lock.json
 npm-debug.log*
 
 # Environment variables - NEVER COMMIT SECRETS
