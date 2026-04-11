@@ -4,14 +4,18 @@
  */
 
 import { ZEEGOCLOUD_CONFIG, generateRoomId } from '../../config/zeegocloud';
+import { IStreamingService } from '../interfaces/IStreamingService';
 
-export class ZeegocloudStreamingService {
+export class ZeegocloudStreamingService implements IStreamingService {
   private static instance: ZeegocloudStreamingService;
   private roomId: string = '';
   private userId: string = '';
   private userName: string = '';
   private isHost: boolean = false;
   private eventHandlers: Map<string, Function[]> = new Map();
+  private initialized = false;
+  private audioMuted = false;
+  private videoEnabled = true;
 
   private constructor() {
     this.initializeEventHandlers();
@@ -54,21 +58,92 @@ export class ZeegocloudStreamingService {
     });
   }
 
-  public async initialize(userId: string, roomId?: string, userName?: string, isHost: boolean = false): Promise<boolean> {
+  public async initialize(userId?: string, roomId?: string, userName?: string, isHost: boolean = false): Promise<void> {
     try {
-      this.userId = userId;
-      this.roomId = roomId || generateRoomId(userId);
-      this.userName = userName || `User_${userId}`;
+      const resolvedUserId = userId || this.userId || 'system';
+      this.userId = resolvedUserId;
+      this.roomId = roomId || this.roomId || generateRoomId(resolvedUserId);
+      this.userName = userName || this.userName || `User_${resolvedUserId}`;
       this.isHost = isHost;
+      this.initialized = true;
 
       console.log('✅ ZeegoCloud initialized:', { roomId: this.roomId, userId: this.userId, appID: ZEEGOCLOUD_CONFIG.appID });
       setTimeout(() => this.emit('onConnected', { roomId: this.roomId }), 100);
-      return true;
     } catch (error) {
       console.error('❌ Initialization error:', error);
       this.emit('onError', { code: 'INIT_ERROR', message: String(error) });
-      return false;
+      throw error;
     }
+  }
+
+  public async createChannel(userId: string): Promise<string> {
+    this.userId = userId;
+    this.roomId = generateRoomId(userId);
+    this.initialized = true;
+    return this.roomId;
+  }
+
+  public async joinChannel(channelName: string, userId: string, isHost: boolean): Promise<void> {
+    await this.initialize(userId, channelName, undefined, isHost);
+  }
+
+  public async leaveChannel(): Promise<void> {
+    await this.leaveStream();
+  }
+
+  public async getToken(_channelName: string, _userId: string, _isHost?: boolean): Promise<string> {
+    return '';
+  }
+
+  public async muteAudio(): Promise<void> {
+    this.audioMuted = true;
+  }
+
+  public async unmuteAudio(): Promise<void> {
+    this.audioMuted = false;
+  }
+
+  public isAudioMuted(): boolean {
+    return this.audioMuted;
+  }
+
+  public async enableVideo(): Promise<void> {
+    this.videoEnabled = true;
+  }
+
+  public async disableVideo(): Promise<void> {
+    this.videoEnabled = false;
+  }
+
+  public async switchCamera(): Promise<void> {}
+
+  public isVideoEnabled(): boolean {
+    return this.videoEnabled;
+  }
+
+  public async setVideoQuality(_quality: 'low' | 'medium' | 'high'): Promise<void> {}
+
+  public async setVideoConfig(_config: { width: number; height: number; frameRate: number; bitrate: number }): Promise<void> {}
+
+  public onUserJoined(callback: (userId: string) => void): void {
+    this.on('onUserJoined', (payload: any) => callback(String(payload?.userId || '')));
+  }
+
+  public onUserLeft(callback: (userId: string) => void): void {
+    this.on('onUserLeft', (payload: any) => callback(String(payload?.userId || '')));
+  }
+
+  public onConnectionStateChanged(callback: (state: string) => void): void {
+    this.on('onConnected', () => callback('connected'));
+    this.on('onDisconnected', () => callback('disconnected'));
+  }
+
+  public onError(callback: (error: Error) => void): void {
+    this.on('onError', (payload: any) => callback(new Error(payload?.message || 'Streaming error')));
+  }
+
+  public getAppId(): string {
+    return String(ZEEGOCLOUD_CONFIG.appID || '');
   }
 
   public async startBroadcast(): Promise<boolean> {
@@ -105,6 +180,9 @@ export class ZeegocloudStreamingService {
     try {
       this.emit('onUserLeft', { userId: this.userId });
       this.emit('onDisconnected', {});
+      this.initialized = false;
+      this.roomId = '';
+      this.userId = '';
     } catch (error) {
       console.error('❌ Leave error:', error);
     }
@@ -133,14 +211,20 @@ export class ZeegocloudStreamingService {
     return this.roomId !== '';
   }
 
-  public getProvider(): string {
-    return 'zeegocloud';
+  public getProvider(): 'custom' {
+    return 'custom';
+  }
+
+  public isInitialized(): boolean {
+    return this.initialized;
   }
 
   public async disconnect(): Promise<void> {
     await this.leaveStream();
-    this.roomId = '';
-    this.userId = '';
+  }
+
+  public async destroy(): Promise<void> {
+    await this.leaveStream();
   }
 }
 

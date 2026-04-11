@@ -9,6 +9,7 @@ import { Image as ExpoImage } from 'expo-image';
 import React, { useEffect, useState } from 'react';
 import {
     ActivityIndicator,
+    Alert,
     Modal,
     ScrollView,
     StyleSheet,
@@ -18,7 +19,6 @@ import {
     View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { auth } from '../../config/firebase';
 import { apiService } from '../_services/apiService';
 
 interface Collection {
@@ -33,13 +33,14 @@ interface Props {
     onClose: () => void;
     collection: Collection | null;
     allCollections: Collection[];
+    currentUserId?: string;
     onDeleted: (deletedId: string) => void;
 }
 
 type Step = 'confirm' | 'migrate-pick';
 
 export default function CollectionDeleteModal({
-    visible, onClose, collection, allCollections, onDeleted,
+    visible, onClose, collection, allCollections, currentUserId, onDeleted,
 }: Props) {
     const insets = useSafeAreaInsets();
     const [step, setStep] = useState<Step>('confirm');
@@ -59,20 +60,29 @@ export default function CollectionDeleteModal({
     const hasContent = collection.postIds?.length > 0;
 
     const doDelete = async (targetId?: string) => {
-        const uid = auth.currentUser?.uid;
+        const uid = currentUserId;
         if (!uid) return;
         setLoading(true);
         try {
-            await apiService.delete(`/users/${uid}/sections/${collection._id}`, {
-                data: targetId ? { migrateToSectionId: targetId } : {},
+            const res = await apiService.delete(`/users/${uid}/sections/${collection._id}`, {
+                ...(targetId ? { migrateToSectionId: targetId } : {}),
+                requesterId: uid,
+                requesterUserId: uid,
+                viewerId: uid,
             });
-            onDeleted(collection._id);
+
+            if (res?.success) {
+                onDeleted(collection._id);
+                onClose();
+            } else {
+                Alert.alert('Error', res?.error || 'Failed to delete collection');
+            }
         } catch (e) {
             console.error('delete collection error', e);
+            Alert.alert('Error', 'Failed to delete collection');
         } finally {
             setLoading(false);
         }
-        onClose();
     };
 
     // ── Step: confirm ────────────────────────────────────────────────────────
@@ -265,6 +275,15 @@ const styles = StyleSheet.create({
     collThumbImg: { width: '100%', height: '100%' },
     collThumbPlaceholder: { backgroundColor: '#f0f0f0', justifyContent: 'center', alignItems: 'center' },
     collName: { flex: 1, fontSize: 14, fontWeight: '600', color: '#111' },
+    deleteBtn: {
+        height: 48,
+        borderRadius: 12,
+        backgroundColor: '#E74C3C',
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginBottom: 8,
+    },
+    deleteBtnText: { color: '#fff', fontSize: 15, fontWeight: '700' },
     radio: {
         width: 20, height: 20,
         borderRadius: 10,

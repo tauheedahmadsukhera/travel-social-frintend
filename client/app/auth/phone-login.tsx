@@ -142,6 +142,10 @@ export default function PhoneLoginScreen() {
       console.log('ðŸ“§ Sending password reset email to:', email);
 
       // Send password reset email
+      if (!auth) {
+        throw new Error('Authentication service is not available right now');
+      }
+
       await sendPasswordResetEmail(auth, email);
 
       Alert.alert(

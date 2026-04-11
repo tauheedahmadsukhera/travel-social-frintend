@@ -93,7 +93,7 @@ export default function EmailOTPScreen() {
           // Store phone number in user profile
           const { updateUserProfile } = await import('../../lib/firebaseHelpers');
           const { auth } = await import('../../config/firebase');
-          const user = auth.currentUser;
+          const user = auth?.currentUser;
 
           if (user) {
             await updateUserProfile(user.uid, { phoneNumber: phone });
@@ -122,7 +122,7 @@ export default function EmailOTPScreen() {
           [
             {
               text: 'Continue',
-              onPress: () => router.replace('/(tabs)')
+              onPress: () => router.replace('/(tabs)/home')
             }
           ]
         );

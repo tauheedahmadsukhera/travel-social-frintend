@@ -53,13 +53,13 @@ export default function ZeegocloudLiveHost({
         try {
           // Check for ZegoExpressEngine first as it often causes the 'prefix' error
           try {
-            const engineModule = await import('zego-express-engine-reactnative');
+            const engineModule: any = await import('zego-express-engine-reactnative');
             ZegoExpressEngine = engineModule.ZegoExpressEngine;
           } catch (e) {
             console.warn('ZegoExpressEngine not available');
           }
 
-          const zegoModule = await import('@zegocloud/zego-uikit-prebuilt-live-streaming-rn');
+          const zegoModule: any = await import('@zegocloud/zego-uikit-prebuilt-live-streaming-rn');
           ZegoUIKitPrebuiltLiveStreaming = zegoModule.ZegoUIKitPrebuiltLiveStreaming;
           HOST_DEFAULT_CONFIG = zegoModule.HOST_DEFAULT_CONFIG;
         } catch (zegoErr: any) {

@@ -29,6 +29,13 @@ import { auth } from '../config/firebase';
 const db = getFirestore();
 const storage = getStorage();
 
+function requireAuth() {
+  if (!auth) {
+    throw new Error('Authentication service is not available');
+  }
+  return auth;
+}
+
 // Types
 export interface UserProfile {
   uid: string;
@@ -47,7 +54,7 @@ export interface UserProfile {
  */
 export async function signUpWithEmail(email: string, password: string) {
   try {
-    const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+    const userCredential = await createUserWithEmailAndPassword(requireAuth(), email, password);
     return { success: true, user: userCredential.user };
   } catch (error: any) {
     return { success: false, error: error.message };
@@ -59,7 +66,7 @@ export async function signUpWithEmail(email: string, password: string) {
  */
 export async function signInWithEmail(email: string, password: string) {
   try {
-    const userCredential = await signInWithEmailAndPassword(auth, email, password);
+    const userCredential = await signInWithEmailAndPassword(requireAuth(), email, password);
     return { success: true, user: userCredential.user };
   } catch (error: any) {
     return { success: false, error: error.message };
@@ -71,7 +78,7 @@ export async function signInWithEmail(email: string, password: string) {
  */
 export async function resetPassword(email: string) {
   try {
-    await sendPasswordResetEmail(auth, email);
+    await sendPasswordResetEmail(requireAuth(), email);
     return { success: true };
   } catch (error: any) {
     return { success: false, error: error.message };
@@ -94,7 +101,7 @@ export async function sendPhoneOTP(phoneNumber: string, recaptchaVerifier?: Reca
       throw new Error('RecaptchaVerifier required for web');
     }
     
-    const result = await signInWithPhoneNumber(auth, phoneNumber, recaptchaVerifier);
+    const result = await signInWithPhoneNumber(requireAuth(), phoneNumber, recaptchaVerifier);
     confirmationResult = result;
     return { success: true, confirmationResult: result };
   } catch (error: any) {
@@ -126,7 +133,7 @@ export async function verifyPhoneOTP(code: string) {
 export async function signInWithGoogle() {
   try {
     const provider = new GoogleAuthProvider();
-    const result = await signInWithPopup(auth, provider);
+    const result = await signInWithPopup(requireAuth(), provider);
     return { success: true, user: result.user };
   } catch (error: any) {
     return { success: false, error: error.message };
@@ -139,7 +146,7 @@ export async function signInWithGoogle() {
 export async function signInWithApple() {
   try {
     const provider = new OAuthProvider('apple.com');
-    const result = await signInWithPopup(auth, provider);
+    const result = await signInWithPopup(requireAuth(), provider);
     return { success: true, user: result.user };
   } catch (error: any) {
     return { success: false, error: error.message };
@@ -229,7 +236,7 @@ export async function uploadProfileImage(uid: string, imageUri: string) {
  */
 export async function signOutUser() {
   try {
-    await signOut(auth);
+    await signOut(requireAuth());
     return { success: true };
   } catch (error: any) {
     return { success: false, error: error.message };
@@ -240,7 +247,7 @@ export async function signOutUser() {
  * Get current user
  */
 export function getCurrentUser(): User | null {
-  return auth.currentUser;
+  return auth?.currentUser ?? null;
 }
 
 // ==================== PHONE OTP FOR PASSWORD RESET ====================

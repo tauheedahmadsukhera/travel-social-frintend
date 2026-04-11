@@ -10,7 +10,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 let socket: Socket | null = null;
 let currentUserId: string | null = null;
 let reconnectAttempts = 0;
-const MAX_RECONNECT_ATTEMPTS = 5;
+const MAX_RECONNECT_ATTEMPTS = 20;
 
 /**
  * Initialize socket connection
@@ -19,6 +19,13 @@ export function initializeSocket(userId: string): Socket {
   if (socket && socket.connected && currentUserId === userId) {
     console.log('[Socket] Already connected for user:', userId);
     return socket;
+  }
+
+  if (socket && currentUserId === userId && !socket.connected) {
+    console.log('[Socket] Recreating disconnected socket for user:', userId);
+    socket.disconnect();
+    socket = null;
+    currentUserId = null;
   }
 
   // Disconnect existing socket if different user
@@ -33,12 +40,16 @@ export function initializeSocket(userId: string): Socket {
   console.log('[Socket] Connecting to:', SOCKET_URL, 'for user:', userId);
 
   socket = io(SOCKET_URL, {
-    transports: ['websocket', 'polling'],
+    transports: ['polling', 'websocket'],
     reconnection: true,
-    reconnectionAttempts: MAX_RECONNECT_ATTEMPTS,
+    reconnectionAttempts: 20,
     reconnectionDelay: 1000,
-    reconnectionDelayMax: 5000,
-    timeout: 20000,
+    reconnectionDelayMax: 10000,
+    timeout: 30000,
+    autoConnect: true,
+    forceNew: true,
+    rememberUpgrade: false,
+    withCredentials: false,
   });
 
   currentUserId = userId;
@@ -63,6 +74,15 @@ export function initializeSocket(userId: string): Socket {
   socket.on('connect_error', (error) => {
     console.error('[Socket] Connection error:', error.message);
     reconnectAttempts++;
+
+    // Force websocket retry after a few polling failures.
+    if (socket && reconnectAttempts === 3) {
+      try {
+        socket.io.opts.transports = ['websocket', 'polling'];
+      } catch {
+        // best effort
+      }
+    }
 
     if (reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
       console.error('[Socket] Max reconnection attempts reached');
@@ -294,11 +314,15 @@ export function subscribeToTyping(
 }
 
 export function subscribeToLiveStream(streamId: string, onUserJoined: (data: any) => void, onUserLeft: (data: any) => void, onLiveComment: (comment: any) => void) {
+  if (!socket) {
+    return () => {};
+  }
   socket.emit('joinLiveStream', streamId);
   socket.on('userJoined', onUserJoined);
   socket.on('userLeft', onUserLeft);
   socket.on('newLiveComment', onLiveComment);
   return () => {
+    if (!socket) return;
     socket.emit('leaveLiveStream', streamId);
     socket.off('userJoined', onUserJoined);
     socket.off('userLeft', onUserLeft);
@@ -307,6 +331,7 @@ export function subscribeToLiveStream(streamId: string, onUserJoined: (data: any
 }
 
 export function sendLiveComment(streamId: string, comment: any) {
+  if (!socket) return;
   socket.emit('sendLiveComment', { streamId, comment });
 }
 

@@ -1,5 +1,8 @@
-import { Feather } from '@expo/vector-icons';
+import { DEFAULT_AVATAR_URL } from '../lib/api';
+import { Feather, Ionicons } from '@expo/vector-icons';
 import { ResizeMode, Video } from 'expo-av';
+import { compressVideoSafe, compressImageSafe } from '../lib/mediaUtils';
+
 import * as Location from 'expo-location';
 import * as MediaLibrary from 'expo-media-library';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
@@ -34,7 +37,7 @@ const GRID_SIZE = width / 3;
 const MIN_MEDIA_RATIO = 4 / 5;
 const MAX_MEDIA_RATIO = 1.91;
 
-const DEFAULT_AVATAR_URL = 'https://via.placeholder.com/200x200.png?text=Profile';
+
 
 type LocationType = {
   name: string;
@@ -50,6 +53,18 @@ type UserType = {
   displayName?: string;
   userName?: string;
   photoURL?: string | null;
+};
+
+type GalleryAsset = {
+  id: string;
+  uri: string;
+  mediaType: 'photo' | 'video';
+  duration?: number;
+};
+
+const isVideoUri = (uri: string) => {
+  const lower = String(uri || '').toLowerCase();
+  return lower.endsWith('.mp4') || lower.endsWith('.mov') || lower.includes('video');
 };
 
 export default function CreatePostScreen() {
@@ -82,7 +97,7 @@ export default function CreatePostScreen() {
   const activePreviewUriRef = useRef<string | null>(null);
   const previewReqIdRef = useRef(0);
   const [networkError, setNetworkError] = useState<boolean>(false);
-  const [postType, setPostType] = useState<'POST' | 'STORY' | 'REEL'>('POST');
+  const [postType, setPostType] = useState<'POST' | 'STORY'>('POST');
   const { selectedImages: paramImages, postType: paramPostType, step: paramStep } = useLocalSearchParams();
 
   useEffect(() => {
@@ -98,7 +113,6 @@ export default function CreatePostScreen() {
     if (paramPostType) setPostType(paramPostType as any);
     if (paramStep) setStep(paramStep as any);
   }, [paramImages, paramPostType, paramStep]);
-
 
   const clampMediaRatio = (ratio: number) => {
     if (!Number.isFinite(ratio) || ratio <= 0) return 1;
@@ -173,9 +187,11 @@ export default function CreatePostScreen() {
   const [showVisibilityModal, setShowVisibilityModal] = useState<boolean>(false);
 
   // Gallery
-  const [galleryImages, setGalleryImages] = useState<string[]>([]);
-  const [galleryVideos, setGalleryVideos] = useState<string[]>([]);
+  const [galleryAssets, setGalleryAssets] = useState<GalleryAsset[]>([]);
+  const [galleryEndCursor, setGalleryEndCursor] = useState<string | undefined>(undefined);
+  const [hasMoreGallery, setHasMoreGallery] = useState(true);
   const [loadingGallery, setLoadingGallery] = useState<boolean>(false);
+  const [loadingMoreGallery, setLoadingMoreGallery] = useState<boolean>(false);
 
   // Category
   // Map DEFAULT_CATEGORIES to objects for UI
@@ -194,9 +210,6 @@ export default function CreatePostScreen() {
   const [categories, setCategories] = useState<{ name: string; image: string }[]>(defaultCategoryObjects);
   const [selectedCategories, setSelectedCategories] = useState<{ name: string; image: string }[]>([]);
   const [categorySearch, setCategorySearch] = useState<string>('');
-
-  // Gallery tab state for switching between images/videos
-  const [galleryTab, setGalleryTab] = useState<'images' | 'videos'>('images');
 
   // Reset form when screen loses focus or on mount
   useFocusEffect(
@@ -247,15 +260,6 @@ export default function CreatePostScreen() {
     }
     loadGroups();
   }, []);
-
-  // Sync gallery tab with post type
-  useEffect(() => {
-    if (postType === 'REEL') {
-      setGalleryTab('videos');
-    } else if (postType === 'POST' || postType === 'STORY') {
-      setGalleryTab('images');
-    }
-  }, [postType]);
 
   const renderCategoryItem = useCallback(({ item }: { item: { name: string; image: string } }) => {
     const isSelected = selectedCategories.some(c => c.name === item.name);
@@ -322,7 +326,10 @@ export default function CreatePostScreen() {
           return;
         }
 
-        const loc = await Location.getCurrentPositionAsync({});
+        let loc = await Location.getLastKnownPositionAsync();
+        if (!loc) {
+          loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+        }
         if (cancelled) return;
         setVerifiedCenter({ lat: loc.coords.latitude, lon: loc.coords.longitude });
       } catch {
@@ -363,8 +370,14 @@ export default function CreatePostScreen() {
 
     verifiedSearchTimerRef.current = setTimeout(async () => {
       try {
-        const places = await mapService.getNearbyPlaces(verifiedCenter.lat, verifiedCenter.lon, 100, verifiedSearch.trim() || undefined);
+        const rawPlaces = await mapService.getNearbyPlaces(verifiedCenter.lat, verifiedCenter.lon, 100, verifiedSearch.trim() || undefined);
         if (verifiedReqIdRef.current !== reqId) return;
+
+        const places = [];
+        for (const p of rawPlaces || []) {
+          const dist = await mapService.calculateDistance({ latitude: verifiedCenter.lat, longitude: verifiedCenter.lon } as any, p);
+          if (dist <= 0.15) places.push(p);
+        }
 
         const mapped: LocationType[] = Array.isArray(places)
           ? places
@@ -418,7 +431,10 @@ export default function CreatePostScreen() {
       try {
         const { status } = await Location.requestForegroundPermissionsAsync();
         if (status === 'granted') {
-          const loc = await Location.getCurrentPositionAsync({});
+          let loc = await Location.getLastKnownPositionAsync();
+          if (!loc) {
+            loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+          }
 
           // Reverse geocode to get actual location name
           let locationName = 'Current Location';
@@ -512,38 +528,103 @@ export default function CreatePostScreen() {
   }, []);
 
   useEffect(() => {
-    loadGalleryImages();
-    loadGalleryVideos();
+    loadGalleryAssets();
   }, []);
 
-  const loadGalleryImages = async (): Promise<void> => {
-    setLoadingGallery(true);
+  const loadGalleryAssets = async (after?: string): Promise<void> => {
+    if (!after) setLoadingGallery(true);
+    if (after) setLoadingMoreGallery(true);
     try {
       const { status } = await MediaLibrary.requestPermissionsAsync();
-      if (status === 'granted') {
-        const assets = await MediaLibrary.getAssetsAsync({ mediaType: ['photo'], first: 60 });
-        setGalleryImages(assets.assets.map((asset: { uri: string }) => asset.uri));
-      } else {
-        Alert.alert('Permission required', 'Please allow access to your photos to create a post.');
+      if (status !== 'granted') {
+        Alert.alert('Permission required', 'Please allow full gallery access to create posts and stories.');
+        setGalleryAssets([]);
+        return;
       }
+
+      const page = await MediaLibrary.getAssetsAsync({
+        mediaType: [MediaLibrary.MediaType.photo, MediaLibrary.MediaType.video],
+        sortBy: [[MediaLibrary.SortBy.creationTime, false]],
+        first: 30,
+        after,
+      });
+
+      const mapped: GalleryAsset[] = page.assets.map((a: any) => ({
+        id: String(a.id),
+        uri: String(a.uri),
+        mediaType: a.mediaType === MediaLibrary.MediaType.video ? 'video' : 'photo',
+        duration: typeof a.duration === 'number' ? a.duration : undefined,
+      }));
+
+      if (after) {
+        setGalleryAssets((prev) => {
+          const seen = new Set(prev.map((p) => p.id));
+          const merged = [...prev];
+          mapped.forEach((m) => {
+            if (!seen.has(m.id)) merged.push(m);
+          });
+          return merged;
+        });
+      } else {
+        setGalleryAssets(mapped);
+      }
+
+      setGalleryEndCursor(page.endCursor);
+      setHasMoreGallery(!!page.hasNextPage);
     } catch (err) {
-      console.warn('Gallery permission error', err);
-      setGalleryImages([]);
+      console.warn('Gallery load error', err);
+      if (!after) setGalleryAssets([]);
+    } finally {
+      setLoadingGallery(false);
+      setLoadingMoreGallery(false);
     }
-    setLoadingGallery(false);
   };
 
-  const loadGalleryVideos = async (): Promise<void> => {
+  const loadMoreGallery = async (): Promise<void> => {
+    if (!hasMoreGallery || loadingMoreGallery) return;
+    await loadGalleryAssets(galleryEndCursor);
+  };
+
+  const openCamera = async () => {
     try {
-      const { status } = await MediaLibrary.requestPermissionsAsync();
-      if (status === 'granted') {
-        const assets = await MediaLibrary.getAssetsAsync({ mediaType: ['video'], first: 30 });
-        setGalleryVideos(assets.assets.map((asset: { uri: string }) => asset.uri));
-      } else {
-        setGalleryVideos([]);
+      if (!ImagePicker) {
+        Alert.alert('Error', 'Camera not available');
+        return;
       }
-    } catch (err) {
-      setGalleryVideos([]);
+      const perm = await ImagePicker.requestCameraPermissionsAsync();
+      if (!perm.granted) {
+        Alert.alert('Permission denied', 'Camera permission is required to take photos or videos.');
+        return;
+      }
+      const result = await ImagePicker.launchCameraAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.All,
+        allowsEditing: false,
+        quality: 0.9,
+        videoMaxDuration: 60,
+      });
+      if (!result.canceled && result.assets?.[0]) {
+        const asset = result.assets[0];
+        const mediaType = asset.type === 'video' ? 'video' : 'photo';
+        
+        if (postType === 'STORY') {
+          // For STORY, navigate directly to story-upload
+          router.push({
+            pathname: '/story-upload',
+            params: {
+              storyMediaUri: asset.uri,
+              storyMediaType: mediaType,
+              storyTextOverlays: '',
+            },
+          });
+        } else {
+          // For POST, add to selection
+          setSelectedImages([asset.uri]);
+          setPreviewIndex(0);
+        }
+      }
+    } catch (e) {
+      console.error('[CreatePost] Camera error:', e);
+      Alert.alert('Error', 'Failed to open camera');
     }
   };
 
@@ -554,7 +635,7 @@ export default function CreatePostScreen() {
     }
     setLoading(true);
     try {
-      const mediaType = selectedImages.length > 0 && (selectedImages[0].toLowerCase().endsWith('.mp4') || selectedImages[0].toLowerCase().endsWith('.mov') || selectedImages[0].toLowerCase().includes('video')) ? 'video' : 'image';
+      const mediaType = selectedImages.length > 0 && isVideoUri(selectedImages[0]) ? 'video' : 'image';
       let locationData: LocationType | null = null;
 
       // Priority 1: If verifiedLocation exists (GPS or Passport), use it
@@ -650,17 +731,33 @@ export default function CreatePostScreen() {
         const compressedImages: string[] = [];
         for (const imgUri of selectedImages) {
           try {
-            // Use optimized compression with 80% quality & 2048px max width
-            const compressed = await compressImage(imgUri, 0.8, 2048);
+            // Use optimized compression with 75% quality & 1080px max width
+            const compressed = await compressImage(imgUri, 0.75, 1080);
             compressedImages.push(compressed.uri);
-            console.log(`âœ… Image compressed: ${(compressed.size / 1024).toFixed(0)}KB`);
+            console.log(`✅ Image compressed: ${(compressed.size / 1024).toFixed(0)}KB`);
           } catch (error) {
             console.warn(`âš ï¸ Compression failed, using original: ${error}`);
             compressedImages.push(imgUri);
           }
         }
         uploadImages = compressedImages;
+      } else if (mediaType === 'video') {
+        const compressedVideos: string[] = [];
+        for (const vidUri of selectedImages) {
+          try {
+            console.log('[CreatePost] Compressing video...');
+            // Use safe utility that won't crash if native module is missing
+            const compressed = await compressVideoSafe(vidUri);
+            compressedVideos.push(compressed);
+            console.log('✅ Video compressed or using original!');
+          } catch (error) {
+            console.warn('[CreatePost] Video compression failed, using original:', error);
+            compressedVideos.push(vidUri);
+          }
+        }
+        uploadImages = compressedVideos;
       }
+
 
       // Get userId from user context or AsyncStorage
       let userId = user?.uid;
@@ -695,14 +792,19 @@ export default function CreatePostScreen() {
         console.log('[createPost] Creating story...');
         result = await createStory(
           typeof userId === 'string' ? userId : '',
-          uploadImages[0], // Story currently supports single media
-          mediaType,
+          uploadImages[0], 
+          mediaType as any,
+          undefined, // userNameRaw
           locationData ? {
             name: locationData.name,
-            address: locationData.address,
+            address: locationData.address || '',
             placeId: locationData.placeId,
-          } : undefined
+          } : undefined,
+          undefined, // thumbnailUrlRaw
+          visibility,
+          allowedFollowers
         ) as any;
+
       } else {
         result = await createPost(
           typeof userId === 'string' ? userId : '',
@@ -807,24 +909,20 @@ export default function CreatePostScreen() {
   // --- END OF COMPONENT ---
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: '#fff' }} edges={["top"]}>
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={getKeyboardOffset()}
-        style={{ flex: 1 }}
-      >
         {step === 'picker' ? (
           <View style={{ flex: 1, backgroundColor: '#fff' }}>
             {/* Header */}
             <View style={{ flexDirection: 'row', alignItems: 'center', height: 50, paddingHorizontal: 16 }}>
               <TouchableOpacity
                 onPress={() => router.back()}
-                style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: '#f5f5f5', alignItems: 'center', justifyContent: 'center' }}
+                style={{ width: 40, height: 40, borderRadius: 20, borderWidth: 1, borderColor: '#ddd', alignItems: 'center', justifyContent: 'center', marginTop: -4 }}
               >
-                <Feather name="x" size={24} color="#000" />
+                <Ionicons name="close" size={20} color="#333" />
               </TouchableOpacity>
-              <View style={{ flex: 1, alignItems: 'center', marginRight: 36 }}>
-                <Text style={{ fontWeight: '700', fontSize: 18, color: '#000' }}>New post</Text>
+              <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', marginTop: -4 }}>
+                <Text style={{ fontWeight: '500', fontSize: 18, color: '#000' }}>New {postType === 'STORY' ? 'Story' : 'Post'}</Text>
               </View>
+              <View style={{ width: 40 }} />
             </View>
 
             <View style={{ flex: 1 }}>
@@ -841,35 +939,73 @@ export default function CreatePostScreen() {
 
                 {/* Gallery Grid */}
                 <FlatList
-                  data={galleryTab === 'images' ? galleryImages : galleryVideos}
-                  keyExtractor={(item) => item}
+                  data={galleryAssets}
+                  keyExtractor={(item) => item.id}
                   numColumns={3}
+                  onEndReached={loadMoreGallery}
+                  onEndReachedThreshold={0.5}
+                  ListHeaderComponent={() => (
+                    <TouchableOpacity
+                      onPress={openCamera}
+                      style={{
+                        width: GRID_ITEM_SIZE,
+                        height: GRID_ITEM_SIZE,
+                        padding: 1,
+                        backgroundColor: '#f5f5f5',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                      }}
+                    >
+                      <Feather name="camera" size={32} color="#000" />
+                      <Text style={{ fontSize: 12, fontWeight: '600', color: '#000', marginTop: 4 }}>
+                        Camera
+                      </Text>
+                    </TouchableOpacity>
+                  )}
                   renderItem={({ item }) => {
-                    const isSelected = selectedImages.includes(item);
+                    const isSelected = selectedImages.includes(item.uri);
                     return (
                       <TouchableOpacity
                         onPress={() => {
                           if (isSelected) {
-                            setSelectedImages(selectedImages.filter((img) => img !== item));
+                            setSelectedImages(selectedImages.filter((img) => img !== item.uri));
                           } else {
-                            if (postType === 'POST' && galleryTab === 'images') {
-                              setSelectedImages([...selectedImages, item]);
+                            if (postType === 'STORY') {
+                              setSelectedImages([item.uri]);
+                            } else if (item.mediaType === 'video') {
+                              setSelectedImages([item.uri]);
                             } else {
-                              setSelectedImages([item]);
+                              const hasVideoAlready = selectedImages.some((u) => isVideoUri(u));
+                              if (hasVideoAlready) {
+                                setSelectedImages([item.uri]);
+                              } else {
+                                setSelectedImages([...selectedImages, item.uri]);
+                              }
                             }
                           }
                         }}
                         style={{ width: GRID_ITEM_SIZE, height: GRID_ITEM_SIZE, padding: 1 }}
                       >
-                        <Image source={{ uri: item }} style={{ flex: 1 }} />
+                        <Image source={{ uri: item.uri }} style={{ flex: 1 }} />
+                        {item.mediaType === 'video' && (
+                          <View style={{ position: 'absolute', bottom: 6, right: 6, backgroundColor: 'rgba(0,0,0,0.6)', borderRadius: 6, paddingHorizontal: 4, paddingVertical: 2, flexDirection: 'row', alignItems: 'center' }}>
+                            <Feather name="video" size={10} color="#fff" />
+                            {typeof item.duration === 'number' && (
+                              <Text style={{ color: '#fff', fontSize: 10, fontWeight: '600', marginLeft: 3 }}>
+                                {Math.floor(item.duration / 60)}:{String(Math.floor(item.duration % 60)).padStart(2, '0')}
+                              </Text>
+                            )}
+                          </View>
+                        )}
                         {isSelected && (
                           <View style={{ position: 'absolute', top: 5, right: 5, width: 22, height: 22, borderRadius: 11, backgroundColor: '#0095f6', borderWidth: 2, borderColor: '#fff', alignItems: 'center', justifyContent: 'center' }}>
-                            <Text style={{ color: '#fff', fontSize: 10, fontWeight: 'bold' }}>{selectedImages.indexOf(item) + 1}</Text>
+                            <Text style={{ color: '#fff', fontSize: 10, fontWeight: 'bold' }}>{selectedImages.indexOf(item.uri) + 1}</Text>
                           </View>
                         )}
                       </TouchableOpacity>
                     );
                   }}
+                  ListFooterComponent={loadingMoreGallery ? <ActivityIndicator size="small" color="#999" style={{ marginVertical: 12 }} /> : null}
                   contentContainerStyle={{ paddingBottom: 120 }}
                 />
 
@@ -891,7 +1027,7 @@ export default function CreatePostScreen() {
                     shadowRadius: 10,
                     elevation: 10
                   }}>
-                    {['POST', 'STORY', 'REEL'].map((type) => (
+                    {['POST', 'STORY'].map((type) => (
                       <TouchableOpacity
                         key={type}
                         onPress={() => {
@@ -931,13 +1067,28 @@ export default function CreatePostScreen() {
               paddingBottom: Platform.OS === 'ios' ? insets.bottom : 16
             }}>
               <TouchableOpacity onPress={() => setSelectedImages([])}>
-                <Text style={{ color: '#000', fontWeight: '700', fontSize: 18 }}>Clear all</Text>
+                <Text style={{ color: '#000', fontWeight: '500', fontSize: 18 }}>Clear all</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                onPress={() => setStep('details')}
+                onPress={() => {
+                  if (postType === 'STORY' && selectedImages.length > 0) {
+                    // Navigate directly to story-upload for STORY
+                    router.push({
+                      pathname: '/story-upload',
+                      params: {
+                        storyMediaUri: selectedImages[0],
+                        storyMediaType: isVideoUri(selectedImages[0]) ? 'video' : 'photo',
+                        storyTextOverlays: '',
+                      },
+                    });
+                  } else {
+                    // Go to details form for POST
+                    setStep('details');
+                  }
+                }}
                 disabled={selectedImages.length === 0}
                 style={{
-                  backgroundColor: selectedImages.length > 0 ? '#A1B1C5' : '#eee',
+                  backgroundColor: selectedImages.length > 0 ? '#0A3D62' : '#eee',
                   paddingHorizontal: 40,
                   paddingVertical: 8,
                   borderRadius: 12,
@@ -950,21 +1101,27 @@ export default function CreatePostScreen() {
           </View>
         ) : (
           <View style={{ flex: 1, backgroundColor: '#fff' }}>
-            {/* Details Header */}
+            {/* Details Header - Outside KeyboardAvoidingView to stay fixed */}
             <View style={{ flexDirection: 'row', alignItems: 'center', height: 56, paddingHorizontal: 16 }}>
               <TouchableOpacity
                 onPress={() => paramPostType ? router.back() : setStep('picker')}
-                style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: '#f5f5f5', alignItems: 'center', justifyContent: 'center' }}
+                style={{ width: 40, height: 40, borderRadius: 20, borderWidth: 1, borderColor: '#ddd', alignItems: 'center', justifyContent: 'center' }}
               >
-                <Feather name="x" size={24} color="#000" />
+                <Ionicons name="close" size={20} color="#333" />
               </TouchableOpacity>
-              <View style={{ flex: 1, alignItems: 'center' }}>
-                <Text style={{ fontWeight: '700', fontSize: 18, color: '#000' }}>New {postType === 'STORY' ? 'Story' : postType === 'REEL' ? 'Reel' : 'Post'}</Text>
+              <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+                <Text style={{ fontWeight: '500', fontSize: 18, color: '#000' }}>New {postType === 'STORY' ? 'Story' : 'Post'}</Text>
               </View>
-              <TouchableOpacity onPress={handleShare}>
-                <Text style={{ color: '#0095f6', fontWeight: '700', fontSize: 16 }}>Share</Text>
+              <TouchableOpacity onPress={handleShare} style={{ paddingHorizontal: 12, alignItems: 'flex-end', justifyContent: 'center' }}>
+                <Text style={{ color: '#0095f6', fontWeight: '500', fontSize: 16 }}>Share</Text>
               </TouchableOpacity>
             </View>
+
+            <KeyboardAvoidingView
+              behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+              keyboardVerticalOffset={getKeyboardOffset()}
+              style={{ flex: 1 }}
+            >
             <ScrollView style={{ flex: 1 }} keyboardShouldPersistTaps="handled">
               {/* Media Preview Area (top) */}
               <View style={{ width: windowWidth, height: DETAILS_IMAGE_HEIGHT, backgroundColor: '#f0f0f0', marginBottom: 10 }}>
@@ -988,7 +1145,7 @@ export default function CreatePostScreen() {
                 <View style={{ paddingBottom: 4 }}>
                   <TouchableOpacity style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 6 }} onPress={() => { }}>
                     <Feather name="align-justify" size={18} color="#000" style={{ marginRight: 16 }} />
-                    <Text style={{ color: '#111', fontSize: 16, fontWeight: '600' }}>Add a text</Text>
+                    <Text style={{ color: '#111', fontSize: 16, fontWeight: '500' }}>Add a text</Text>
                   </TouchableOpacity>
                   <TextInput
                     style={{ fontSize: 14, color: '#111', marginLeft: 34, marginTop: -2, minHeight: 24, paddingVertical: 0 }}
@@ -1002,40 +1159,64 @@ export default function CreatePostScreen() {
                 </View>
 
                 {/* Option: Add tags */}
-                <View style={{ paddingVertical: 4 }}>
-                  <TouchableOpacity style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 6 }} onPress={() => { }}>
-                    <Feather name="hash" size={18} color="#000" style={{ marginRight: 16 }} />
-                    <Text style={{ color: '#111', fontSize: 16, fontWeight: '600' }}>Add tags</Text>
-                  </TouchableOpacity>
-                  <TextInput
-                    style={{ fontSize: 14, color: '#111', marginLeft: 34, marginTop: -2, minHeight: 24, paddingVertical: 0 }}
-                    placeholder="#hashtags (space separated)"
-                    placeholderTextColor="#888"
-                    underlineColorAndroid="transparent"
-                    value={hashtagInput}
-                    onChangeText={handleHashtagInputChange}
-                  />
-                  {
-                    hashtags.length > 0 && (
-                      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 4, marginLeft: 34, marginTop: 4 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'flex-start', paddingVertical: 12 }}>
+                  <Feather name="hash" size={20} color="#000" style={{ marginRight: 16, marginTop: 2 }} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ color: '#111', fontSize: 16, fontWeight: '500' }}>Add tags</Text>
+                    
+                    {/* Tag Input Field */}
+                    <TextInput
+                      style={{ fontSize: 14, color: '#111', marginTop: 4, paddingVertical: 4 }}
+                      placeholder="Type and press space or comma..."
+                      placeholderTextColor="#888"
+                      underlineColorAndroid="transparent"
+                      value={hashtagInput}
+                      onChangeText={(text) => {
+                        setHashtagInput(text);
+                        // If space or comma is typed, "commit" the tag
+                        if (text.endsWith(' ') || text.endsWith(',')) {
+                          const tag = text.trim().replace(/[ ,#]/g, '').toLowerCase();
+                          if (tag && !hashtags.includes(tag)) {
+                            setHashtags([...hashtags, tag]);
+                            setHashtagInput('');
+                          } else if (!tag) {
+                            setHashtagInput('');
+                          }
+                        }
+                      }}
+                      onSubmitEditing={() => {
+                        const tag = hashtagInput.trim().replace(/[ #]/g, '').toLowerCase();
+                        if (tag && !hashtags.includes(tag)) {
+                          setHashtags([...hashtags, tag]);
+                          setHashtagInput('');
+                        }
+                      }}
+                    />
+
+                    {/* Tag Pills (Chips) */}
+                    {hashtags.length > 0 && (
+                      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 12 }}>
                         {hashtags.map(tag => (
-                          <View key={tag} style={{ backgroundColor: '#f2f2f2', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, flexDirection: 'row', alignItems: 'center' }}>
-                            <Text style={{ color: '#111', fontWeight: '500', fontSize: 12 }}>#{tag}</Text>
-                            <TouchableOpacity onPress={() => setHashtags(hashtags.filter(t => t !== tag))} style={{ marginLeft: 6 }}>
-                              <Feather name="x" size={12} color="#666" />
+                          <View key={tag} style={{ backgroundColor: '#0A3D62', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, flexDirection: 'row', alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.1, shadowRadius: 2, elevation: 2 }}>
+                            <Text style={{ color: '#fff', fontWeight: '600', fontSize: 13 }}>#{tag}</Text>
+                            <TouchableOpacity 
+                              onPress={() => setHashtags(hashtags.filter(t => t !== tag))} 
+                              style={{ marginLeft: 6, backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: 10, padding: 2 }}
+                            >
+                              <Feather name="x" size={12} color="#fff" />
                             </TouchableOpacity>
                           </View>
                         ))}
                       </View>
-                    )
-                  }
+                    )}
+                  </View>
                 </View>
 
                 {/* Option: Add a category */}
                 <TouchableOpacity style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 12 }} onPress={() => setShowCategoryModal(true)}>
                   <Feather name="bookmark" size={20} color="#000" style={{ marginRight: 16 }} />
                   <View style={{ flex: 1 }}>
-                    <Text style={{ color: '#111', fontSize: 16, fontWeight: '600' }}>Add a category for the home feed</Text>
+                    <Text style={{ color: '#111', fontSize: 16, fontWeight: '500' }}>Add a category for the home feed</Text>
                     {selectedCategories.length > 0 && (
                       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>
                         {selectedCategories.map(cat => (
@@ -1059,7 +1240,7 @@ export default function CreatePostScreen() {
                 <TouchableOpacity style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 12 }} onPress={() => setShowLocationModal(true)}>
                   <Feather name="map-pin" size={20} color="#000" style={{ marginRight: 16 }} />
                   <View style={{ flex: 1 }}>
-                    <Text style={{ color: '#111', fontSize: 16, fontWeight: '600' }}>Add a location</Text>
+                    <Text style={{ color: '#111', fontSize: 16, fontWeight: '500' }}>Add a location</Text>
                     {location && (
                       <Text style={{ color: '#0095f6', fontSize: 14, marginTop: 4 }}>{location.name}</Text>
                     )}
@@ -1071,7 +1252,7 @@ export default function CreatePostScreen() {
                 <TouchableOpacity style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 12 }} onPress={() => setShowVerifiedModal(true)}>
                   <Feather name="lock" size={20} color="#000" style={{ marginRight: 16 }} />
                   <View style={{ flex: 1 }}>
-                    <Text style={{ color: '#111', fontSize: 16, fontWeight: '600' }}>Add a verified location</Text>
+                    <Text style={{ color: '#111', fontSize: 16, fontWeight: '500' }}>Add a verified location</Text>
                     {verifiedLocation && (
                       <Text style={{ color: '#0095f6', fontSize: 14, marginTop: 4 }}>{verifiedLocation.name}</Text>
                     )}
@@ -1083,15 +1264,18 @@ export default function CreatePostScreen() {
                 <TouchableOpacity style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 12 }} onPress={() => setShowTagModal(true)}>
                   <Feather name="user-plus" size={20} color="#000" style={{ marginRight: 16 }} />
                   <View style={{ flex: 1 }}>
-                    <Text style={{ color: '#111', fontSize: 16, fontWeight: '600' }}>Tag people</Text>
+                    <Text style={{ color: '#111', fontSize: 16, fontWeight: '500' }}>Tag people</Text>
                     {taggedUsers.length > 0 && (
-                      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>
+                      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 12 }}>
                         {taggedUsers.map(u => (
-                          <View key={u.uid} style={{ backgroundColor: '#f2f2f2', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 20, flexDirection: 'row', alignItems: 'center' }}>
-                            <Image source={{ uri: u.photoURL || DEFAULT_AVATAR_URL }} style={{ width: 18, height: 18, borderRadius: 9, marginRight: 6 }} />
-                            <Text style={{ color: '#111', fontWeight: '500', fontSize: 13 }}>{u.displayName || u.userName || u.uid}</Text>
-                            <TouchableOpacity onPress={() => setTaggedUsers(taggedUsers.filter(tu => tu.uid !== u.uid))} style={{ marginLeft: 6 }}>
-                              <Feather name="x" size={12} color="#666" />
+                          <View key={u.uid} style={{ backgroundColor: '#0A3D62', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 20, flexDirection: 'row', alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.1, shadowRadius: 2, elevation: 2 }}>
+                            <Image source={{ uri: u.photoURL || DEFAULT_AVATAR_URL }} style={{ width: 20, height: 20, borderRadius: 10, marginRight: 8, borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)' }} />
+                            <Text style={{ color: '#fff', fontWeight: '600', fontSize: 13 }}>{u.displayName || u.userName || u.uid}</Text>
+                            <TouchableOpacity 
+                              onPress={() => setTaggedUsers(taggedUsers.filter(tu => tu.uid !== u.uid))} 
+                              style={{ marginLeft: 6, backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: 10, padding: 2 }}
+                            >
+                              <Feather name="x" size={12} color="#fff" />
                             </TouchableOpacity>
                           </View>
                         ))}
@@ -1105,7 +1289,7 @@ export default function CreatePostScreen() {
                 <TouchableOpacity style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 12 }} onPress={() => setShowVisibilityModal(true)}>
                   <Feather name="eye" size={20} color="#000" style={{ marginRight: 16 }} />
                   <View style={{ flex: 1 }}>
-                    <Text style={{ color: '#111', fontSize: 16, fontWeight: '600' }}>Post visibility</Text>
+                    <Text style={{ color: '#111', fontSize: 16, fontWeight: '500' }}>Post visibility</Text>
                     <Text style={{ color: '#0095f6', fontSize: 14, marginTop: 4 }}>{visibility}</Text>
                   </View>
                   <Feather name="chevron-right" size={20} color="#ccc" />
@@ -1125,7 +1309,7 @@ export default function CreatePostScreen() {
               paddingBottom: Platform.OS === 'ios' ? insets.bottom : 16
             }}>
               <TouchableOpacity onPress={() => { setSelectedImages([]); setStep('picker'); }}>
-                <Text style={{ color: '#000', fontWeight: '700', fontSize: 18 }}>Clear all</Text>
+                <Text style={{ color: '#000', fontWeight: '500', fontSize: 18 }}>Clear all</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 onPress={handleShare}
@@ -1136,12 +1320,12 @@ export default function CreatePostScreen() {
                   borderRadius: 12
                 }}
               >
-                <Text style={{ color: '#fff', fontWeight: '700', fontSize: 18 }}>Share</Text>
+                <Text style={{ color: '#fff', fontWeight: '500', fontSize: 18 }}>Share</Text>
               </TouchableOpacity>
             </View>
-
-          </View>
-        )}
+          </KeyboardAvoidingView>
+        </View>
+      )}
         {/* Modals would go here, omitted for brevity */}
         {/* Category Modal */}
         <Modal visible={showCategoryModal} animationType="slide" transparent onRequestClose={() => setShowCategoryModal(false)}>
@@ -1153,13 +1337,13 @@ export default function CreatePostScreen() {
               paddingHorizontal: 20,
               paddingTop: 16,
               paddingBottom: 32,
-              height: getModalHeight(0.85)
+              height: getModalHeight(0.70)
             }}>
               {/* Handle bar */}
               <View style={{ width: 40, height: 4, backgroundColor: '#e0e0e0', borderRadius: 2, alignSelf: 'center', marginBottom: 20 }} />
 
               {/* Header */}
-              <Text style={{ fontWeight: '700', fontSize: 16, marginBottom: 8, color: '#000', textAlign: 'center' }}>Add a category</Text>
+              <Text style={{ fontWeight: '500', fontSize: 16, marginBottom: 8, color: '#000', textAlign: 'center' }}>Add a category</Text>
               <Text style={{ color: '#666', fontSize: 14, textAlign: 'center', marginBottom: 20, paddingHorizontal: 20 }}>
                 This will help people find your post in the home feed.
               </Text>
@@ -1200,25 +1384,19 @@ export default function CreatePostScreen() {
         {/* Location Modal */}
         <Modal visible={showLocationModal} animationType="slide" transparent onRequestClose={() => setShowLocationModal(false)}>
           <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' }}>
-            <KeyboardAvoidingView
-              style={{ flex: 1 }}
-              behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-              keyboardVerticalOffset={Platform.select({ ios: 90, android: 0 })}
-            >
-              <View style={{ flex: 1, justifyContent: 'flex-end' }}>
-                <View style={{
-                  backgroundColor: '#fff',
-                  borderTopLeftRadius: 32,
-                  borderTopRightRadius: 32,
-                  paddingHorizontal: 20,
-                  paddingTop: 16,
-                  paddingBottom: 32,
-                  height: getModalHeight(0.85)
-                }}>
+            <View style={{
+              backgroundColor: '#fff',
+              borderTopLeftRadius: 32,
+              borderTopRightRadius: 32,
+              paddingHorizontal: 20,
+              paddingTop: 16,
+              paddingBottom: 32,
+              height: getModalHeight(0.70)
+            }}>
                   {/* Handle bar */}
                   <View style={{ width: 40, height: 4, backgroundColor: '#e0e0e0', borderRadius: 2, alignSelf: 'center', marginBottom: 20 }} />
 
-                  <Text style={{ fontWeight: '700', fontSize: 16, marginBottom: 20, color: '#000', textAlign: 'center' }}>Choose a location to tag</Text>
+                  <Text style={{ fontWeight: '500', fontSize: 16, marginBottom: 20, color: '#000', textAlign: 'center' }}>Choose a location to tag</Text>
 
                   {/* Search Bar */}
                   <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#f9f9f9', borderRadius: 24, paddingHorizontal: 16, paddingVertical: 12, marginBottom: 20, borderWidth: 1, borderColor: '#f0f0f0' }}>
@@ -1287,7 +1465,6 @@ export default function CreatePostScreen() {
                       ListEmptyComponent={<Text style={{ color: '#888', marginTop: 12, textAlign: 'center' }}>No results</Text>}
                     />
                   )}
-                  {/* Footer Buttons */}
                   <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingTop: 16, paddingHorizontal: 4 }}>
                     <TouchableOpacity onPress={() => setShowLocationModal(false)}>
                       <Text style={{ color: '#111', fontWeight: '700', fontSize: 15 }}>Cancel</Text>
@@ -1298,33 +1475,25 @@ export default function CreatePostScreen() {
                   </View>
                 </View>
               </View>
-            </KeyboardAvoidingView>
-          </View>
-        </Modal>
+            </Modal>
         {/* Verified Location Modal */}
         <Modal visible={showVerifiedModal} animationType="slide" transparent onRequestClose={() => setShowVerifiedModal(false)}>
           <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' }}>
-            <KeyboardAvoidingView
-              style={{ flex: 1 }}
-              behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-              keyboardVerticalOffset={Platform.select({ ios: 90, android: 0 })}
-            >
-              <View style={{ flex: 1, justifyContent: 'flex-end' }}>
-                <View style={{
-                  backgroundColor: '#fff',
-                  borderTopLeftRadius: 32,
-                  borderTopRightRadius: 32,
-                  paddingHorizontal: 20,
-                  paddingTop: 16,
-                  paddingBottom: 32,
-                  height: getModalHeight(0.85)
-                }}>
+            <View style={{
+              backgroundColor: '#fff',
+              borderTopLeftRadius: 32,
+              borderTopRightRadius: 32,
+              paddingHorizontal: 20,
+              paddingTop: 16,
+              paddingBottom: 32,
+              height: getModalHeight(0.70)
+            }}>
                   {/* Handle bar */}
                   <View style={{ width: 40, height: 4, backgroundColor: '#e0e0e0', borderRadius: 2, alignSelf: 'center', marginBottom: 20 }} />
 
                   <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginBottom: 8 }}>
                     <Feather name="lock" size={16} color="#000" style={{ marginRight: 8 }} />
-                    <Text style={{ fontWeight: '700', fontSize: 16, color: '#000' }}>Add a verified location</Text>
+                    <Text style={{ fontWeight: '500', fontSize: 16, color: '#000' }}>Add a verified location</Text>
                   </View>
                   <Text style={{ color: '#666', fontSize: 14, textAlign: 'center', marginBottom: 20, paddingHorizontal: 20 }}>
                     To add a verified location you must be within 50 meters.
@@ -1424,30 +1593,22 @@ export default function CreatePostScreen() {
                   </View>
                 </View>
               </View>
-            </KeyboardAvoidingView>
-          </View>
-        </Modal>
+            </Modal>
         {/* Tag People Modal */}
         <Modal visible={showTagModal} animationType="slide" transparent onRequestClose={() => setShowTagModal(false)}>
           <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' }}>
-            <KeyboardAvoidingView
-              style={{ flex: 1 }}
-              behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-              keyboardVerticalOffset={Platform.select({ ios: 90, android: 0 })}
-            >
-              <View style={{ flex: 1, justifyContent: 'flex-end' }}>
-                <View style={{
-                  backgroundColor: '#fff',
-                  borderTopLeftRadius: 32,
-                  borderTopRightRadius: 32,
-                  paddingHorizontal: 20,
-                  paddingTop: 16,
-                  paddingBottom: 32,
-                  height: getModalHeight(0.85)
-                }}>
+            <View style={{
+              backgroundColor: '#fff',
+              borderTopLeftRadius: 32,
+              borderTopRightRadius: 32,
+              paddingHorizontal: 20,
+              paddingTop: 16,
+              paddingBottom: 32,
+              height: getModalHeight(0.70)
+            }}>
                   {/* Handle bar */}
                   <View style={{ width: 40, height: 4, backgroundColor: '#e0e0e0', borderRadius: 2, alignSelf: 'center', marginBottom: 20 }} />
-                  <Text style={{ fontWeight: '700', fontSize: 16, marginBottom: 20, color: '#000', textAlign: 'center' }}>Tag someone</Text>
+                  <Text style={{ fontWeight: '500', fontSize: 16, marginBottom: 20, color: '#000', textAlign: 'center' }}>Tag someone</Text>
 
                   {/* Search Bar */}
                   <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#f9f9f9', borderRadius: 24, paddingHorizontal: 16, paddingVertical: 12, marginBottom: 20, borderWidth: 1, borderColor: '#f0f0f0' }}>
@@ -1501,7 +1662,7 @@ export default function CreatePostScreen() {
                               style={{ width: 44, height: 44, borderRadius: 16, marginRight: 16, backgroundColor: '#eee' }}
                             />
                             <View style={{ flex: 1 }}>
-                              <Text style={{ fontSize: 15, fontWeight: '600', color: '#111' }} numberOfLines={1}>
+                              <Text style={{ fontSize: 15, fontWeight: '400', color: '#111' }} numberOfLines={1}>
                                 {item.displayName || item.userName || item.uid}
                               </Text>
                               {!!item.userName && (
@@ -1532,9 +1693,7 @@ export default function CreatePostScreen() {
                   </View>
                 </View>
               </View>
-            </KeyboardAvoidingView>
-          </View>
-        </Modal>
+            </Modal>
         {/* Visibility Modal */}
         <Modal visible={showVisibilityModal} animationType="slide" transparent onRequestClose={() => setShowVisibilityModal(false)}>
           <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' }}>
@@ -1549,7 +1708,7 @@ export default function CreatePostScreen() {
             }}>
               {/* Handle bar */}
               <View style={{ width: 40, height: 4, backgroundColor: '#e0e0e0', borderRadius: 2, alignSelf: 'center', marginBottom: 20 }} />
-              <Text style={{ fontWeight: '700', fontSize: 16, marginBottom: 24, color: '#000', textAlign: 'center' }}>Post visibility</Text>
+              <Text style={{ fontWeight: '500', fontSize: 16, marginBottom: 24, color: '#000', textAlign: 'center' }}>Post visibility</Text>
 
               {/* Visibility options: Everyone + real groups */}
               {[
@@ -1617,14 +1776,11 @@ export default function CreatePostScreen() {
             </View>
           </View>
         </Modal>
-        {
-          loading && (
-            <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(255,255,255,0.7)', alignItems: 'center', justifyContent: 'center', zIndex: 99 }}>
-              <ActivityIndicator size="large" color="#FFB800" />
-            </View>
-          )
-        }
-      </KeyboardAvoidingView>
+      {loading && (
+        <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(255,255,255,0.7)', alignItems: 'center', justifyContent: 'center', zIndex: 99 }}>
+          <ActivityIndicator size="large" color="#FFB800" />
+        </View>
+      )}
     </SafeAreaView>
   );
 }

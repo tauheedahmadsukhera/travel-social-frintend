@@ -83,7 +83,7 @@ export default function PhoneOTPScreen() {
         [
           {
             text: 'Continue',
-            onPress: () => router.replace('/(tabs)')
+            onPress: () => router.replace('/(tabs)/home')
           }
         ]
       );

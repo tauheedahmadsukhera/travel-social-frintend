@@ -8,12 +8,21 @@ import * as WebBrowser from 'expo-web-browser';
 import { GoogleAuthProvider, OAuthProvider, signInWithCredential, signInWithPopup } from 'firebase/auth';
 import { Alert, Platform } from 'react-native';
 import { auth } from '../config/firebase';
+import { DEFAULT_AVATAR_URL } from '@/lib/api';
+
 
 // Read env with safe fallback to undefined (avoids accidental string "undefined")
 const getEnv = (key: string, envValue?: string) => {
   if (envValue && envValue !== 'undefined') return envValue;
   const val = (process as any).env?.[key];
   return val && val !== 'undefined' ? val : undefined;
+};
+
+const requireAuth = () => {
+  if (!auth) {
+    throw new Error('Authentication service is not available');
+  }
+  return auth;
 };
 
 // Google Sign-In for native (will be configured)
@@ -39,7 +48,7 @@ export async function signInWithGoogle() {
       provider.addScope('profile');
       provider.addScope('email');
 
-      const result = await signInWithPopup(auth, provider);
+      const result = await signInWithPopup(requireAuth(), provider);
       return {
         success: true,
         user: result.user,
@@ -101,7 +110,7 @@ export async function signInWithGoogle() {
         const googleCredential = GoogleAuthProvider.credential(idToken);
 
         // Sign in with Firebase
-        const result = await signInWithCredential(auth, googleCredential);
+        const result = await signInWithCredential(requireAuth(), googleCredential);
 
         return {
           success: true,
@@ -204,7 +213,7 @@ export async function signInWithApple() {
       });
 
       // Sign in with Firebase
-      const result = await signInWithCredential(auth, firebaseCredential);
+      const result = await signInWithCredential(requireAuth(), firebaseCredential);
 
       return {
         success: true,
@@ -218,7 +227,7 @@ export async function signInWithApple() {
       provider.addScope('email');
       provider.addScope('name');
 
-      const result = await signInWithPopup(auth, provider);
+      const result = await signInWithPopup(requireAuth(), provider);
       return {
         success: true,
         user: result.user,
@@ -392,7 +401,7 @@ export async function signInWithTikTok() {
       try {
         // Try to sign in first
         console.log('📱 Trying to sign in existing TikTok user:', tiktokEmail);
-        const signInResult = await signInWithEmailAndPassword(auth, tiktokEmail, tiktokPassword);
+        const signInResult = await signInWithEmailAndPassword(requireAuth(), tiktokEmail, tiktokPassword);
         firebaseUser = signInResult.user;
         console.log('✅ Signed in existing TikTok user');
       } catch (signInError: any) {
@@ -400,7 +409,7 @@ export async function signInWithTikTok() {
         if (signInError.code === 'auth/user-not-found') {
           // Create new account
           console.log('🆕 Creating new TikTok user...');
-          const createResult = await createUserWithEmailAndPassword(auth, tiktokEmail, tiktokPassword);
+          const createResult = await createUserWithEmailAndPassword(requireAuth(), tiktokEmail, tiktokPassword);
           firebaseUser = createResult.user;
           console.log('✅ New TikTok user created');
 
@@ -538,7 +547,7 @@ export async function signInWithSnapchat() {
       let firebaseUser;
       try {
         console.log('📸 Trying to sign in existing Snapchat user:', snapchatEmail);
-        const signInResult = await signInWithEmailAndPassword(auth, snapchatEmail, snapchatPassword);
+        const signInResult = await signInWithEmailAndPassword(requireAuth(), snapchatEmail, snapchatPassword);
         firebaseUser = signInResult.user;
         console.log('✅ Signed in existing Snapchat user');
       } catch (signInError) {
@@ -546,7 +555,7 @@ export async function signInWithSnapchat() {
         console.log('⚠️ Snapchat sign-in failed, error code:', errorAny.code);
         if (errorAny.code === 'auth/user-not-found') {
           console.log('🆕 Creating new Snapchat user...');
-          const createResult = await createUserWithEmailAndPassword(auth, snapchatEmail, snapchatPassword);
+          const createResult = await createUserWithEmailAndPassword(requireAuth(), snapchatEmail, snapchatPassword);
           firebaseUser = createResult.user;
           console.log('✅ New Snapchat user created');
 
@@ -598,7 +607,7 @@ export async function signInWithSnapchat() {
 export async function handleSocialAuthResult(result: any, router: any) {
   if (result.success) {
     const user = result.user;
-    const defaultAvatar = 'https://firebasestorage.googleapis.com/v0/b/travel-app-3da72.firebasestorage.app/o/default%2Fdefault-pic.jpg?alt=media&token=7177f487-a345-4e45-9a56-732f03dbf65d';
+    const defaultAvatar = DEFAULT_AVATAR_URL;
     const userAvatar = user.photoURL || defaultAvatar;
     const userName = user.displayName || user.email?.split('@')[0] || 'User';
 
@@ -644,7 +653,13 @@ export async function handleSocialAuthResult(result: any, router: any) {
         await AsyncStorage.setItem('token', response.token);
         // Use backend ID preferably, fallback to firebase/sync ID
         const userIdToStore = response.user?.id || response.user?._id || user.uid;
+        const firebaseUidToStore = response.user?.firebaseUid || user.uid;
+        // iOS Fix: Store all avatar variants for fallback access
+        const avatarToStore = response.user?.avatar || response.user?.photoURL || response.user?.profilePicture || userAvatar || '';
         await AsyncStorage.setItem('userId', String(userIdToStore));
+        await AsyncStorage.setItem('uid', String(firebaseUidToStore));
+        await AsyncStorage.setItem('firebaseUid', String(firebaseUidToStore));
+        await AsyncStorage.setItem('userAvatar', avatarToStore);  // iOS Fix: Cache avatar in storage
         await AsyncStorage.setItem('userEmail', user.email || '');
 
         // Force a small delay to ensure storage persistence

@@ -24,8 +24,9 @@ import {
     View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { apiService } from '../_services/apiService';
+import { feedEventEmitter } from '../../lib/feedEventEmitter';
+import { resolveCanonicalUserId } from '../../lib/currentUser';
 
 const { height: SCREEN_H } = Dimensions.get('window');
 
@@ -58,11 +59,15 @@ interface Props {
     onClose: () => void;
     postId: string;
     postImageUrl?: string;
+    currentUserId?: string;
+    onSaveChange?: (saved: boolean) => void;
+    initialGloballySaved?: boolean;
+    onCollectionCreated?: (collection: Collection) => void;
 }
 
 // ─── Component ───────────────────────────────────────────────────────────────
 
-export default function SaveToCollectionModal({ visible, onClose, postId, postImageUrl }: Props) {
+export default function SaveToCollectionModal({ visible, onClose, postId, postImageUrl, currentUserId, onSaveChange, initialGloballySaved = true, onCollectionCreated }: Props) {
     const insets = useSafeAreaInsets();
 
     // Screen
@@ -95,26 +100,43 @@ export default function SaveToCollectionModal({ visible, onClose, postId, postIm
     const nameInputRef = useRef<TextInput>(null);
     const [currentUid, setCurrentUid] = useState<string | null>(null);
 
+    const [isGloballySaved, setIsGloballySaved] = useState(initialGloballySaved);
+    const didAutoGlobalSaveRef = useRef(false);
+    // Toast logic
+    const [toast, setToast] = useState<{ visible: boolean; message: string }>({ visible: false, message: '' });
+    const toastAnim = useRef(new Animated.Value(0)).current;
+
+    const showToast = (message: string) => {
+        setToast({ visible: true, message });
+        Animated.sequence([
+            Animated.timing(toastAnim, { toValue: 1, duration: 300, useNativeDriver: true }),
+            Animated.delay(2000),
+            Animated.timing(toastAnim, { toValue: 0, duration: 300, useNativeDriver: true }),
+        ]).start(() => setToast({ visible: false, message: '' }));
+    };
+
     // Load canonical userId once on mount
     useEffect(() => {
-        AsyncStorage.getItem('userId').then(id => setCurrentUid(id));
-    }, []);
+        if (currentUserId) {
+            setCurrentUid(currentUserId);
+            return;
+        }
+
+        let mounted = true;
+        (async () => {
+            const resolved = await resolveCanonicalUserId();
+            if (!mounted) return;
+            setCurrentUid(resolved);
+        })();
+
+        return () => {
+            mounted = false;
+        };
+    }, [currentUserId]);
 
     // ── Load on open ──────────────────────────────────────────────────────────
 
-    useEffect(() => {
-        if (visible) {
-            setScreen('list');
-            setNewName('');
-            setNewVisibility('private');
-            setNewCollaborators([]);
-            setAllowedUsers([]);
-            setTempSelectedCollaborators([]);
-            setTempSelectedGroups([]);
-            loadCollections();
-            loadGroups();
-        }
-    }, [visible]);
+
 
     useEffect(() => {
         const delayDebounceFn = setTimeout(async () => {
@@ -147,7 +169,11 @@ export default function SaveToCollectionModal({ visible, onClose, postId, postIm
         if (!currentUid) return;
         setLoadingCollections(true);
         try {
-            const res = await apiService.get(`/users/${currentUid}/sections`);
+            const res = await apiService.get(`/users/${currentUid}/sections`, {
+                requesterUserId: currentUid,
+                requesterId: currentUid,
+                viewerId: currentUid,
+            });
             if (res?.success && Array.isArray(res.data)) setCollections(res.data);
             else setCollections([]);
         } catch {
@@ -185,31 +211,118 @@ export default function SaveToCollectionModal({ visible, onClose, postId, postIm
         }
     }, [currentUid]);
 
+    // ── Load on open ──────────────────────────────────────────────────────────
+
+    useEffect(() => {
+        if (visible) {
+            setScreen('list');
+            setNewName('');
+            setNewVisibility('private');
+            setNewCollaborators([]);
+            setAllowedUsers([]);
+            setTempSelectedCollaborators([]);
+            setTempSelectedGroups([]);
+            setIsGloballySaved(initialGloballySaved);
+            didAutoGlobalSaveRef.current = false;
+            loadCollections();
+            loadGroups();
+        }
+    }, [visible, initialGloballySaved, loadCollections, loadGroups]);
+
+    // Auto-save to "All" ONLY if post is not in any collection.
+    // This matches expected behavior:
+    // - If user already added it to another collection, opening modal should NOT re-save to All.
+    useEffect(() => {
+        if (!visible) return;
+        if (!currentUid) return;
+        if (!postId) return;
+        if (didAutoGlobalSaveRef.current) return;
+        if (isGloballySaved) return;
+        if (loadingCollections) return;
+
+        const inAnyCollection = collections.some(c => c.postIds?.includes(postId));
+        if (inAnyCollection) return;
+
+        didAutoGlobalSaveRef.current = true;
+        (async () => {
+            try {
+                await apiService.post(`/users/${currentUid}/saved`, { postId });
+                setIsGloballySaved(true);
+                showToast('Saved to All');
+                syncGlobalState(true, collections);
+            } catch (e) {
+                // If it fails, don't spam retries in same open session
+                console.error('[SaveToCollectionModal] auto global save error', e);
+            }
+        })();
+    }, [visible, currentUid, postId, isGloballySaved, loadingCollections, collections]);
+
     // ── Actions ───────────────────────────────────────────────────────────────
 
-    const addPostToCollection = async (collectionId: string) => {
+    const syncGlobalState = (globSaved: boolean, cols: Collection[]) => {
+        if (!onSaveChange) return;
+        const inAnyCollection = cols.some(c => c.postIds?.includes(postId));
+        onSaveChange(globSaved || inAnyCollection);
+    };
+
+    const togglePostInCollection = async (collectionId: string) => {
         if (!currentUid || isUpdating) return;
+        
+        const col = collections.find(c => c._id === collectionId);
+        if (!col) return;
+        
+        const isCurrentlySaved = col.postIds?.includes(postId);
         setIsUpdating(true);
+
         try {
-            console.log('[SaveToCollectionModal] Adding post:', postId, 'to collection:', collectionId);
-            const res = await apiService.put(`/users/${currentUid}/sections/${collectionId}`, { addPostId: postId });
+            console.log('[SaveToCollectionModal] Toggling post:', postId, 'in collection:', collectionId, 'currentlySaved:', isCurrentlySaved);
+            const body = {
+                ...(isCurrentlySaved ? { removePostId: postId } : { addPostId: postId }),
+                requesterUserId: currentUid,
+                viewerId: currentUid,
+            };
+            const res = await apiService.put(`/users/${currentUid}/sections/${collectionId}`, body);
+            
             if (res?.success) {
-                console.log('[SaveToCollectionModal] Post added successfully');
-                // Update local collections state if visible on the screen behind
-                setCollections(prev => prev.map(c => 
+                const updatedCols = collections.map(c => 
                     c._id === collectionId 
-                    ? { ...c, postIds: [...(c.postIds || []), postId] } 
+                    ? { ...c, postIds: isCurrentlySaved 
+                        ? (c.postIds || []).filter(id => id !== postId) 
+                        : [...(c.postIds || []), postId] 
+                      } 
                     : c
-                ));
-                // Important: Close and trigger parent refresh
-                onClose();
+                );
+                setCollections(updatedCols);
+                syncGlobalState(isGloballySaved, updatedCols);
+                showToast(isCurrentlySaved ? `Removed from ${col.name}` : `Saved to ${col.name}`);
             } else {
-              console.error('[SaveToCollectionModal] Failed to add post:', res?.error || 'Unknown error');
-              Alert.alert('Error', 'Failed to add post to collection');
+                Alert.alert('Error', 'Failed to update collection');
             }
         } catch (e) {
-            console.error('[SaveToCollectionModal] addPostToCollection error', e);
-            Alert.alert('Error', 'An error occurred while adding the post');
+            console.error('[SaveToCollectionModal] toggle error', e);
+        } finally {
+            setIsUpdating(false);
+        }
+    };
+
+    const handleGlobalToggle = async () => {
+        if (!currentUid || isUpdating) return;
+        setIsUpdating(true);
+        const nextState = !isGloballySaved;
+        try {
+            if (nextState) {
+                // Add to global saved
+                await apiService.post(`/users/${currentUid}/saved`, { postId });
+                showToast('Saved to All');
+            } else {
+                // Remove from global saved
+                await apiService.delete(`/users/${currentUid}/saved/${postId}`);
+                showToast('Removed from Saved');
+            }
+            setIsGloballySaved(nextState);
+            syncGlobalState(nextState, collections);
+        } catch (e) {
+            console.error('[SaveToCollectionModal] handleGlobalToggle error', e);
         } finally {
             setIsUpdating(false);
         }
@@ -218,6 +331,7 @@ export default function SaveToCollectionModal({ visible, onClose, postId, postIm
     const createCollection = async () => {
         if (!currentUid || !newName.trim()) return;
         setSaving(true);
+        let createdSuccessfully = false;
         try {
             const res = await apiService.post(`/users/${currentUid}/sections`, {
                 name: newName.trim(),
@@ -227,17 +341,34 @@ export default function SaveToCollectionModal({ visible, onClose, postId, postIm
                 collaborators: newCollaborators.map(u => u.uid || u.firebaseUid || u._id),
                 allowedUsers: allowedUsers,
                 allowedGroups: tempSelectedGroups,
+                requesterUserId: currentUid,
+                viewerId: currentUid,
             });
             if (res?.success) {
-                setCollections(prev => [...prev, res.data]);
-                // Ensure we also refresh the underlying screen if needed
+                const createdCollection = (res?.data || res?.section || null) as Collection | null;
+                if (createdCollection?._id) {
+                    setCollections(prev => [createdCollection, ...prev.filter(c => c._id !== createdCollection._id)]);
+                    onCollectionCreated?.(createdCollection);
+                }
+                await loadCollections();
+                if (postId) {
+                    onSaveChange?.(true);
+                }
+                feedEventEmitter.emit('feedUpdated');
+                createdSuccessfully = true;
+            } else {
+                Alert.alert('Error', res?.error || 'Failed to create collection');
             }
         } catch (e) {
             console.error('createCollection error', e);
+            Alert.alert('Error', 'Failed to create collection');
         } finally {
             setSaving(false);
         }
-        onClose();
+
+        if (createdSuccessfully) {
+            onClose();
+        }
     };
 
     // ── Screen transitions ────────────────────────────────────────────────────
@@ -332,28 +463,49 @@ export default function SaveToCollectionModal({ visible, onClose, postId, postIm
 
     // ─── Common header ────────────────────────────────────────────────────────
 
-    const Header = ({ title, onLeft, leftLabel = 'Cancel', rightLabel = 'Save', onRight, rightDisabled = false }: {
+    const Header = ({ title, onLeft, leftLabel = 'Cancel', rightLabel = 'Save', onRight, rightDisabled = false, showDragBar = true, titleOnLeft = false }: {
         title: string;
         onLeft?: () => void;
         leftLabel?: string;
         rightLabel?: string;
         onRight?: () => void;
         rightDisabled?: boolean;
+        showDragBar?: boolean;
+        titleOnLeft?: boolean;
     }) => (
         <View style={styles.header}>
-            <TouchableOpacity style={styles.headerBtn} onPress={onLeft || goBack}>
+            <TouchableOpacity
+                style={[styles.headerBtn, { alignItems: 'flex-start' }]}
+                onPress={onLeft || goBack}
+                activeOpacity={0.7}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            >
                 <Text style={styles.headerLeft}>{leftLabel}</Text>
             </TouchableOpacity>
-            <View style={styles.headerDragBar} />
-            <Text style={styles.headerTitle}>{title}</Text>
+            
+            <View style={styles.headerTitleWrap}>
+                <Text style={[styles.headerTitle, titleOnLeft && { textAlign: 'left', marginLeft: 10 }]}>{title}</Text>
+            </View>
+
             {onRight ? (
-                <TouchableOpacity style={styles.headerBtn} onPress={onRight} disabled={rightDisabled}>
+                <TouchableOpacity
+                    style={[styles.headerBtn, { alignItems: 'flex-end' }]}
+                    onPress={onRight}
+                    disabled={rightDisabled}
+                    activeOpacity={0.7}
+                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                >
                     <Text style={[styles.headerRight, rightDisabled && styles.headerRightDisabled]}>{rightLabel}</Text>
                 </TouchableOpacity>
             ) : (
                 <View style={styles.headerBtn} />
             )}
         </View>
+    );
+
+    // Keyboard background fix
+    const KeyboardBackground = () => (
+        <View style={{ position: 'absolute', bottom: -1000, left: 0, right: 0, height: 1000, backgroundColor: '#fff' }} />
     );
 
     // ─── Screen: list ────────────────────────────────────────────────────────
@@ -368,57 +520,83 @@ export default function SaveToCollectionModal({ visible, onClose, postId, postIm
                 onRight={goToNew}
             />
 
-            {loadingCollections ? (
-                <View style={styles.center}>
-                    <ActivityIndicator color="#0A3D62" />
+            <View style={styles.savedToAllRow}>
+                <View style={styles.savedToAllThumb}>
+                    {postImageUrl ? (
+                        <ExpoImage source={{ uri: postImageUrl }} style={styles.collThumbImg} contentFit="cover" />
+                    ) : (
+                        <View style={[styles.collThumbImg, styles.collThumbPlaceholder]}>
+                            <Feather name="bookmark" size={20} color="#666" />
+                        </View>
+                    )}
                 </View>
-            ) : collections.length === 0 ? (
-                // ── Empty state ──
-                <View style={styles.emptyState}>
-                    <View style={styles.emptyIconWrap}>
-                        <Feather name="bookmark" size={36} color="#0A3D62" />
+                <View style={{ flex: 1 }}>
+                    <Text style={styles.savedToAllTitle}>Saved</Text>
+                    <Text style={styles.savedToAllSub}>Private</Text>
+                </View>
+                <TouchableOpacity onPress={handleGlobalToggle} style={{ padding: 4 }}>
+                    <Ionicons name={isGloballySaved ? "bookmark" : "bookmark-outline"} size={24} color={isGloballySaved ? "#0A3D62" : "#999"} />
+                </TouchableOpacity>
+            </View>
+
+            <View style={styles.collectionsDivider} />
+            <Text style={styles.collectionsLabel}>Collections</Text>
+
+            <View style={{ flex: 1 }}>
+                {loadingCollections ? (
+                    <View style={styles.center}>
+                        <ActivityIndicator color="#0A3D62" />
                     </View>
-                    <Text style={styles.emptyTitle}>Organize the post you love</Text>
-                    <Text style={styles.emptySubtitle}>
-                        Save posts and pictures just for you or to share with others.
-                    </Text>
-                    <TouchableOpacity style={styles.emptyBtn} onPress={goToNew}>
-                        <Text style={styles.emptyBtnText}>Create your first collection</Text>
-                    </TouchableOpacity>
-                </View>
-            ) : (
-                // ── Collections list ──
-                <ScrollView keyboardShouldPersistTaps="handled" style={{ flex: 1 }}>
-                    {collections.map(col => (
-                        <TouchableOpacity
-                            key={col._id}
-                            style={styles.collRow}
-                            onPress={() => addPostToCollection(col._id)}
-                            activeOpacity={0.7}
-                        >
-                            <View style={styles.collThumb}>
-                                {col.coverImage ? (
-                                    <ExpoImage
-                                        source={{ uri: col.coverImage }}
-                                        style={styles.collThumbImg}
-                                        contentFit="cover"
-                                    />
-                                ) : (
-                                    <View style={[styles.collThumbImg, styles.collThumbPlaceholder]}>
-                                        <Feather name="image" size={20} color="#ccc" />
-                                    </View>
-                                )}
-                            </View>
-                            <Text style={styles.collName}>{col.name}</Text>
-                            {isSaved(col) ? (
-                                <Ionicons name="checkmark-circle" size={24} color="#0A3D62" />
-                            ) : (
-                                <Ionicons name="add-circle-outline" size={24} color="#aaa" />
-                            )}
+                ) : collections.length === 0 ? (
+                    // ── Empty state ──
+                    <View style={[styles.emptyState, { paddingBottom: Math.max(insets.bottom + 16, 24) }]}>
+                        <View style={styles.emptyIconWrap}>
+                            <Feather name="bookmark" size={36} color="#0A3D62" />
+                        </View>
+                        <Text style={styles.emptyTitle}>Organize the post you love</Text>
+                        <Text style={styles.emptySubtitle}>
+                            Save posts and pictures just for you or to share with others.
+                        </Text>
+                        <TouchableOpacity style={styles.emptyBtn} onPress={goToNew} activeOpacity={0.8}>
+                            <Text style={styles.emptyBtnText}>Create your first collection</Text>
                         </TouchableOpacity>
-                    ))}
-                </ScrollView>
-            )}
+                    </View>
+                ) : (
+                    // ── Collections list ──
+                    <ScrollView keyboardShouldPersistTaps="handled" style={{ flex: 1 }}>
+                        <View style={styles.collectionsList}>
+                            {collections.map(col => (
+                                <TouchableOpacity
+                                    key={col._id}
+                                    style={styles.collRow}
+                                    onPress={() => togglePostInCollection(col._id)}
+                                    activeOpacity={0.7}
+                                >
+                                    <View style={styles.collThumb}>
+                                        {col.coverImage ? (
+                                            <ExpoImage
+                                                source={{ uri: col.coverImage }}
+                                                style={styles.collThumbImg}
+                                                contentFit="cover"
+                                            />
+                                        ) : (
+                                            <View style={[styles.collThumbImg, styles.collThumbPlaceholder]}>
+                                                <Feather name="folder" size={24} color="#ccc" />
+                                            </View>
+                                        )}
+                                    </View>
+                                    <Text style={styles.collName}>{col.name}</Text>
+                                    {isSaved(col) ? (
+                                        <Ionicons name="checkmark-circle" size={24} color="#0A3D62" />
+                                    ) : (
+                                        <Ionicons name="add-circle-outline" size={24} color="#ccc" />
+                                    )}
+                                </TouchableOpacity>
+                            ))}
+                        </View>
+                    </ScrollView>
+                )}
+            </View>
         </>
     );
 
@@ -436,35 +614,42 @@ export default function SaveToCollectionModal({ visible, onClose, postId, postIm
             <ScrollView keyboardShouldPersistTaps="handled" style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 20 }}>
                 {/* Post thumbnail */}
                 {postImageUrl ? (
-                    <ExpoImage
-                        source={{ uri: postImageUrl }}
-                        style={styles.newPostThumb}
-                        contentFit="cover"
-                    />
+                    <View style={styles.newPostThumbContainer}>
+                        <ExpoImage
+                            source={{ uri: postImageUrl }}
+                            style={styles.newPostThumb}
+                            contentFit="cover"
+                        />
+                    </View>
                 ) : (
-                    <View style={[styles.newPostThumb, styles.collThumbPlaceholder]}>
+                    <View style={[styles.newPostThumbContainer, styles.collThumbPlaceholder]}>
                         <Feather name="image" size={40} color="#ccc" />
                     </View>
                 )}
 
                 {/* Name input */}
-                <View style={styles.inputWrap}>
+                <View style={styles.newInputContainer}>
                     <TextInput
                         ref={nameInputRef}
-                        style={styles.nameInput}
+                        style={styles.newNameInput}
                         placeholder="Collection name"
-                        placeholderTextColor="#bbb"
+                        placeholderTextColor="#999"
                         value={newName}
                         onChangeText={setNewName}
                         returnKeyType="done"
                         onSubmitEditing={Keyboard.dismiss}
                     />
+                    {newName.length > 0 && (
+                        <TouchableOpacity onPress={() => setNewName('')} style={styles.clearInput}>
+                            <Ionicons name="close-circle" size={18} color="#ccc" />
+                        </TouchableOpacity>
+                    )}
                 </View>
 
                 {/* Visibility row */}
-                <TouchableOpacity style={styles.optionRow} onPress={goToVisibility}>
+                <TouchableOpacity style={styles.newOptionRow} onPress={goToVisibility}>
                     <Ionicons name="eye-outline" size={20} color="#444" />
-                    <Text style={styles.optionLabel}>Visibility</Text>
+                    <Text style={styles.newOptionLabel}>Visibility</Text>
                     <View style={styles.optionRight}>
                         <Text style={styles.optionValue}>
                             {newVisibility === 'public' ? 'Public' : newVisibility === 'private' ? 'Private' : 'Specific'}
@@ -474,9 +659,9 @@ export default function SaveToCollectionModal({ visible, onClose, postId, postIm
                 </TouchableOpacity>
 
                 {/* Invite row */}
-                <TouchableOpacity style={styles.optionRow} onPress={goToInvite}>
+                <TouchableOpacity style={styles.newOptionRow} onPress={goToInvite}>
                     <Ionicons name="person-add-outline" size={20} color="#444" />
-                    <Text style={styles.optionLabel}>Invite an other person to collaborate</Text>
+                    <Text style={styles.newOptionLabel}>Add people to collection</Text>
                     <Feather name="chevron-right" size={18} color="#aaa" />
                 </TouchableOpacity>
 
@@ -609,6 +794,7 @@ export default function SaveToCollectionModal({ visible, onClose, postId, postIm
             animationType="slide"
             onRequestClose={goBack}
             statusBarTranslucent
+            presentationStyle="overFullScreen"
         >
             <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
                 <View style={styles.backdrop} />
@@ -621,13 +807,25 @@ export default function SaveToCollectionModal({ visible, onClose, postId, postIm
                 keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
             >
                 <View style={[styles.sheet, { paddingBottom: insets.bottom + 8 }]}>
+                    <KeyboardBackground />
                     {/* Drag handle */}
                     <View style={styles.dragHandle} />
 
-                    {screen === 'list' && renderList()}
-                    {screen === 'new' && renderNew()}
-                    {screen === 'visibility' && renderVisibility()}
-                    {screen === 'invite' && renderInvite()}
+                    <View style={{ flex: 1 }}>
+                        {screen === 'list' && renderList()}
+                        {screen === 'new' && renderNew()}
+                        {screen === 'visibility' && renderVisibility()}
+                        {screen === 'invite' && renderInvite()}
+                    </View>
+
+                    {/* Toast Notification */}
+                    {toast.visible && (
+                        <Animated.View style={[styles.toastContainer, { opacity: toastAnim, transform: [{ translateY: toastAnim.interpolate({ inputRange: [0, 1], outputRange: [20, 0] }) }] }]}>
+                            <View style={styles.toast}>
+                                <Text style={styles.toastText}>{toast.message}</Text>
+                            </View>
+                        </Animated.View>
+                    )}
                 </View>
             </KeyboardAvoidingView>
         </Modal>
@@ -650,8 +848,8 @@ const styles = StyleSheet.create({
         backgroundColor: '#fff',
         borderTopLeftRadius: 20,
         borderTopRightRadius: 20,
-        maxHeight: SCREEN_H * 0.88,
-        minHeight: 320,
+        maxHeight: SCREEN_H * 0.9,
+        minHeight: 450,
         overflow: 'hidden',
     },
     dragHandle: {
@@ -675,18 +873,20 @@ const styles = StyleSheet.create({
     },
     headerDragBar: { flex: 1 },
     headerBtn: { minWidth: 80 },
+    headerTitleWrap: {
+        flex: 2,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
     headerTitle: {
-        position: 'absolute',
-        left: 0, right: 0,
-        textAlign: 'center',
         fontSize: 16,
         fontWeight: '700',
-        color: '#111',
+        color: '#000',
     },
     headerLeft: {
         fontSize: 15,
-        color: '#555',
-        fontWeight: '500',
+        color: '#0A3D62',
+        fontWeight: '600',
     },
     headerRight: {
         fontSize: 15,
@@ -700,9 +900,11 @@ const styles = StyleSheet.create({
 
     // Empty state
     emptyState: {
+        flex: 1,
+        justifyContent: 'center',
         alignItems: 'center',
         paddingHorizontal: 32,
-        paddingVertical: 40,
+        paddingVertical: 24,
     },
     emptyIconWrap: {
         width: 72,
@@ -741,6 +943,46 @@ const styles = StyleSheet.create({
         fontWeight: '700',
     },
 
+    // Saved to All Row
+    savedToAllRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 16,
+        paddingVertical: 14,
+    },
+    savedToAllThumb: {
+        width: 44,
+        height: 44,
+        borderRadius: 8,
+        overflow: 'hidden',
+        marginRight: 12,
+        backgroundColor: '#f0f0f0',
+    },
+    savedToAllTitle: {
+        fontSize: 15,
+        fontWeight: '700',
+        color: '#000',
+    },
+    savedToAllSub: {
+        fontSize: 12,
+        color: '#888',
+        marginTop: 1,
+    },
+    collectionsDivider: {
+        height: 1,
+        backgroundColor: '#f2f2f2',
+        marginHorizontal: 16,
+        marginTop: 4,
+    },
+    collectionsLabel: {
+        fontSize: 14,
+        fontWeight: '700',
+        color: '#000',
+        marginHorizontal: 16,
+        marginTop: 16,
+        marginBottom: 8,
+    },
+
     // Collection row
     collRow: {
         flexDirection: 'row',
@@ -773,25 +1015,55 @@ const styles = StyleSheet.create({
         color: '#111',
     },
 
-    // New collection
-    newPostThumb: {
-        width: 130,
-        height: 130,
-        borderRadius: 12,
+    // New collection screen
+    newPostThumbContainer: {
+        width: 140,
+        height: 140,
+        borderRadius: 16,
         alignSelf: 'center',
-        marginVertical: 20,
-        backgroundColor: '#f0f0f0',
+        marginVertical: 24,
+        backgroundColor: '#f9f9f9',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.1,
+        shadowRadius: 8,
+        elevation: 5,
     },
-    inputWrap: {
+    newPostThumb: {
+        width: '100%',
+        height: '100%',
+        borderRadius: 16,
+    },
+    newInputContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
         marginHorizontal: 16,
         borderBottomWidth: 1,
-        borderBottomColor: '#ddd',
-        marginBottom: 8,
+        borderBottomColor: '#f0f0f0',
+        paddingVertical: 4,
+        marginBottom: 12,
     },
-    nameInput: {
+    newNameInput: {
+        flex: 1,
         fontSize: 16,
-        color: '#111',
+        color: '#000',
         paddingVertical: 12,
+    },
+    clearInput: {
+        padding: 4,
+    },
+    newOptionRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 16,
+        paddingVertical: 18,
+        gap: 12,
+    },
+    newOptionLabel: {
+        flex: 1,
+        fontSize: 15,
+        color: '#000',
+        fontWeight: '500',
     },
     optionRow: {
         flexDirection: 'row',
@@ -962,5 +1234,31 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         alignItems: 'center',
         paddingVertical: 40,
+    },
+
+    // Toast
+    toastContainer: {
+        position: 'absolute',
+        bottom: 40,
+        left: 0,
+        right: 0,
+        alignItems: 'center',
+        zIndex: 9999,
+    },
+    toast: {
+        backgroundColor: 'rgba(38, 38, 38, 0.9)',
+        paddingHorizontal: 20,
+        paddingVertical: 12,
+        borderRadius: 12,
+        minWidth: 200,
+        alignItems: 'center',
+    },
+    toastText: {
+        color: '#fff',
+        fontSize: 14,
+        fontWeight: '600',
+    },
+    collectionsList: {
+        paddingBottom: 20,
     },
 });

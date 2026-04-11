@@ -81,7 +81,7 @@ export const getStreamingService = (): IStreamingService => {
   if (!_streamingService) {
     _streamingService = ZeegocloudStreamingService.getInstance();
   }
-  return _streamingService;
+  return _streamingService as IStreamingService;
 };
 
 /**

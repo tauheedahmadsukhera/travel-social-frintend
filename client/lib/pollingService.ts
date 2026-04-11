@@ -47,7 +47,10 @@ export async function startConversationsPolling(
       // Pass userId as query parameter
       const response = await apiService.get(`/conversations?userId=${userId}`);
       
-      console.log('📡 Conversations API full response:', JSON.stringify(response).substring(0, 300));
+      console.log('📡 Conversations API summary:', {
+        success: !!response?.success,
+        count: Array.isArray(response?.data) ? response.data.length : 0,
+      });
       
       // apiService returns response.data directly, so response is { success, data: [] }
       // NOT response.data.data
@@ -93,7 +96,8 @@ export async function startConversationsPolling(
     );
     await Promise.race([poll(), timeoutPromise]);
   } catch (err) {
-    console.warn('⚠️ Initial poll failed, will retry:', err.message);
+    const message = err instanceof Error ? err.message : String(err);
+    console.warn('⚠️ Initial poll failed, will retry:', message);
     callback([]); // Unblock loading
   }
 

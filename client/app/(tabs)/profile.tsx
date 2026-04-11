@@ -4,9 +4,10 @@ import { Image as ExpoImage } from 'expo-image';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 // Firebase removed - using Backend API
 import { LinearGradient } from 'expo-linear-gradient';
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Animated,
   Alert,
   Dimensions,
   Image,
@@ -22,7 +23,7 @@ import {
   TouchableOpacity,
   View
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { API_BASE_URL } from '../../lib/api';
 import { useCurrentLocation } from '../../hooks/useCurrentLocation';
 import { createStory, getUserHighlights, getUserSectionsSorted, getUserStories } from '../../lib/firebaseHelpers';
@@ -41,14 +42,17 @@ import HighlightViewer from '@/src/_components/HighlightViewer';
 import PostViewerModal from '@/src/_components/PostViewerModal';
 import StoriesViewer from '@/src/_components/StoriesViewer';
 import * as Clipboard from 'expo-clipboard';
+import { useHeaderVisibility, useHeaderHeight } from './_layout';
 
 import { getTaggedPosts, getUserHighlights as getUserHighlightsAPI, getUserPosts as getUserPostsAPI, getUserProfile as getUserProfileAPI, getUserSections as getUserSectionsAPI } from '@/src/_services/firebaseService';
+import { apiService } from '@/src/_services/apiService';
 import { getKeyboardOffset, getModalHeight } from '../../utils/responsive';
 import { getPassportData } from '../../lib/firebaseHelpers/passport';
 import { feedEventEmitter } from '../../lib/feedEventEmitter';
 import * as ImagePicker from 'expo-image-picker';
 import * as ImageManipulator from 'expo-image-manipulator';
 import { ResizeMode, Video } from 'expo-av';
+import { resolveCanonicalUserId } from '../../lib/currentUser';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const isSmallDevice = SCREEN_HEIGHT < 700;
@@ -74,15 +78,24 @@ if (Platform.OS !== 'web') {
 }
 
 // Default avatar URL
-const DEFAULT_AVATAR_URL = 'https://firebasestorage.googleapis.com/v0/b/travel-app-3da72.firebasestorage.app/o/default%2Fdefault-pic.jpg?alt=media&token=7177f487-a345-4e45-9a56-732f03dbf65d';
+import { DEFAULT_AVATAR_URL } from '@/lib/api';
 const DEFAULT_IMAGE_URL = DEFAULT_AVATAR_URL;
+const DEFAULT_AVATAR_SOURCE = { uri: DEFAULT_AVATAR_URL };
 
 function normalizeAvatarUri(uri: any): string | null {
+  if (typeof uri === 'object' && uri !== null) {
+    const candidate = (uri as any).url || (uri as any).uri || (uri as any).secure_url || '';
+    if (typeof candidate === 'string') uri = candidate;
+  }
   if (typeof uri !== 'string') return null;
   const trimmed = uri.trim();
   if (!trimmed) return null;
   const lower = trimmed.toLowerCase();
   if (lower === 'null' || lower === 'undefined' || lower === 'n/a' || lower === 'na') return null;
+  if (lower.includes('via.placeholder.com/200x200.png?text=profile')) return null;
+  if (lower.includes('/default%2fdefault-pic.jpg') || lower.includes('/default/default-pic.jpg')) return null;
+  if (lower.startsWith('http://')) return `https://${trimmed.slice(7)}`;
+  if (lower.startsWith('//')) return `https:${trimmed}`;
   return trimmed;
 }
 
@@ -262,6 +275,7 @@ function getPostId(post: any): string {
 
 export default function Profile({ userIdProp }: any) {
   // Constants
+  const insets = useSafeAreaInsets();
   const POSTS_PER_PAGE = 12;
 
   // State and context
@@ -272,6 +286,8 @@ export default function Profile({ userIdProp }: any) {
   const [highlightViewerVisible, setHighlightViewerVisible] = useState(false);
   const [selectedHighlightId, setSelectedHighlightId] = useState<string | null>(null);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [currentUserUidAlias, setCurrentUserUidAlias] = useState<string | null>(null);
+  const [currentUserFirebaseAlias, setCurrentUserFirebaseAlias] = useState<string | null>(null);
   const [authLoading, setAuthLoading] = useState(false);
   const router = useRouter();
   const params = useLocalSearchParams();
@@ -280,8 +296,14 @@ export default function Profile({ userIdProp }: any) {
   useEffect(() => {
     const getUserId = async () => {
       try {
-        const userId = await AsyncStorage.getItem('userId');
+        const userId = await resolveCanonicalUserId();
         setCurrentUserId(userId);
+        const [uidAlias, firebaseAlias] = await Promise.all([
+          AsyncStorage.getItem('uid'),
+          AsyncStorage.getItem('firebaseUid'),
+        ]);
+        setCurrentUserUidAlias(uidAlias);
+        setCurrentUserFirebaseAlias(firebaseAlias);
       } catch (error) {
         console.error('[Profile] Failed to get userId from storage:', error);
       }
@@ -300,21 +322,36 @@ export default function Profile({ userIdProp }: any) {
     viewedUserId = currentUserId || undefined;
   }
 
-  console.log('[Profile] viewedUserId extracted:', viewedUserId, 'currentUserId:', currentUserId, 'userIdProp:', userIdProp);
+  if (__DEV__) {
+    console.log('[Profile] viewedUserId extracted:', viewedUserId, 'currentUserId:', currentUserId, 'userIdProp:', userIdProp);
+  }
 
   // Determine if viewing own profile - compare IDs or check if no explicit user passed
-  const isOwnProfile = (viewedUserId && currentUserId && viewedUserId === currentUserId) || (!userIdProp && !params.user && !!currentUserId);
+  const selfIds = new Set(
+    [currentUserId, currentUserUidAlias, currentUserFirebaseAlias]
+      .filter(Boolean)
+      .map((v) => String(v))
+  );
+  const isOwnProfile = (viewedUserId && selfIds.has(String(viewedUserId))) || (!userIdProp && !params.user && selfIds.size > 0);
 
-  console.log('[Profile] isOwnProfile:', isOwnProfile, 'viewedUserId===currentUserId:', viewedUserId === currentUserId);
+  if (viewedUserId && selfIds.has(String(viewedUserId)) && currentUserId && viewedUserId !== currentUserId) {
+    viewedUserId = currentUserId;
+  }
+
+  if (__DEV__) {
+    console.log('[Profile] isOwnProfile:', isOwnProfile, 'viewedUserId===currentUserId:', viewedUserId === currentUserId);
+  }
 
   const [profile, setProfile] = useState<ProfileData | null>(null);
+  const [profileAvatarFailed, setProfileAvatarFailed] = useState(false);
   const [isPrivate, setIsPrivate] = useState(false);
   const [approvedFollower, setApprovedFollower] = useState(false);
   const [followRequestPending, setFollowRequestPending] = useState(false);
   const [loading, setLoading] = useState<boolean>(true);
   const [posts, setPosts] = useState<any[]>([]);
+  const [savedSectionPosts, setSavedSectionPosts] = useState<any[]>([]);
   const [passportLocationsCount, setPassportLocationsCount] = useState<number>(0);
-  const [sections, setSections] = useState<{ name: string; postIds: string[]; coverImage?: string }[]>([]);
+  const [sections, setSections] = useState<{ name: string; postIds: string[]; coverImage?: string; visibility?: 'public' | 'private' | 'specific'; collaborators?: any[] }[]>([]);
   const [selectedSection, setSelectedSection] = useState<string | null>(null);
   const [postViewerVisible, setPostViewerVisible] = useState<boolean>(false);
   const [selectedPostIndex, setSelectedPostIndex] = useState<number>(0);
@@ -322,6 +359,7 @@ export default function Profile({ userIdProp }: any) {
   const { location: currentLocation } = useCurrentLocation();
   const [taggedPosts, setTaggedPosts] = useState<any[]>([]);
   const [editSectionsModal, setEditSectionsModal] = useState<boolean>(false);
+  const [viewCollectionsModal, setViewCollectionsModal] = useState<boolean>(false);
   const [followLoading, setFollowLoading] = useState(false);
   const [likedPosts, setLikedPosts] = useState<{ [key: string]: boolean }>({});
   const [savedPosts, setSavedPosts] = useState<{ [key: string]: boolean }>({});
@@ -329,7 +367,6 @@ export default function Profile({ userIdProp }: any) {
   const [commentModalPostId, setCommentModalPostId] = useState<string>('');
   const [commentModalAvatar, setCommentModalAvatar] = useState<string>('');
   const [highlights, setHighlights] = useState<Highlight[]>([]);
-  const [createHighlightModalVisible, setCreateHighlightModalVisible] = useState(false);
   const [isFollowing, setIsFollowing] = useState(false);
 
   // Story Upload State
@@ -341,6 +378,27 @@ export default function Profile({ userIdProp }: any) {
   const [locationSuggestions, setLocationSuggestions] = useState<any[]>([]);
   const [loadingLocations, setLoadingLocations] = useState(false);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
+  const hasLoadedOnceRef = useRef(false);
+  const isProfileLoadingRef = useRef(false);
+  const lastProfileLoadAtRef = useRef(0);
+  const lastRefreshEventAtRef = useRef(0);
+  const MIN_PROFILE_RELOAD_MS = 2500;
+  const MIN_REFRESH_EVENT_GAP_MS = 1200;
+  const { hideHeader, showHeader, headerScrollY } = useHeaderVisibility();
+  const headerHeight = useHeaderHeight();
+
+  // Always show the TopMenu when this tab gains focus
+  // (fixes: header stays hidden if Home screen hid it before user switches to Profile)
+  useFocusEffect(
+    useCallback(() => {
+      showHeader();
+      headerHiddenRef.current = false;
+    }, [showHeader])
+  );
+
+  const lastScrollYRef = useRef(0);
+  const lastEmitTsRef = useRef(0);
+  const headerHiddenRef = useRef(false);
 
   // Handle return from story-creator
   useEffect(() => {
@@ -385,8 +443,19 @@ export default function Profile({ userIdProp }: any) {
     router.push('/story-creator' as any);
   };
 
+  const sectionSourcePosts = useMemo(() => {
+    const merged = [...posts, ...savedSectionPosts];
+    const byId = new Map<string, any>();
+    for (const p of merged) {
+      const id = getPostId(p);
+      if (!id) continue;
+      if (!byId.has(id)) byId.set(id, p);
+    }
+    return Array.from(byId.values());
+  }, [posts, savedSectionPosts]);
+
   const visiblePosts = selectedSection
-    ? posts.filter((p: any) => (sections.find((s: any) => s.name === selectedSection)?.postIds || []).includes(getPostId(p)))
+    ? sectionSourcePosts.filter((p: any) => (sections.find((s: any) => s.name === selectedSection)?.postIds || []).includes(getPostId(p)))
     : posts;
 
   const PROFILE_MAP_ENABLED = false;
@@ -409,9 +478,9 @@ export default function Profile({ userIdProp }: any) {
         }
       } else {
         if (isFollowing) {
-          console.log('[handleFollowToggle] Unfollowing user:', viewedUserId);
+          if (__DEV__) console.log('[handleFollowToggle] Unfollowing user:', viewedUserId);
           const res = await unfollowUser(currentUserId, viewedUserId);
-          console.log('[handleFollowToggle] Unfollow response:', res);
+          if (__DEV__) console.log('[handleFollowToggle] Unfollow response:', res);
           setApprovedFollower(false);
           if (res.success) {
             // Update local state immediately
@@ -427,13 +496,13 @@ export default function Profile({ userIdProp }: any) {
             const profileRes = await getUserProfileAPI(viewedUserId, currentUserId || undefined);
             if (profileRes.success && profileRes.data) {
               setProfile(profileRes.data);
-              console.log('[handleFollowToggle] Profile refreshed after unfollow');
+              if (__DEV__) console.log('[handleFollowToggle] Profile refreshed after unfollow');
             }
           }
         } else {
-          console.log('[handleFollowToggle] Following user:', viewedUserId);
+          if (__DEV__) console.log('[handleFollowToggle] Following user:', viewedUserId);
           const res = await followUser(currentUserId, viewedUserId);
-          console.log('[handleFollowToggle] Follow response:', res);
+          if (__DEV__) console.log('[handleFollowToggle] Follow response:', res);
           if (res.success) {
             // Update local state immediately
             setIsFollowing(true);
@@ -448,7 +517,7 @@ export default function Profile({ userIdProp }: any) {
             const profileRes = await getUserProfileAPI(viewedUserId, currentUserId || undefined);
             if (profileRes.success && profileRes.data) {
               setProfile(profileRes.data);
-              console.log('[handleFollowToggle] Profile refreshed after follow');
+              if (__DEV__) console.log('[handleFollowToggle] Profile refreshed after follow');
             }
           }
         }
@@ -500,7 +569,7 @@ export default function Profile({ userIdProp }: any) {
       // TODO: implement save/unsave on backend API
       // For now, just update UI state
       setSavedPosts(prev => ({ ...prev, [post.id]: !isSaved }));
-      console.log('Post', isSaved ? 'unsaved' : 'saved', '(local only)');
+      if (__DEV__) console.log('Post', isSaved ? 'unsaved' : 'saved', '(local only)');
     } catch (error) {
       console.error('Error saving/unsaving post:', error);
     }
@@ -510,7 +579,7 @@ export default function Profile({ userIdProp }: any) {
     try {
       await sharePost(post);
     } catch (e) {
-      console.log('Share error:', e);
+      if (__DEV__) console.log('Share error:', e);
     }
   };
 
@@ -529,18 +598,23 @@ export default function Profile({ userIdProp }: any) {
           onPress: async () => {
             try {
               // Block user via backend API
-              const success = await userService.blockUser(currentUserId, viewedUserId);
+              const blockerId = currentUserId;
+              const targetUserId = viewedUserId;
+              if (!blockerId || !targetUserId) {
+                throw new Error('Missing user id');
+              }
+              const success = await userService.blockUser(blockerId, targetUserId);
 
               if (success) {
                 // Also unfollow if following
                 if (isFollowing) {
-                  await unfollowUser(currentUserId, viewedUserId);
+                  await unfollowUser(blockerId, targetUserId);
                 }
 
                 // Remove from your followers if they follow you
-                const theyFollowYou = profile?.followers?.includes(currentUserId);
+                const theyFollowYou = profile?.followers?.includes(blockerId);
                 if (theyFollowYou) {
-                  await unfollowUser(viewedUserId, currentUserId);
+                  await unfollowUser(targetUserId, blockerId);
                 }
 
                 setUserMenuVisible(false);
@@ -606,6 +680,7 @@ export default function Profile({ userIdProp }: any) {
   // Effects
   useFocusEffect(
     React.useCallback(() => {
+      const forceReload = refreshTrigger > 0;
       const fetchData = async () => {
         // Don't fetch data if viewedUserId is not set yet
         if (!viewedUserId) {
@@ -613,45 +688,83 @@ export default function Profile({ userIdProp }: any) {
           return;
         }
 
-        setLoading(true);
-        try {
-          console.log('[Profile] Fetching data for user:', viewedUserId, 'requester:', currentUserId);
+        const shouldThrottle =
+          !forceReload &&
+          hasLoadedOnceRef.current &&
+          Date.now() - lastProfileLoadAtRef.current < MIN_PROFILE_RELOAD_MS;
 
+        if (shouldThrottle || isProfileLoadingRef.current) {
+          return;
+        }
+
+        isProfileLoadingRef.current = true;
+
+        const isColdStart = !hasLoadedOnceRef.current;
+        if (isColdStart) setLoading(true);
+        try {
           // Fetch profile with requester ID for privacy check
           const profileRes = await getUserProfileAPI(viewedUserId, currentUserId || undefined);
-          console.log('[Profile] Profile response:', profileRes);
-          console.log('[Profile] Full response structure:', {
-            hasSuccess: isObjectLike(profileRes) && 'success' in profileRes,
-            hasData: isObjectLike(profileRes) && 'data' in profileRes,
-            successValue: profileRes?.success,
-            dataType: typeof profileRes?.data,
-            dataKeys: profileRes?.data ? Object.keys(profileRes.data) : 'N/A'
-          });
+          if (__DEV__) {
+            console.log('[Profile] Profile response:', profileRes);
+            console.log('[Profile] Full response structure:', {
+              hasSuccess: isObjectLike(profileRes) && 'success' in profileRes,
+              hasData: isObjectLike(profileRes) && 'data' in profileRes,
+              successValue: profileRes?.success,
+              dataType: typeof profileRes?.data,
+              dataKeys: profileRes?.data ? Object.keys(profileRes.data) : 'N/A',
+              platform: Platform.OS
+            });
+          }
 
           if (profileRes.success) {
             let profileData: ProfileData | null = null;
             if (isObjectLike(profileRes) && 'data' in profileRes && profileRes.data && typeof profileRes.data === 'object') {
               profileData = profileRes.data as ProfileData;
-              console.log('[Profile] Extracted from profileRes.data:', {
-                name: profileData?.name,
-                displayName: profileData?.displayName,
-                avatar: profileData?.avatar,
-                photoURL: profileData?.photoURL,
-                email: profileData?.email,
-                uid: profileData?.uid,
-                _id: (profileData as any)?._id
-              });
+              if (__DEV__) {
+                console.log('[Profile] Extracted from profileRes.data:', {
+                  name: profileData?.name,
+                  displayName: profileData?.displayName,
+                  avatar: profileData?.avatar,
+                  photoURL: profileData?.photoURL,
+                  email: profileData?.email,
+                  uid: profileData?.uid,
+                  _id: (profileData as any)?._id
+                });
+              }
             } else if (isObjectLike(profileRes) && 'profile' in profileRes && profileRes.profile && typeof profileRes.profile === 'object') {
               profileData = profileRes.profile as ProfileData;
-              console.log('[Profile] Extracted from profileRes.profile:', {
-                name: profileData?.name,
-                displayName: profileData?.displayName,
-                avatar: profileData?.avatar,
-                photoURL: profileData?.photoURL
-              });
+              if (__DEV__) {
+                console.log('[Profile] Extracted from profileRes.profile:', {
+                  name: profileData?.name,
+                  displayName: profileData?.displayName,
+                  avatar: profileData?.avatar,
+                  photoURL: profileData?.photoURL
+                });
+              }
             }
-            console.log('[Profile] Final profileData being set:', profileData);
-            console.log('[Profile] Profile state update - isOwnProfile:', isOwnProfile, 'viewedUserId:', viewedUserId);
+            if (__DEV__) {
+              console.log('[Profile] Final profileData being set:', profileData);
+              console.log('[Profile] Profile state update - isOwnProfile:', isOwnProfile, 'viewedUserId:', viewedUserId);
+            }
+            
+            // If profile avatar is missing OR backend still returns default, use cached avatar for own profile.
+            const currentAvatar = normalizeAvatarUri(profileData?.avatar) || normalizeAvatarUri((profileData as any)?.photoURL) || normalizeAvatarUri((profileData as any)?.profilePicture);
+            const isDefaultAvatar = currentAvatar === DEFAULT_AVATAR_URL;
+            if (profileData && isOwnProfile && (!currentAvatar || isDefaultAvatar)) {
+              try {
+                const cachedAvatar = await AsyncStorage.getItem('userAvatar');
+                const normalizedCached = normalizeAvatarUri(cachedAvatar);
+                if (normalizedCached && normalizedCached !== DEFAULT_AVATAR_URL) {
+                  profileData.avatar = normalizedCached;
+                  (profileData as any).photoURL = normalizedCached;
+                  (profileData as any).profilePicture = normalizedCached;
+                  if (__DEV__) console.log('[Profile] Merged cached avatar into profile:', normalizedCached.substring(0, 50));
+                }
+              } catch (e) {
+                if (__DEV__) console.log('[Profile] Could not get cached avatar:', e);
+              }
+            }
+            
             setProfile(profileData);
             const derivedIsPrivate = !!profileData?.isPrivate;
             const derivedApprovedFollower = !!profileData?.approvedFollowers?.includes(currentUserId || '');
@@ -661,92 +774,120 @@ export default function Profile({ userIdProp }: any) {
             setApprovedFollower(derivedApprovedFollower);
             setFollowRequestPending(profileData?.followRequestPending || false);
 
-            setPassportLocationsCount(0);
-            if (viewedUserId && canViewPrivateProfile) {
-              try {
-                const passportRes: any = await getPassportData(viewedUserId);
-                const stamps = Array.isArray(passportRes?.stamps) ? passportRes.stamps : [];
-                const count = typeof passportRes?.ticketCount === 'number' ? passportRes.ticketCount : stamps.length;
-                setPassportLocationsCount(count);
-              } catch {
-                setPassportLocationsCount(0);
-              }
+            // Performance: don't block the whole profile screen on every endpoint.
+            // Fetch the blocker set first (needed for filtering), then progressively
+            // hydrate posts/sections/highlights/stories/tagged/saved.
+            const blockedSet = await (currentUserId ? fetchBlockedUserIds(currentUserId) : Promise.resolve(new Set<string>()));
+
+            // Start requests in parallel (but apply results progressively)
+            const postsPromise = getUserPostsAPI(viewedUserId, currentUserId || undefined).catch(() => null);
+            const sectionsPromise = getUserSectionsAPI(viewedUserId, currentUserId || undefined).catch(() => null);
+            const highlightsPromise = getUserHighlightsAPI(viewedUserId, currentUserId || undefined).catch(() => null);
+            const storiesPromise = getUserStories(viewedUserId).catch(() => null);
+            const taggedPostsPromise = getTaggedPosts(viewedUserId, currentUserId || undefined).catch(() => null);
+            const savedPostsPromise = apiService.get(`/users/${viewedUserId}/saved`, {
+              viewerId: currentUserId || undefined,
+              requesterId: currentUserId || undefined,
+              requesterUserId: currentUserId || undefined,
+            }).catch(() => ({ success: false, data: [] }));
+
+            const passportPromise = (viewedUserId && canViewPrivateProfile)
+              ? getPassportData(viewedUserId).catch(() => null)
+              : Promise.resolve(null);
+            const followStatusPromise = (!isOwnProfile && currentUserId && viewedUserId)
+              ? import('../../lib/firebaseHelpers/follow').then(({ checkFollowStatus }) => checkFollowStatus(currentUserId!, viewedUserId!)).catch(() => null)
+              : Promise.resolve(null);
+
+            // Let UI render header ASAP (lists can hydrate after)
+            setLoading(false);
+
+            const passportRes = await passportPromise;
+            const followStatusRes = await followStatusPromise;
+
+            // Passport count
+            if (passportRes) {
+              const stamps = Array.isArray((passportRes as any)?.stamps) ? (passportRes as any).stamps : [];
+              const count = typeof (passportRes as any)?.ticketCount === 'number' ? (passportRes as any).ticketCount : stamps.length;
+              setPassportLocationsCount(count);
+            } else {
+              setPassportLocationsCount(0);
             }
 
-            // Check follow status if not own profile
-            if (!isOwnProfile && currentUserId && viewedUserId) {
-              const { checkFollowStatus } = await import('../../lib/firebaseHelpers/follow');
-              const followStatusRes = await checkFollowStatus(currentUserId, viewedUserId);
-              console.log('[Profile] Follow status:', followStatusRes);
-              if (followStatusRes.success) {
-                setIsFollowing(followStatusRes.isFollowing || false);
-              }
+            // Follow status
+            if (followStatusRes && (followStatusRes as any).success) {
+              setIsFollowing((followStatusRes as any).isFollowing || false);
             }
-          } else {
-            console.warn('[Profile] Profile fetch failed:', profileRes.error);
-            setProfile(null);
-            setPassportLocationsCount(0);
-          }
 
-          // Fetch posts
-          const postsRes = await getUserPostsAPI(viewedUserId, currentUserId || undefined);
-          console.log('[Profile] Posts response success:', postsRes.success);
+            // Posts (hydrate progressively)
+            const postsRes: any = await postsPromise;
+            let postsData: any[] = [];
+            if (postsRes?.success) {
+              if (isObjectLike(postsRes) && 'data' in postsRes && Array.isArray(postsRes.data)) postsData = postsRes.data;
+              else if (isObjectLike(postsRes) && 'posts' in postsRes && Array.isArray(postsRes.posts)) postsData = postsRes.posts;
+            }
+            // Reduce initial render cost; full list is still available via refresh/pagination later
+            const filteredPosts = filterOutBlocked(postsData, blockedSet);
+            setPosts(filteredPosts.slice(0, 36));
 
-          let postsData: any[] = [];
-          if (postsRes.success) {
-            if (isObjectLike(postsRes) && 'data' in postsRes && Array.isArray(postsRes.data)) postsData = postsRes.data;
-            else if (isObjectLike(postsRes) && 'posts' in postsRes && Array.isArray(postsRes.posts)) postsData = postsRes.posts;
-            const blocked = currentUserId ? await fetchBlockedUserIds(currentUserId) : new Set<string>();
-            setPosts(filterOutBlocked(postsData, blocked));
-          } else {
-            setPosts([]);
-          }
-
-          // Fetch sections (sorted by user's preferred order)
-          let sectionsData: any[] = [];
-          if (viewedUserId) {
-            const sectionsRes = await getUserSectionsAPI(viewedUserId, currentUserId || undefined);
-            if (sectionsRes.success) {
+            // Sections
+            const sectionsRes: any = await sectionsPromise;
+            let sectionsData: any[] = [];
+            if (sectionsRes?.success) {
               if (isObjectLike(sectionsRes) && 'data' in sectionsRes && Array.isArray(sectionsRes.data)) sectionsData = sectionsRes.data;
               else if (isObjectLike(sectionsRes) && 'sections' in sectionsRes && Array.isArray(sectionsRes.sections)) sectionsData = sectionsRes.sections;
-              setSections(sectionsData);
-            } else {
-              setSections([]);
             }
-          } else {
-            setSections([]);
-          }
 
-          // Fetch highlights
-          const highlightsRes = await getUserHighlightsAPI(viewedUserId, currentUserId || undefined);
-          let highlightsData: any[] = [];
-          if (highlightsRes.success) {
-            if (isObjectLike(highlightsRes) && 'data' in highlightsRes && Array.isArray(highlightsRes.data)) highlightsData = highlightsRes.data;
-            else if (isObjectLike(highlightsRes) && 'highlights' in highlightsRes && Array.isArray(highlightsRes.highlights)) highlightsData = highlightsRes.highlights;
-            setHighlights(highlightsData);
-          } else {
-            setHighlights([]);
-          }
+            if (isOwnProfile && sectionsData.length === 0) {
+              const sectionsById = new Map<string, any>();
+              sectionsData.forEach((s: any) => {
+                const k = String(s?._id || s?.id || `${s?.userId || 'u'}:${s?.name || 'section'}`);
+                if (k && !sectionsById.has(k)) sectionsById.set(k, s);
+              });
 
-          // Fetch sections
-          const sectionsRes2 = await getUserSectionsAPI(viewedUserId, currentUserId || undefined);
-          let sectionsData2: any[] = [];
-          if (sectionsRes2.success) {
-            if (isObjectLike(sectionsRes2) && 'data' in sectionsRes2 && Array.isArray(sectionsRes2.data)) sectionsData2 = sectionsRes2.data;
-            else if (isObjectLike(sectionsRes2) && 'sections' in sectionsRes2 && Array.isArray(sectionsRes2.sections)) sectionsData2 = sectionsRes2.sections;
-            console.log('[Profile] useFocusEffect - Setting sections:', sectionsData2.length, 'sections');
-            setSections(sectionsData2);
-          } else {
-            console.log('[Profile] useFocusEffect - No sections found');
-            setSections([]);
-          }
+              const aliases = [currentUserUidAlias, currentUserFirebaseAlias].filter(Boolean).map((v) => String(v));
+              if (__DEV__) {
+                console.log('[Profile] sections fallback aliases:', aliases);
+              }
+              for (const alias of aliases) {
+                const aliasSectionsRes = await getUserSectionsAPI(alias, currentUserId || undefined);
+                const aliasSections = aliasSectionsRes?.success
+                  ? (Array.isArray((aliasSectionsRes as any)?.data) ? (aliasSectionsRes as any).data : (Array.isArray((aliasSectionsRes as any)?.sections) ? (aliasSectionsRes as any).sections : []))
+                  : [];
+                if (__DEV__) {
+                  console.log('[Profile] sections fallback result:', { alias, count: aliasSections.length, success: !!aliasSectionsRes?.success });
+                }
 
-          // Fetch stories
-          try {
-            const storiesRes = await getUserStories(viewedUserId);
-            if (storiesRes.success && Array.isArray(storiesRes.stories)) {
+                aliasSections.forEach((s: any) => {
+                  const k = String(s?._id || s?.id || `${s?.userId || 'u'}:${s?.name || 'section'}`);
+                  if (k && !sectionsById.has(k)) sectionsById.set(k, s);
+                });
+              }
+
+              sectionsData = Array.from(sectionsById.values());
+            }
+            setSections(sectionsData);
+
+            // Highlights
+            const highlightsRes: any = await highlightsPromise;
+            let highlightsData: any[] = [];
+            if (highlightsRes?.success) {
+              if (isObjectLike(highlightsRes) && 'data' in highlightsRes && Array.isArray(highlightsRes.data)) highlightsData = highlightsRes.data;
+              else if (isObjectLike(highlightsRes) && 'highlights' in highlightsRes && Array.isArray(highlightsRes.highlights)) highlightsData = highlightsRes.highlights;
+            }
+            const normalizedHighlights = (Array.isArray(highlightsData) ? highlightsData : [])
+              .map((h: any) => ({
+                ...h,
+                id: String(h?.id || h?._id || ''),
+                title: h?.title || h?.name || 'Highlight',
+                coverImage: h?.coverImage || h?.image || h?.cover || '',
+              }))
+              .filter((h: any) => !!h.id);
+            setHighlights(normalizedHighlights);
+
+            // Stories
+            const storiesRes: any = await storiesPromise;
+            if (storiesRes?.success && Array.isArray(storiesRes?.stories)) {
               const now = Date.now();
-              // Transform stories to match StoriesViewer format
               const transformedStories = storiesRes.stories
                 .filter((s: any) => {
                   const expiryTime = s.expiresAt ? new Date(s.expiresAt).getTime() : 0;
@@ -756,45 +897,114 @@ export default function Profile({ userIdProp }: any) {
                   ...story,
                   id: story._id || story.id,
                   userId: viewedUserId,
-                  userName: profile?.username || profile?.name || 'User',
-                  userAvatar: normalizeAvatarUri(profile?.avatar) || '',
+                  userName: profileData?.username || profileData?.name || (profileData as any)?.displayName || 'User',
+                  userAvatar: normalizeAvatarUri(profileData?.avatar) || normalizeAvatarUri(profileData?.photoURL) || normalizeAvatarUri((profileData as any)?.profilePicture) || '',  // iOS Fix: Check all avatar fields
                   imageUrl: story.image || story.imageUrl || story.mediaUrl,
                   videoUrl: story.video || story.videoUrl,
                   mediaType: story.video ? 'video' : 'image',
                   createdAt: story.createdAt || Date.now()
                 }));
-              setUserStories(transformedStories);
+              // Oldest first (sequence wise)
+              transformedStories.sort((a: any, b: any) => {
+                const ta = Date.parse(String(a?.createdAt || 0)) || 0;
+                const tb = Date.parse(String(b?.createdAt || 0)) || 0;
+                return ta - tb;
+              });
+              setUserStories(transformedStories.slice(0, 60));
             } else {
               setUserStories([]);
             }
-          } catch (err) {
-            console.error('[Profile] Error fetching stories:', err);
-            setUserStories([]);
-          }
 
-          // Fetch tagged posts
-          const taggedPostsRes = await getTaggedPosts(viewedUserId, currentUserId || undefined);
-          if (taggedPostsRes.success) {
+            // Tagged posts
+            const taggedPostsRes: any = await taggedPostsPromise;
             let taggedData: any[] = [];
-            if (isObjectLike(taggedPostsRes) && 'data' in taggedPostsRes && Array.isArray(taggedPostsRes.data)) taggedData = taggedPostsRes.data;
-            else if (isObjectLike(taggedPostsRes) && 'posts' in taggedPostsRes && Array.isArray(taggedPostsRes.posts)) taggedData = taggedPostsRes.posts;
+            if (taggedPostsRes?.success) {
+              if (isObjectLike(taggedPostsRes) && 'data' in taggedPostsRes && Array.isArray(taggedPostsRes.data)) taggedData = taggedPostsRes.data;
+              else if (isObjectLike(taggedPostsRes) && 'posts' in taggedPostsRes && Array.isArray(taggedPostsRes.posts)) taggedData = taggedPostsRes.posts;
+            }
+            setTaggedPosts(filterOutBlocked(taggedData, blockedSet));
 
-            const blocked = currentUserId ? await fetchBlockedUserIds(currentUserId) : new Set<string>();
-            setTaggedPosts(filterOutBlocked(taggedData, blocked));
+            // Saved posts used for section composition (e.g., saved external posts in user's collections)
+            const savedPostsRes: any = await savedPostsPromise;
+            let savedData: any[] = [];
+            if ((savedPostsRes as any)?.success) {
+              const rawSaved = (savedPostsRes as any)?.data || (savedPostsRes as any);
+              if (Array.isArray(rawSaved)) savedData = rawSaved;
+            }
+
+            if (isOwnProfile && savedData.length === 0) {
+              const savedById = new Map<string, any>();
+              savedData.forEach((p: any) => {
+                const k = String(p?._id || p?.id || '');
+                if (k && !savedById.has(k)) savedById.set(k, p);
+              });
+
+              const aliases = [currentUserUidAlias, currentUserFirebaseAlias].filter(Boolean).map((v) => String(v));
+              if (__DEV__) {
+                console.log('[Profile] saved fallback aliases:', aliases);
+              }
+              for (const alias of aliases) {
+                const aliasSavedRes: any = await apiService.get(`/users/${alias}/saved`, {
+                  viewerId: currentUserId || undefined,
+                  requesterId: currentUserId || undefined,
+                  requesterUserId: currentUserId || undefined,
+                }).catch(() => ({ success: false, data: [] }));
+                const aliasSaved = Array.isArray(aliasSavedRes?.data) ? aliasSavedRes.data : (Array.isArray(aliasSavedRes) ? aliasSavedRes : []);
+                if (__DEV__) {
+                  console.log('[Profile] saved fallback result:', { alias, count: aliasSaved.length, success: !!aliasSavedRes?.success });
+                }
+                aliasSaved.forEach((p: any) => {
+                  const k = String(p?._id || p?.id || '');
+                  if (k && !savedById.has(k)) savedById.set(k, p);
+                });
+              }
+
+              savedData = Array.from(savedById.values());
+            }
+            setSavedSectionPosts(filterOutBlocked(savedData, blockedSet));
+
+            if (__DEV__) {
+              console.log('[Profile] final data counts:', {
+                posts: postsData.length,
+                sections: sectionsData.length,
+                savedSectionPosts: savedData.length,
+                isOwnProfile,
+                viewedUserId,
+                currentUserId,
+                currentUserUidAlias,
+                currentUserFirebaseAlias,
+              });
+            }
           } else {
+            console.warn('[Profile] Profile fetch failed:', profileRes.error);
+            setProfile(null);
+            setPassportLocationsCount(0);
+            setPosts([]);
+            setSavedSectionPosts([]);
+            setSections([]);
+            setHighlights([]);
+            setUserStories([]);
             setTaggedPosts([]);
           }
 
-          console.log('[Profile] All data fetched successfully');
+          if (__DEV__) console.log('[Profile] All data fetched successfully');
         } catch (err) {
           console.error('[Profile] Error fetching data:', err);
+        } finally {
+          isProfileLoadingRef.current = false;
+          lastProfileLoadAtRef.current = Date.now();
         }
         setLoading(false);
+        hasLoadedOnceRef.current = true;
       };
 
       fetchData();
-    }, [viewedUserId, currentUserId, refreshTrigger])
+    }, [viewedUserId, currentUserId, currentUserUidAlias, currentUserFirebaseAlias, isOwnProfile, refreshTrigger])
   );
+
+  useEffect(() => {
+    setProfileAvatarFailed(false);
+  }, [profile?.avatar, (profile as any)?.photoURL, (profile as any)?.profilePicture]);
 
   const handleAvatarPick = async () => {
     try {
@@ -826,6 +1036,7 @@ export default function Profile({ userIdProp }: any) {
             const updateRes = await updateUserProfile(currentUserId, { avatar: uploadRes.url });
             if (updateRes.success) {
               setProfile(prev => prev ? { ...prev, avatar: uploadRes.url ?? '' } : prev);
+              await AsyncStorage.setItem('userAvatar', String(uploadRes.url));
               Alert.alert('Success', 'Profile picture updated!');
             } else {
               Alert.alert('Error', 'Failed to update profile avatar: ' + (updateRes.error || 'Unknown error'));
@@ -848,14 +1059,19 @@ export default function Profile({ userIdProp }: any) {
   useEffect(() => {
     const unsub = feedEventEmitter.onFeedUpdate((event) => {
       if (event.type === 'POST_DELETED' && event.postId) {
-        console.log('[Profile] Post deleted event received:', event.postId);
+        if (__DEV__) console.log('[Profile] Post deleted event received:', event.postId);
         setPosts(prev => prev.filter(p => (p.id || p._id) !== event.postId));
       }
     });
 
     // Listen for general feed updates to refresh all data (including stories)
     const subscription = feedEventEmitter.addListener('feedUpdated', () => {
-      console.log('[Profile] Feed updated signal received, refreshing data...');
+      const now = Date.now();
+      if (now - lastRefreshEventAtRef.current < MIN_REFRESH_EVENT_GAP_MS) {
+        return;
+      }
+      lastRefreshEventAtRef.current = now;
+      if (__DEV__) console.log('[Profile] Feed updated signal received, refreshing data...');
       setRefreshTrigger(prev => prev + 1);
     });
 
@@ -898,7 +1114,7 @@ export default function Profile({ userIdProp }: any) {
           <Text style={{ fontSize: 18, color: '#999', marginBottom: 20 }}>Please log in to view your profile</Text>
           <TouchableOpacity
             style={{ backgroundColor: '#007aff', paddingHorizontal: 30, paddingVertical: 12, borderRadius: 8 }}
-            onPress={() => router.push('/login')}
+            onPress={() => router.push('/login' as any)}
           >
             <Text style={{ color: '#fff', fontSize: 16, fontWeight: 'bold' }}>Go to Login</Text>
           </TouchableOpacity>
@@ -932,7 +1148,18 @@ export default function Profile({ userIdProp }: any) {
           <ActivityIndicator size="large" color="#007aff" />
         </View>
       )}
-      <ScrollView contentContainerStyle={styles.content}>
+      <Animated.ScrollView 
+        contentContainerStyle={[styles.content, { paddingTop: headerHeight }]}
+        scrollEventThrottle={16}
+        removeClippedSubviews={Platform.OS !== 'web'}
+        onScroll={
+          headerScrollY
+            ? Animated.event([{ nativeEvent: { contentOffset: { y: headerScrollY } } }], {
+                useNativeDriver: false,
+              })
+            : undefined
+        }
+      >
         {/* Avatar centered */}
         <View style={styles.avatarContainer}>
           <View style={{ position: 'relative', alignItems: 'center', justifyContent: 'center' }}>
@@ -966,14 +1193,28 @@ export default function Profile({ userIdProp }: any) {
               }}
             >
               {(() => {
-                const avatarUri =
+                let avatarUri =
                   normalizeAvatarUri(profile?.avatar) ||
                   normalizeAvatarUri((profile as any)?.photoURL) ||
                   normalizeAvatarUri((profile as any)?.profilePicture) ||
                   null;
 
+                if (profileAvatarFailed) {
+                  avatarUri = null;
+                }
+
+                console.log('[Profile Avatar] Resolved avatarUri:', {
+                  profileAvatar: profile?.avatar,
+                  photoURL: (profile as any)?.photoURL,
+                  profilePicture: (profile as any)?.profilePicture,
+                  finalUri: avatarUri,
+                  isOwnProfile,
+                  platform: Platform.OS
+                });
+
                 const dimmed = isPrivate && !isOwnProfile && !approvedFollower;
 
+                // iOS Fix: Always show avatar URI if available, fallback to DEFAULT_AVATAR_URL not initials
                 if (avatarUri) {
                   return (
                     <ExpoImage
@@ -982,15 +1223,28 @@ export default function Profile({ userIdProp }: any) {
                       contentFit="cover"
                       transition={200}
                       cachePolicy="memory-disk"
+                      priority="high"
+                      onError={() => {
+                        console.warn('[Profile] Avatar failed to load:', {
+                          avatarUri,
+                          platform: Platform.OS
+                        });
+                        setProfileAvatarFailed(true);
+                      }}
                     />
                   );
                 }
 
-                const initials = getInitials(profile?.name || (profile as any)?.displayName || profile?.username || 'User');
+                // iOS Fix: Use DEFAULT_AVATAR_URL instead of initials if no avatar found
                 return (
-                  <View style={[styles.avatar, styles.avatarFallback, dimmed && { opacity: 0.3 }]}>
-                    <Text style={styles.avatarInitials}>{initials}</Text>
-                  </View>
+                  <ExpoImage
+                    source={DEFAULT_AVATAR_SOURCE}
+                    style={[styles.avatar, dimmed && { opacity: 0.3 }]}
+                    contentFit="cover"
+                    transition={200}
+                    cachePolicy="memory-disk"
+                    priority="high"
+                  />
                 );
               })()}
               {isPrivate && !isOwnProfile && !approvedFollower && (
@@ -1140,24 +1394,62 @@ export default function Profile({ userIdProp }: any) {
           {!!(profile as any)?.interests && (!isPrivate || isOwnProfile || approvedFollower) && <Text style={styles.interests}>✨ {(profile as any).interests}</Text>}
         </View>
 
-        {/* Pill buttons: Profile | Sections | Passport (only show for own profile) */}
+        {/* Action Buttons: Owner (Profile | Collections) */}
         {isOwnProfile && (
-          <View style={styles.pillRow}>
-            <TouchableOpacity style={styles.pillBtn} onPress={() => router.push({ pathname: '/edit-profile', params: { userId: viewedUserId } } as any)}>
-              <Ionicons name="person-outline" size={16} color="#000" style={{ marginRight: 4 }} />
+          <View style={[styles.pillRow, { marginBottom: 0 }]}>
+            <TouchableOpacity style={[styles.pillBtn, { flex: 1, paddingVertical: 8 }]} onPress={() => router.push({ pathname: '/edit-profile', params: { userId: viewedUserId } } as any)}>
+              <Feather name="edit-2" size={14} color="#000" style={{ marginRight: 6 }} />
               <Text style={styles.pillText}>Profile</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.pillBtn} onPress={() => router.push('/saved' as any)}>
-              <Ionicons name="albums-outline" size={16} color="#000" style={{ marginRight: 4 }} />
+            <TouchableOpacity style={[styles.pillBtn, { flex: 1, paddingVertical: 8 }]} onPress={() => router.push('/(tabs)/saved' as any)}>
+              <Feather name="edit-2" size={14} color="#000" style={{ marginRight: 6 }} />
               <Text style={styles.pillText}>Collections</Text>
             </TouchableOpacity>
           </View>
         )}
 
+        {/* Action Buttons: Other User (Follow | Message | Collections) */}
+        {!isOwnProfile && (
+          <View style={[styles.pillRow, { marginBottom: 0 }]}>
+            <TouchableOpacity
+              style={[
+                styles.followBtn,
+                (isFollowing || followRequestPending) && styles.followingBtn,
+                { flex: 1, paddingVertical: 8 }
+              ]}
+              onPress={handleFollowToggle}
+              disabled={followLoading || followRequestPending}
+            >
+              <Text style={[
+                styles.followText,
+                (isFollowing || followRequestPending) && styles.followingText
+              ]}>
+                {followRequestPending
+                  ? 'Requested'
+                  : (isFollowing
+                    ? (followLoading ? 'Unfollowing...' : 'Following ⌄')
+                    : (followLoading ? 'Following...' : 'Follow'))}
+              </Text>
+            </TouchableOpacity>
+            {(!isPrivate || approvedFollower) && (
+              <TouchableOpacity style={[styles.pillBtn, { flex: 1, paddingVertical: 8 }]} onPress={handleMessage}>
+                <Ionicons name="chatbubble-outline" size={16} color="#000" style={{ marginRight: 6 }} />
+                <Text style={styles.pillText}>Message</Text>
+              </TouchableOpacity>
+            )}
+            {(!isPrivate || approvedFollower) && (
+              <TouchableOpacity style={[styles.pillBtn, { flex: 1, paddingVertical: 8 }]} onPress={() => setViewCollectionsModal(true)}>
+                <Ionicons name="folder-outline" size={16} color="#000" style={{ marginRight: 6 }} />
+                <Text style={styles.pillText}>Collections</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        )}
+
         {/* Highlights carousel (Instagram-style) - only show for own profile or approved followers */}
         {(!isPrivate || isOwnProfile || approvedFollower) && (
-          <View style={{ marginBottom: 4, marginTop: 4 }}>
-            <HighlightCarousel highlights={highlights} onPressHighlight={handlePressHighlight} isOwnProfile={isOwnProfile} onAddHighlight={() => setCreateHighlightModalVisible(true)} />
+          <View style={{ marginBottom: 0, marginTop: 4 }}>
+            <HighlightCarousel highlights={highlights} onPressHighlight={handlePressHighlight} isOwnProfile={isOwnProfile} />
             {/* StoriesViewer for own stories */}
             {storiesViewerVisible && (
               <Modal
@@ -1176,44 +1468,10 @@ export default function Profile({ userIdProp }: any) {
               visible={highlightViewerVisible}
               highlightId={selectedHighlightId}
               onClose={() => setHighlightViewerVisible(false)}
+              userId={isOwnProfile ? (currentUserId || undefined) : undefined}
+              userName={profile?.displayName || profile?.name}
+              userAvatar={profile?.avatar || profile?.photoURL || undefined}
             />
-          </View>
-        )}
-
-        {/* Follow/Unfollow button for other users' profiles */}
-        {!isOwnProfile && (
-          <View style={styles.pillRow}>
-            <TouchableOpacity
-              style={[
-                styles.followBtn,
-                (isFollowing || followRequestPending) && styles.followingBtn
-              ]}
-              onPress={handleFollowToggle}
-              disabled={followLoading || followRequestPending}
-            >
-              <Text style={[
-                styles.followText,
-                (isFollowing || followRequestPending) && styles.followingText
-              ]}>
-                {followRequestPending
-                  ? 'Requested'
-                  : (isFollowing
-                    ? (followLoading ? 'Unfollowing...' : 'Following')
-                    : (followLoading ? 'Following...' : 'Follow'))}
-              </Text>
-            </TouchableOpacity>
-            {(!isPrivate || approvedFollower) && (
-              <>
-                <TouchableOpacity style={styles.pillBtn} onPress={handleMessage}>
-                  <Ionicons name="chatbubble-outline" size={16} color="#000" style={{ marginRight: 4 }} />
-                  <Text style={styles.pillText}>Message</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.pillBtn} onPress={() => router.push({ pathname: '/saved', params: { userId: viewedUserId } } as any)}>
-                  <Ionicons name="albums-outline" size={16} color="#000" style={{ marginRight: 4 }} />
-                  <Text style={styles.pillText}>Collections</Text>
-                </TouchableOpacity>
-              </>
-            )}
           </View>
         )}
 
@@ -1303,49 +1561,66 @@ export default function Profile({ userIdProp }: any) {
         )}
 
         {/* Collections horizontal scroller - only show if not private or approved */}
-        {(!isPrivate || isOwnProfile || approvedFollower) && segmentTab === 'grid' && sections.length > 0 && (
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 12, gap: 14, paddingVertical: 10 }}>
-            {sections.map((s) => {
-              const isActive = selectedSection === s.name;
-              const coverUri = s.coverImage || posts.find(p => s.postIds?.includes?.(getPostId(p)))?.imageUrl || DEFAULT_AVATAR_URL;
-              return (
-                <TouchableOpacity
-                  key={`section-${s.name}`}
-                  activeOpacity={0.8}
-                  onPress={() => setSelectedSection(isActive ? null : s.name)}
-                  style={{ alignItems: 'center', width: 60 }}
-                >
-                  <View style={{
-                    width: 60, height: 60,
-                    borderRadius: 10,
-                    overflow: 'hidden',
-                    borderWidth: isActive ? 2 : 0,
-                    borderColor: '#0A3D62',
-                    backgroundColor: '#eee',
-                  }}>
-                    <ExpoImage
-                      source={{ uri: coverUri }}
-                      style={{ width: '100%', height: '100%' }}
-                      contentFit="cover"
-                      transition={200}
-                    />
-                  </View>
-                  <Text
-                    numberOfLines={1}
-                    style={{
-                      marginTop: 4,
-                      fontSize: 10,
-                      fontWeight: isActive ? '700' : '400',
-                      color: isActive ? '#0A3D62' : '#333',
-                      textAlign: 'center',
-                      width: 60,
-                    }}
-                  >{s.name}</Text>
-                </TouchableOpacity>
-              );
-            })}
-          </ScrollView>
-        )}
+        {(!isPrivate || isOwnProfile || approvedFollower) && segmentTab === 'grid' && (() => {
+          const visibleSections = (sections as any[]).filter(s => {
+            if (isOwnProfile) return true;
+            // Public is always visible
+            if (!s.visibility || s.visibility === 'public') return true;
+            // Check collaborators for private/specific visibility
+            const collaborators = Array.isArray(s.collaborators) ? s.collaborators : [];
+            const viewerId = String(currentUserId || '');
+            return collaborators.some((c: any) => {
+              const cid = typeof c === 'string' ? c : (c.userId || c.uid || c._id || c.firebaseUid);
+              return String(cid) === viewerId;
+            });
+          });
+
+          if (visibleSections.length === 0) return null;
+
+          return (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 12, gap: 14, paddingVertical: 10 }}>
+              {visibleSections.map((s, idx) => {
+                const isActive = selectedSection === s.name;
+                const coverUri = s.coverImage || sectionSourcePosts.find(p => s.postIds?.includes?.(getPostId(p)))?.imageUrl || DEFAULT_AVATAR_URL;
+                return (
+                  <TouchableOpacity
+                    key={`section-${String((s as any)?._id || s.name)}-${idx}`}
+                    activeOpacity={0.8}
+                    onPress={() => setSelectedSection(isActive ? null : s.name)}
+                    style={{ alignItems: 'center', width: 60 }}
+                  >
+                    <View style={{
+                      width: 60, height: 60,
+                      borderRadius: 10,
+                      overflow: 'hidden',
+                      borderWidth: isActive ? 2 : 0,
+                      borderColor: '#0A3D62',
+                      backgroundColor: '#eee',
+                    }}>
+                      <ExpoImage
+                        source={{ uri: coverUri }}
+                        style={{ width: '100%', height: '100%' }}
+                        contentFit="cover"
+                        transition={200}
+                      />
+                    </View>
+                    <Text
+                      numberOfLines={1}
+                      style={{
+                        marginTop: 4,
+                        fontSize: 10,
+                        fontWeight: isActive ? '700' : '400',
+                        color: isActive ? '#0A3D62' : '#333',
+                        textAlign: 'center',
+                        width: 60,
+                      }}
+                    >{s.name}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          );
+        })()}
 
         {/* Posts grid by segment tab - only show if not private or approved */}
         {(!isPrivate || isOwnProfile || approvedFollower) && segmentTab !== 'map' && (
@@ -1394,7 +1669,71 @@ export default function Profile({ userIdProp }: any) {
             })}
           </View>
         )}
-      </ScrollView>
+      </Animated.ScrollView>
+
+      {/* Collections View Sheet */}
+      <Modal
+        visible={viewCollectionsModal}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setViewCollectionsModal(false)}
+      >
+        <TouchableOpacity
+          style={styles.menuOverlay}
+          activeOpacity={1}
+          onPress={() => setViewCollectionsModal(false)}
+        >
+          <TouchableOpacity 
+            activeOpacity={1} 
+            onPress={(e) => e.stopPropagation()}
+            style={[styles.menuSheet, { paddingBottom: Math.max(insets.bottom, 20), maxHeight: SCREEN_HEIGHT * 0.7 }]}
+          >
+            <View style={styles.handleContainer}>
+              <View style={styles.menuHandle} />
+            </View>
+            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 10 }}>
+              {sections.length === 0 ? (
+                <Text style={{ textAlign: 'center', color: '#999', marginTop: 20 }}>No collections yet.</Text>
+              ) : sections.map((s, idx) => {
+                // Ensure visibility rule applies to the list as well (if private or specific collaborators)
+                if (!isOwnProfile && s.visibility === 'private') {
+                  const collaborators = Array.isArray(s.collaborators) ? s.collaborators : [];
+                  const viewerId = String(currentUserId || '');
+                  const isCollab = collaborators.some((c: any) => {
+                    const cid = typeof c === 'string' ? c : (c.userId || c.uid || c._id || c.firebaseUid);
+                    return String(cid) === viewerId;
+                  });
+                  if (!isCollab) return null;
+                }
+
+                const coverUri = s.coverImage || sectionSourcePosts.find(p => s.postIds?.includes?.(getPostId(p)))?.imageUrl || DEFAULT_AVATAR_URL;
+                const isActive = selectedSection === s.name;
+                
+                return (
+                  <TouchableOpacity
+                    key={`sheet-section-${idx}`}
+                    style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 16 }}
+                    onPress={() => {
+                      setSelectedSection(isActive ? null : s.name);
+                      setViewCollectionsModal(false);
+                    }}
+                  >
+                    <ExpoImage
+                      source={{ uri: coverUri }}
+                      style={{ width: 50, height: 50, borderRadius: 12, backgroundColor: '#eee', borderWidth: isActive ? 2 : 0, borderColor: '#0A3D62' }}
+                      contentFit="cover"
+                      transition={200}
+                    />
+                    <Text style={{ marginLeft: 16, fontSize: 16, fontWeight: isActive ? '700' : '500', color: isActive ? '#0A3D62' : '#222' }}>
+                      {s.name}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
 
       {/* Instagram-style Post Viewer */}
       {React.createElement(PostViewerModal as any, {
@@ -1408,6 +1747,7 @@ export default function Profile({ userIdProp }: any) {
         savedPosts: savedPosts,
         handleLikePost: handleLikePost,
         handleSavePost: handleSavePost,
+        title: "Post",
         handleSharePost: handleSharePost,
         setCommentModalPostId: (id: any) => setCommentModalPostId(id || ''),
         setCommentModalAvatar: setCommentModalAvatar,
@@ -1416,13 +1756,13 @@ export default function Profile({ userIdProp }: any) {
 
       <Modal visible={commentModalVisible} animationType="slide" transparent={true} onRequestClose={() => setCommentModalVisible(false)}>
         <KeyboardAvoidingView
-          style={{ flex: 1, justifyContent: 'flex-end' }}
+          style={{ flex: 1 }}
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          keyboardVerticalOffset={getKeyboardOffset()}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? getKeyboardOffset() : 0}
         >
-          <View style={{ flex: 1, justifyContent: 'flex-end' }}>
+          <View style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.5)' }}>
             <TouchableOpacity
-              style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)' }}
+              style={{ flex: 1 }}
               activeOpacity={1}
               onPress={() => setCommentModalVisible(false)}
             />
@@ -1438,10 +1778,6 @@ export default function Profile({ userIdProp }: any) {
                 shadowOpacity: 0.08,
                 shadowRadius: 8,
                 elevation: 8,
-                position: 'absolute',
-                left: 0,
-                right: 0,
-                bottom: 0,
               }}
             >
               <View style={{ alignItems: 'center', marginBottom: 8 }}>
@@ -1453,6 +1789,7 @@ export default function Profile({ userIdProp }: any) {
                   postId={commentModalPostId}
                   postOwnerId={posts.find(p => p.id === commentModalPostId)?.userId || ''}
                   currentAvatar={commentModalAvatar}
+                  currentUser={currentUserId ? { uid: currentUserId } : undefined}
                 />
               )}
             </View>
@@ -1473,24 +1810,7 @@ export default function Profile({ userIdProp }: any) {
         />
       )}
 
-      {/* Create Highlight Modal */}
-      <CreateHighlightModal
-        visible={createHighlightModalVisible}
-        onClose={() => setCreateHighlightModalVisible(false)}
-        userId={currentUserId || ''}
-        onSuccess={async () => {
-          // Refresh highlights after creating new one
-          if (viewedUserId) {
-            const highlightsRes = await getUserHighlights(viewedUserId, currentUserId || undefined);
-            let highlightsData: any[] = [];
-            if (highlightsRes.success) {
-              if (isObjectLike(highlightsRes) && 'data' in highlightsRes && Array.isArray(highlightsRes.data)) highlightsData = highlightsRes.data;
-              else if (isObjectLike(highlightsRes) && 'highlights' in highlightsRes && Array.isArray(highlightsRes.highlights)) highlightsData = highlightsRes.highlights;
-              setHighlights(highlightsData);
-            }
-          }
-        }}
-      />
+      {/* Create Highlight Modal removed as per user request */}
 
       {/* User Menu Modal (for other users' profiles) - Block, Report options */}
       <Modal
@@ -1504,15 +1824,25 @@ export default function Profile({ userIdProp }: any) {
           activeOpacity={1}
           onPress={() => setUserMenuVisible(false)}
         >
-          <TouchableOpacity activeOpacity={1} onPress={(e) => e.stopPropagation()}>
+          <TouchableOpacity 
+            activeOpacity={1} 
+            onPress={(e) => e.stopPropagation()}
+            style={[
+              styles.menuSheet, 
+              { paddingBottom: Math.max(insets.bottom, 20) }
+            ]}
+          >
+            {/* Static Handle Container */}
+            <View style={styles.handleContainer}>
+              <View style={styles.menuHandle} />
+            </View>
+
             <ScrollView
-              style={styles.menuSheet}
+              style={{ maxHeight: SCREEN_HEIGHT * 0.8 }}
               contentContainerStyle={styles.menuSheetContent}
               bounces={false}
+              showsVerticalScrollIndicator={false}
             >
-              {/* Handle */}
-              <View style={styles.menuHandle} />
-
               {/* Menu Options */}
               <TouchableOpacity
                 style={styles.menuItem}
@@ -1759,7 +2089,17 @@ export default function Profile({ userIdProp }: any) {
                         );
                         uploadUri = manipResult.uri;
                       }
-                      const storyRes = await createStory(currentUserId, uploadUri, mediaType, selectedMedia.locationData, (p: number) => setUploadProgress(Math.round(p)));
+                      const storyRes = await createStory(
+                        currentUserId,
+                        uploadUri,
+                        mediaType,
+                        undefined,
+                        selectedMedia.locationData,
+                        undefined,
+                        'Everyone',
+                        [],
+                        (p: number) => setUploadProgress(Math.round(p))
+                      );
                       if (storyRes?.success) {
                         setUploadProgress(100);
                         setTimeout(() => {
@@ -1793,9 +2133,10 @@ const styles = StyleSheet.create({
   headerTitle: { fontSize: 18, fontWeight: 'bold', color: '#222', flex: 1, textAlign: 'center' },
   headerMenuBtn: { padding: 8, marginLeft: 8, marginTop: 4 },
   menuOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' },
-  menuSheet: { backgroundColor: '#fff', borderTopLeftRadius: 20, borderTopRightRadius: 20, maxHeight: '85%' },
-  menuSheetContent: { paddingBottom: 20, paddingTop: 8 },
-  menuHandle: { width: 40, height: 4, backgroundColor: '#ccc', borderRadius: 2, alignSelf: 'center', marginTop: 8, marginBottom: 16 },
+  menuSheet: { backgroundColor: '#fff', borderTopLeftRadius: 24, borderTopRightRadius: 24, overflow: 'hidden' },
+  menuSheetContent: { paddingBottom: 20 },
+  handleContainer: { width: '100%', alignItems: 'center', paddingTop: 10, paddingBottom: 10 },
+  menuHandle: { width: 40, height: 4, backgroundColor: '#ddd', borderRadius: 2 },
   menuItem: { flexDirection: 'row', alignItems: 'center', paddingVertical: 16, paddingHorizontal: 20 },
   menuIconContainer: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center', marginRight: 14 },
   menuItemText: { fontSize: 16, color: '#222', fontWeight: '500' },
@@ -1809,11 +2150,11 @@ const styles = StyleSheet.create({
   avatarFallback: { alignItems: 'center', justifyContent: 'center', backgroundColor: '#EEF2FF' },
   avatarInitials: { fontSize: 26, fontWeight: '800', color: '#667085' },
   statsRow: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', paddingVertical: 8, paddingHorizontal: 16, gap: 24 },
-  statItem: { alignItems: 'center', minWidth: 50 },
-  statNum: { fontWeight: '700', fontSize: 16, color: '#222' },
-  statLbl: { fontSize: 11, color: '#666', marginTop: 2 },
+  statItem: { alignItems: 'center', minWidth: 60, gap: 4 },
+  statNum: { fontWeight: '700', fontSize: 18, color: '#000' },
+  statLbl: { fontSize: 12, color: '#444', marginTop: 4, fontWeight: '600' },
   infoBlock: { alignItems: 'center', paddingVertical: 8, paddingHorizontal: 16 },
-  displayName: { fontSize: 15, fontWeight: '600', color: '#222' },
+  displayName: { fontSize: 16, fontWeight: '700', color: '#000' },
   username: { fontSize: 13, color: '#667eea', marginTop: 2, fontWeight: '500' },
   bio: { fontSize: 13, color: '#555', marginTop: 4, textAlign: 'center', lineHeight: 18 },
   linksBlock: { marginTop: 6, width: '100%' },
@@ -1843,19 +2184,75 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#333',
   },
-  pillRow: { flexDirection: 'row', gap: 8, paddingVertical: 8, paddingHorizontal: 16 },
+  pillRow: { flexDirection: 'row', gap: 8, paddingVertical: 8, paddingHorizontal: 16, marginBottom: 0 },
   pillBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: '#f5f5f5', paddingVertical: 8, borderRadius: 6, borderWidth: 1, borderColor: '#e0e0e0' },
   pillText: { fontSize: 12, fontWeight: '500', color: '#333' },
   followBtn: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#0A3D62', paddingVertical: 8, borderRadius: 6 },
   followingBtn: { backgroundColor: '#f5f5f5', borderWidth: 1, borderColor: '#e0e0e0' },
   followText: { fontSize: 12, fontWeight: '600', color: '#fff' },
   followingText: { color: '#333' },
+  collectionsSheetOverlay: {
+    flex: 1,
+    justifyContent: 'flex-end',
+  },
+  collectionsSheetBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.22)',
+  },
+  collectionsSheet: {
+    backgroundColor: '#fff',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingTop: 10,
+    paddingHorizontal: 16,
+    paddingBottom: 18,
+  },
+  collectionsHandle: {
+    width: 42,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: '#ddd',
+    alignSelf: 'center',
+    marginBottom: 12,
+  },
+  collectionSheetRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    borderBottomWidth: 0.5,
+    borderBottomColor: '#f0f0f0',
+  },
+  collectionSheetThumb: {
+    width: 44,
+    height: 44,
+    borderRadius: 10,
+    marginRight: 12,
+    backgroundColor: '#eee',
+  },
+  collectionSheetThumbPlaceholder: {
+    width: 44,
+    height: 44,
+    borderRadius: 10,
+    marginRight: 12,
+    backgroundColor: '#f2f2f2',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  collectionSheetText: {
+    fontSize: 18,
+    color: '#222',
+    flexShrink: 1,
+  },
+  collectionSheetTextActive: {
+    color: '#0A3D62',
+    fontWeight: '700',
+  },
   sectionsScroller: { paddingVertical: 8 },
   sectionCard: { alignItems: 'center', width: 70, marginRight: 4 },
   sectionCover: { width: 60, height: 60, borderRadius: 8, backgroundColor: '#eee' },
   sectionLabel: { marginTop: 4, fontSize: 10, color: '#666', textAlign: 'center' },
   sectionLabelActive: { fontWeight: '700', color: '#000' },
-  segmentControl: { flexDirection: 'row', borderTopWidth: 0.5, borderBottomWidth: 0.5, borderColor: '#e0e0e0', marginTop: 8 },
+  segmentControl: { flexDirection: 'row', borderTopWidth: 0.5, borderBottomWidth: 0.5, borderColor: '#e0e0e0', marginTop: 0 },
   segmentBtn: { flex: 1, alignItems: 'center', paddingVertical: 10 },
   segmentBtnActive: { flex: 1, alignItems: 'center', paddingVertical: 10, borderBottomWidth: 2, borderBottomColor: '#0A3D62' },
   card: { backgroundColor: '#f7f7f7', borderRadius: 12, padding: 16, borderWidth: 1, borderColor: '#eee', marginTop: 8 },

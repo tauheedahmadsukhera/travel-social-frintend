@@ -100,7 +100,7 @@ export default function PhoneSignUpScreen() {
 
       if (result.success) {
         // Store phone number in user profile
-        const user = auth.currentUser;
+        const user = auth?.currentUser;
 
         if (user) {
           await updateUserProfile(user.uid, {
@@ -108,7 +108,9 @@ export default function PhoneSignUpScreen() {
           });
 
           // Logout user immediately so they must verify email first
-          await auth.signOut();
+          if (auth) {
+            await auth.signOut();
+          }
         }
 
         Alert.alert(

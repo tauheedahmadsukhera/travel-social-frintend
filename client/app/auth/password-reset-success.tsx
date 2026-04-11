@@ -37,7 +37,7 @@ export default function PasswordResetSuccessScreen() {
         {/* Back to Home */}
         <CustomButton
           title="Back to Home"
-          onPress={() => router.replace('/(tabs)')}
+          onPress={() => router.replace('/(tabs)/home')}
           variant="secondary"
           style={styles.homeButton}
         />

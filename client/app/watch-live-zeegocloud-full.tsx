@@ -1,3 +1,4 @@
+import { DEFAULT_AVATAR_URL } from '../lib/api';
 /**
  * Watch Live Screen - ZeegoCloud with Full Features
  * Features: Comments, Viewers, Map, Share, etc.
@@ -43,7 +44,7 @@ if (Platform.OS !== 'web') {
 }
 
 const { width, height } = Dimensions.get('window');
-const DEFAULT_AVATAR_URL = 'https://via.placeholder.com/200x200.png?text=Profile';
+
 
 // Utility functions
 function getSafeCoordinate(coord: { latitude?: number; longitude?: number } | null, fallback = { latitude: 51.5074, longitude: -0.1278 }) {
@@ -177,7 +178,7 @@ export default function WatchLiveScreen() {
   // Load user data
   useEffect(() => {
     const loadUser = async () => {
-      const user = auth.currentUser;
+      const user = auth?.currentUser;
       if (user) {
         setCurrentUser({ uid: user.uid, displayName: user.displayName || 'Anonymous', photoURL: user.photoURL || DEFAULT_AVATAR_URL });
       }
@@ -205,60 +206,54 @@ export default function WatchLiveScreen() {
       const service = ZeegocloudStreamingService.getInstance();
       const userId = currentUser?.uid || 'anonymous';
       const userName = currentUser?.displayName || 'Anonymous';
-      
-      const success = await service.initialize(userId, roomId, userName, false);
 
-      if (success) {
-        zeegocloudServiceRef.current = service;
-        setIsJoined(true);
+      await service.initialize(userId, roomId, userName, false);
+      zeegocloudServiceRef.current = service;
+      setIsJoined(true);
 
-        // Notify backend that user joined + subscribe to viewers (best-effort)
-        try {
-          if (streamIdParam && userId) {
-            await joinLiveStreamWithProfile(String(streamIdParam), String(userId), {
-              userName: String(currentUser?.displayName || '').trim() || (typeof auth.currentUser?.email === 'string' ? auth.currentUser.email.split('@')[0] : 'Viewer'),
-              userAvatar: String(currentUser?.photoURL || '').trim() || DEFAULT_AVATAR_URL,
-            });
-          }
-        } catch (e: any) {
-          logger.error('Join live stream (backend) failed:', e);
+      try {
+        if (streamIdParam && userId) {
+          const authEmail = auth?.currentUser?.email;
+          await joinLiveStreamWithProfile(String(streamIdParam), String(userId), {
+            userName: String(currentUser?.displayName || '').trim() || (typeof authEmail === 'string' ? authEmail.split('@')[0] : 'Viewer'),
+            userAvatar: String(currentUser?.photoURL || '').trim() || DEFAULT_AVATAR_URL,
+          });
         }
-
-        try {
-          if (streamIdParam) {
-            if (viewersUnsubRef.current) {
-              try { viewersUnsubRef.current(); } catch {}
-              viewersUnsubRef.current = null;
-            }
-
-            const unsub = subscribeToLiveViewers(
-              String(streamIdParam),
-              (items) => {
-                const mapped: Viewer[] = (Array.isArray(items) ? items : []).map((v: any) => ({
-                  id: String(v?.id || ''),
-                  name: String(v?.name || 'Viewer'),
-                  avatar: (typeof v?.avatar === 'string' && v.avatar.trim().length > 0) ? v.avatar : DEFAULT_AVATAR_URL,
-                }));
-                setViewers(mapped);
-              },
-              (count) => {
-                if (typeof count === 'number') setViewerCount(count);
-              }
-            );
-
-            viewersUnsubRef.current = () => {
-              try { unsub(); } catch {}
-            };
-          }
-        } catch (e: any) {
-          logger.error('Subscribe to live viewers failed:', e);
-        }
-
-        logger.info('Joined stream:', roomId);
-      } else {
-        Alert.alert('Error', 'Failed to join stream');
-        router.back();
+      } catch (e: any) {
+        logger.error('Join live stream (backend) failed:', e);
       }
+
+      try {
+        if (streamIdParam) {
+          if (viewersUnsubRef.current) {
+            try { viewersUnsubRef.current(); } catch {}
+            viewersUnsubRef.current = null;
+          }
+
+          const unsub = subscribeToLiveViewers(
+            String(streamIdParam),
+            (items) => {
+              const mapped: Viewer[] = (Array.isArray(items) ? items : []).map((v: any) => ({
+                id: String(v?.id || ''),
+                name: String(v?.name || 'Viewer'),
+                avatar: (typeof v?.avatar === 'string' && v.avatar.trim().length > 0) ? v.avatar : DEFAULT_AVATAR_URL,
+              }));
+              setViewers(mapped);
+            },
+            (count) => {
+              if (typeof count === 'number') setViewerCount(count);
+            }
+          );
+
+          viewersUnsubRef.current = () => {
+            try { unsub(); } catch {}
+          };
+        }
+      } catch (e: any) {
+        logger.error('Subscribe to live viewers failed:', e);
+      }
+
+      logger.info('Joined stream:', roomId);
     } catch (error) {
       logger.error('Join stream error:', error);
       Alert.alert('Error', 'Failed to join stream');

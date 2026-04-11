@@ -6,7 +6,7 @@
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "trave-social",
-    "userInterfaceStyle": "automatic",
+    "userInterfaceStyle": "light",
     "android": {
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
@@ -26,7 +26,8 @@
         "android.permission.FOREGROUND_SERVICE",
         "android.permission.FOREGROUND_SERVICE_LOCATION",
         "android.permission.POST_NOTIFICATIONS",
-        "android.permission.INTERNET"
+        "android.permission.INTERNET",
+        "android.permission.WAKE_LOCK"
       ],
       "config": {
         "googleMaps": {
@@ -49,7 +50,12 @@
         "NSPhotoLibraryUsageDescription": "Allow Trave-Social to access your photos for posting.",
         "NSLocationWhenInUseUsageDescription": "Allow Trave-Social to use your location for map features and location tagging.",
         "NSLocationAlwaysAndWhenInUseUsageDescription": "Allow Trave-Social to track your travels to create passport stamps.",
-        "NSLocationAlwaysUsageDescription": "Allow Trave-Social to track your travels even when the app is closed to create passport stamps."
+        "NSLocationAlwaysUsageDescription": "Allow Trave-Social to track your travels even when the app is closed to create passport stamps.",
+        "UIBackgroundModes": [
+          "audio",
+          "location",
+          "remote-notification"
+        ]
       },
       "entitlements": {
         "com.apple.developer.applesignin": [
@@ -130,7 +136,8 @@
           "resizeMode": "contain",
           "backgroundColor": "#667eea"
         }
-      ]
+      ],
+      "react-native-compressor"
     ],
     "experiments": {
       "typedRoutes": true
@@ -142,17 +149,10 @@
       "costMode": true,
       "analyticsEnabled": true,
       "dailyCounterSampleRate": 0.05,
-      "FIREBASE_API_KEY": "",
-      "FIREBASE_AUTH_DOMAIN": "travel-app-3da72.firebaseapp.com",
-      "FIREBASE_PROJECT_ID": "travel-app-3da72",
-      "FIREBASE_STORAGE_BUCKET": "travel-app-3da72.firebasestorage.app",
-      "FIREBASE_MESSAGING_SENDER_ID": "709095117662",
-      "FIREBASE_APP_ID": "1:709095117662:web:5f00f45bb4e392ee17f5cf",
-      "FIREBASE_MEASUREMENT_ID": "G-PFZRL4FDFD",
       "eas": {
-        "projectId": "acd24cff-c209-4589-86fa-508a00859191"
+        "projectId": "513a1158-d790-4560-869c-77d75b5ffd6e"
       }
     },
-    "owner": "tauheeddev56"
+    "owner": "tauheedahmad"
   }
 }

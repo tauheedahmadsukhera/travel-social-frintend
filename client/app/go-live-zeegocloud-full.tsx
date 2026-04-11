@@ -1,3 +1,4 @@
+import { DEFAULT_AVATAR_URL } from '../lib/api';
 /**
  * Go Live Screen - ZeegoCloud with Full Features
  * Features: Comments, Viewers, Map, Share, etc.
@@ -45,7 +46,7 @@ if (Platform.OS !== 'web') {
 }
 
 const { width, height } = Dimensions.get('window');
-const DEFAULT_AVATAR_URL = 'https://via.placeholder.com/200x200.png?text=Profile';
+
 
 // Utility: sanitize coordinates for MapView/Marker
 function getSafeCoordinate(coord: { latitude?: number; longitude?: number } | null, fallback = { latitude: 51.5074, longitude: -0.1278 }) {
@@ -194,7 +195,7 @@ export default function GoLiveScreen() {
   // Load user data
   useEffect(() => {
     const loadUser = async () => {
-      const user = auth.currentUser;
+      const user = auth?.currentUser;
       if (user) {
         setCurrentUser({ uid: user.uid, displayName: user.displayName || 'Anonymous', photoURL: user.photoURL || DEFAULT_AVATAR_URL });
       }
@@ -230,13 +231,10 @@ export default function GoLiveScreen() {
       const userName = currentUser?.displayName || 'Anonymous';
       const newRoomId = generateRoomId(userId);
 
-      const success = await service.initialize(userId, newRoomId, userName, true);
-      if (success) {
-        zeegocloudServiceRef.current = service;
-        setRoomId(newRoomId);
-        return true;
-      }
-      return false;
+      await service.initialize(userId, newRoomId, userName, true);
+      zeegocloudServiceRef.current = service;
+      setRoomId(newRoomId);
+      return true;
     } catch (error) {
       logger.error('ZeegoCloud init error:', error);
       return false;

@@ -1,7 +1,8 @@
+import { DEFAULT_AVATAR_URL } from '../../lib/api';
 import { useEffect, useState } from 'react';
 import { apiService } from '../_services/apiService';
 
-const DEFAULT_AVATAR_URL = 'https://res.cloudinary.com/dinwxxnzm/image/upload/v1/default/default-pic.jpg';
+
 
 function isRecord(value: any): value is Record<string, any> {
   return value !== null && typeof value === 'object';
@@ -11,6 +12,7 @@ export interface UserProfile {
   id: string;
   uid: string;
   name: string;
+  displayName?: string;
   username?: string;
   avatar: string;
   photoURL?: string;
@@ -41,12 +43,20 @@ export function useUserProfile(userId: string | null | undefined) {
         const result = await apiService.get(`/users/${userId}`);
         if (!mounted) return;
         if (isRecord(result) && result.success && 'data' in result && isRecord(result.data)) {
-          // Ensure avatar always has a value
-          const avatarUrl = result.data.avatar || result.data.photoURL || DEFAULT_AVATAR_URL;
+          // Ensure avatar always has a value across all supported avatar fields
+          const avatarUrl = result.data.avatar || result.data.photoURL || result.data.profilePicture || DEFAULT_AVATAR_URL;
+          const resolvedName = result.data.displayName || result.data.username || result.data.name || 'Unknown';
           setProfile({
-            ...result.data,
+            id: String(result.data.id || result.data._id || userId),
+            uid: String(result.data.uid || result.data.firebaseUid || result.data.id || result.data._id || userId),
             avatar: avatarUrl,
-            name: result.data.name || 'User',
+            name: resolvedName,
+            displayName: result.data.displayName,
+            username: result.data.username,
+            photoURL: result.data.photoURL,
+            bio: result.data.bio,
+            email: result.data.email,
+            website: result.data.website,
           });
         } else {
           setError('Failed to load profile');
