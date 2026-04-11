@@ -1,7 +1,7 @@
 {
   "name": "trave-social",
   "main": "index.js",
-  "version": "1.0.0",
+  "version": "1.0.7",
   "scripts": {
     "postinstall": "node scripts/fixAndroidManifest.js && node scripts/fixZegoIosFramework.js && npx patch-package",
     "eas-build-post-install": "node scripts/fixAndroidManifest.js && node scripts/fixZegoIosFramework.js && npx patch-package && node scripts/verifyPatches.js",
@@ -41,6 +41,7 @@
     "expo-apple-authentication": "~7.1.3",
     "expo-auth-session": "~6.0.0",
     "expo-av": "~15.0.0",
+    "expo-blur": "~14.0.3",
     "expo-build-properties": "~0.13.0",
     "expo-camera": "~16.0.0",
     "expo-clipboard": "~7.0.0",
@@ -74,6 +75,7 @@
     "react-dom": "18.3.1",
     "react-native": "0.76.9",
     "react-native-app-auth": "^8.1.0",
+    "react-native-compressor": "^1.16.0",
     "react-native-draggable-flatlist": "^4.0.3",
     "react-native-gesture-handler": "~2.20.2",
     "react-native-google-places-autocomplete": "^2.6.1",
