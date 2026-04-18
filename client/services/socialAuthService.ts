@@ -124,12 +124,14 @@ export async function signInWithGoogle() {
 
         // Check if it's Android SHA-1 certificate issue
         if (Platform.OS === 'android' && (configError.code === '10' || configError.message?.includes('DEVELOPER_ERROR'))) {
-          console.warn('⚠️ Google Sign-In SHA-1 Warning: Certificate may need to be added in Firebase Console');
-          console.warn('Steps: 1) cd android && ./gradlew signingReport');
-          console.warn('       2) Copy SHA-1 fingerprint');
-          console.warn('       3) Add to Firebase Console → Project Settings → Android app');
+          console.warn('⚠️ Google Sign-In (DEVELOPER_ERROR): Register the **debug** SHA-1 for com.tauhee56.travesocial in Firebase (and Google Cloud OAuth Android client if you use one).');
+          console.warn('This app signs debug builds with android/app/debug.keystore (not always the same as ~/.android/debug.keystore).');
+          console.warn('From client folder run: npm run get-sha1   → copy SHA-1 into Firebase → Project settings → Your Android app → Add fingerprint.');
+          console.warn('Also add the same SHA-1 on the Android-type OAuth 2.0 client in Google Cloud Console → Credentials, if Sign-In still fails.');
+          console.warn('EAS/Play store builds: add that keystore’s SHA-1 too (different from local debug).');
 
-          errorMessage = 'Google Sign-In configuration error. Please contact support or try email sign-in.';
+          errorMessage =
+            'Google Sign-In on Android needs the correct debug SHA-1 in Firebase (run npm run get-sha1 from the client folder), then reinstall the app. You can use email login until that is done.';
         } else if (configError.code === '12501') {
           errorMessage = 'Sign in cancelled';
         } else if (configError.code === '12500') {
