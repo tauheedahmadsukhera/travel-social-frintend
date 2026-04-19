@@ -1,7 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import { StyleSheet, Text, View, type ViewStyle } from 'react-native';
 import { AppBrandMark } from '@/src/_components/AppBrandMark';
-import fetchLogoUrl from '@/src/_services/brandingService';
 
 export type AuthBrandHeaderProps = {
   /** Extra top spacing like `welcome.tsx` header (logo + first line). */
@@ -15,7 +14,7 @@ export type AuthBrandHeaderProps = {
 };
 
 /**
- * Shared auth hero: remote/bundled logo + optional title + subtitle (matches `welcome.tsx`).
+ * Shared auth hero: always bundled `logo-trips-mark.png` (same on iOS/Android; avoids stale /branding CDN).
  */
 export function AuthBrandHeader({
   variant = 'default',
@@ -24,24 +23,10 @@ export function AuthBrandHeader({
   children,
   style,
 }: AuthBrandHeaderProps) {
-  const [logoUrl, setLogoUrl] = useState<string | null>(null);
-
-  useEffect(() => {
-    let alive = true;
-    fetchLogoUrl()
-      .then((url) => {
-        if (alive) setLogoUrl(url);
-      })
-      .catch(() => {});
-    return () => {
-      alive = false;
-    };
-  }, []);
-
   return (
     <View style={[variant === 'welcome' ? styles.welcomeOuter : styles.defaultOuter, style]}>
       <View style={styles.markWrap}>
-        <AppBrandMark logoUri={logoUrl} size="lg" />
+        <AppBrandMark size="lg" iconAsset="mark" />
       </View>
       {title ? <Text style={styles.title}>{title}</Text> : null}
       {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}

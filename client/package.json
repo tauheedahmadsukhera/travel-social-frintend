@@ -1,7 +1,7 @@
 {
   "name": "trips",
   "main": "index.js",
-  "version": "1.0.8",
+  "version": "1.0.9",
   "scripts": {
     "postinstall": "node scripts/fixAndroidManifest.js && node scripts/fixZegoIosFramework.js && npx patch-package",
     "eas-build-post-install": "node scripts/cleanAndroidAutolinking.js && node scripts/fixAndroidManifest.js && node scripts/fixZegoIosFramework.js && npx patch-package && node scripts/verifyPatches.js && node scripts/generate-trips-png-assets.mjs",

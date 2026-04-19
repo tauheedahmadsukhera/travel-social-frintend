@@ -916,6 +916,10 @@ function PostCard({ post, currentUser, showMenu = true, highlightedCommentId, hi
   const modalMediaIndexRef = useRef(0);
   const carouselIsDraggingRef = useRef(false);
   const lastCarouselTouchStartRef = useRef(0);
+  /** True if finger moved beyond slop (e.g. vertical feed scroll) — do not open media on touch end. */
+  const carouselFingerMovedRef = useRef(false);
+  const carouselTouchOriginRef = useRef({ x: 0, y: 0 });
+  const CAROUSEL_TAP_SLOP = 14;
 
   const closeMediaModal = useCallback(() => {
     setShowMediaModal(false);
@@ -1030,13 +1034,46 @@ function PostCard({ post, currentUser, showMenu = true, highlightedCommentId, hi
     }, 280);
   }, [performDoubleTapLike, openMediaModal]);
 
-  const onCarouselTouchStart = useCallback(() => {
+  const onCarouselTouchStart = useCallback((e: any) => {
     lastCarouselTouchStartRef.current = Date.now();
+    carouselFingerMovedRef.current = false;
+    const t = e?.nativeEvent?.touches?.[0];
+    if (t) {
+      carouselTouchOriginRef.current = { x: t.pageX, y: t.pageY };
+    }
+  }, []);
+
+  const onCarouselTouchMove = useCallback((e: any) => {
+    const t = e?.nativeEvent?.touches?.[0];
+    if (!t) return;
+    const dx = Math.abs(t.pageX - carouselTouchOriginRef.current.x);
+    const dy = Math.abs(t.pageY - carouselTouchOriginRef.current.y);
+    if (dx > CAROUSEL_TAP_SLOP || dy > CAROUSEL_TAP_SLOP) {
+      carouselFingerMovedRef.current = true;
+      if (imageTapTimeoutRef.current) {
+        clearTimeout(imageTapTimeoutRef.current);
+        imageTapTimeoutRef.current = null;
+      }
+      lastImageTapRef.current = 0;
+    }
+  }, []);
+
+  const onCarouselTouchCancel = useCallback(() => {
+    if (imageTapTimeoutRef.current) {
+      clearTimeout(imageTapTimeoutRef.current);
+      imageTapTimeoutRef.current = null;
+    }
+    lastImageTapRef.current = 0;
+    carouselFingerMovedRef.current = true;
   }, []);
 
   const onCarouselTouchEnd = useCallback(() => {
     // If the user was swiping/dragging, do not treat it as a tap.
     if (carouselIsDraggingRef.current) return;
+    if (carouselFingerMovedRef.current) {
+      carouselFingerMovedRef.current = false;
+      return;
+    }
     // Guard against "tap" fired after a tiny accidental drag.
     const elapsed = Date.now() - lastCarouselTouchStartRef.current;
     if (elapsed > 800) return;
@@ -1472,7 +1509,9 @@ function PostCard({ post, currentUser, showMenu = true, highlightedCommentId, hi
                     <View
                       style={{ width: SCREEN_WIDTH, height: mediaHeight }}
                       onTouchStart={onCarouselTouchStart}
+                      onTouchMove={onCarouselTouchMove}
                       onTouchEnd={onCarouselTouchEnd}
+                      onTouchCancel={onCarouselTouchCancel}
                     >
                       <ExpoImage
                         source={{ uri: getOptimizedImageUrl(item || 'https://via.placeholder.com/600x600.png?text=No+Image', 'feed') }}

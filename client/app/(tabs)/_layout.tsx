@@ -20,7 +20,6 @@ import { logAnalyticsEvent, setAnalyticsUserId } from '../../lib/analytics';
 import { getUserConversations } from '../../lib/firebaseHelpers/conversation';
 import { getUserNotifications } from '../../lib/firebaseHelpers/notification';
 import { logoutUser } from '@/src/_services/firebaseAuthService';
-import fetchLogoUrl from '@/src/_services/brandingService';
 import { getNotificationDisplayText } from '../../lib/notificationText';
 
 
@@ -590,8 +589,6 @@ function TopMenu({ setMenuVisible, setGroupsDrawerVisible }: { setMenuVisible: (
 
   const [notificationsModalVisible, setNotificationsModalVisible] = React.useState(false);
 
-  const [logoUrl, setLogoUrl] = useState<string | null>(null);
-  const [logoLoading, setLogoLoading] = useState(false);
   const segments = useSegments();
   const isProfileScreen = segments[segments.length - 1] === 'profile';
   const isHomeScreen = segments[segments.length - 1] === 'home';
@@ -674,17 +671,6 @@ function TopMenu({ setMenuVisible, setGroupsDrawerVisible }: { setMenuVisible: (
     if (u) setAnalyticsUserId(u);
   }, [currentUserId]);
 
-  useEffect(() => {
-    let isMounted = true;
-    fetchLogoUrl().then((url: string | null) => {
-      if (isMounted) {
-        setLogoUrl(url);
-        setLogoLoading(false);
-      }
-    }).catch(() => setLogoLoading(false));
-    return () => { isMounted = false; };
-  }, []);
-
   // Refresh badge counts when screen comes into focus
   useFocusEffect(
     React.useCallback(() => {
@@ -746,10 +732,9 @@ function TopMenu({ setMenuVisible, setGroupsDrawerVisible }: { setMenuVisible: (
           }}
         >
           <AppBrandMark
-            logoUri={logoUrl || undefined}
             size="sm"
             showWordmark
-            iconAsset="app"
+            iconAsset="mark"
             variant="tabBar"
           />
         </TouchableOpacity>
