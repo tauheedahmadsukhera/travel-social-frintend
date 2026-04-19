@@ -34,6 +34,16 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import CollectionDeleteModal from '@/src/_components/CollectionDeleteModal';
 import SaveToCollectionModal from '@/src/_components/SaveToCollectionModal';
+import PostViewerModal from '@/src/_components/PostViewerModal';
+import CommentSection from '@/src/_components/CommentSection';
+import { apiService } from '@/src/_services/apiService';
+import { feedEventEmitter } from '../../lib/feedEventEmitter';
+import { sharePost } from '../../lib/postShare';
+import { useHeaderHeight } from './_layout';
+import { resolveCanonicalUserId } from '../../lib/currentUser';
+import { hapticLight } from '../../lib/haptics';
+import { getCachedData, setCachedData, useOfflineBanner, useNetworkStatus } from '../../hooks/useOffline';
+import { OfflineBanner } from '@/src/_components/OfflineBanner';
 
 const { height: SCREEN_H } = Dimensions.get('window');
 
@@ -71,6 +81,11 @@ export default function SavedScreen() {
   const [collections, setCollections] = useState<Collection[]>([]);
   const [allSavedPosts, setAllSavedPosts] = useState<SavedPost[]>([]);
   const [loading, setLoading] = useState(true);
+  const hasLoadedOnceRef = useRef(false);
+  const justCreatedCollectionRef = useRef(false);
+  const isLoadingDataRef = useRef(false);
+  const lastLoadAtRef = useRef(0);
+  const MIN_RELOAD_MS = 2500;
 
   // Active filter
   const [activeCollection, setActiveCollection] = useState<Collection | null>(null);
@@ -78,7 +93,10 @@ export default function SavedScreen() {
   // Modals
   const [collDropdownOpen, setCollDropdownOpen] = useState(false);
   const [createModalVisible, setCreateModalVisible] = useState(false);
+  const [queuedCreateModalOpen, setQueuedCreateModalOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Collection | null>(null);
+  const [queuedEditTarget, setQueuedEditTarget] = useState<Collection | null>(null);
+  const [queuedDeleteTarget, setQueuedDeleteTarget] = useState<Collection | null>(null);
 
   // Edit sheet state
   const [editTarget, setEditTarget] = useState<Collection | null>(null);
@@ -101,32 +119,187 @@ export default function SavedScreen() {
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [searching, setSearching] = useState(false);
 
+  const getKeyboardOffset = () => {
+    if ((Platform.OS as any) === 'ios') return 0;
+    return 0;
+  };
+
+  // Post Viewer Modal State
+  const [postViewerVisible, setPostViewerVisible] = useState(false);
+  const [selectedPostIndex, setSelectedPostIndex] = useState(0);
+  const [likedPosts, setLikedPosts] = useState<Record<string, boolean>>({});
+  const [savedPosts, setSavedPosts] = useState<Record<string, boolean>>({});
+
+  // Comment Modal State (inside viewer)
+  const [commentModalVisible, setCommentModalVisible] = useState(false);
+  const [commentModalPostId, setCommentModalPostId] = useState("");
+  const [commentModalAvatar, setCommentModalAvatar] = useState("");
+  const { isOnline } = useNetworkStatus();
+  const { showBanner } = useOfflineBanner();
+
+  const SAVED_CACHE_KEY = useCallback((userId: string) => `saved_v1_${String(userId || 'anon')}`, []);
+
   // ── Load data ─────────────────────────────────────────────────────────────
 
-  const loadData = useCallback(async (forcedUid?: string) => {
+  const loadData = useCallback(async (forcedUid?: string, options?: { force?: boolean }) => {
     const activeUid = forcedUid || uid;
     if (!activeUid) return;
-    setLoading(true);
+
+    // Cache-first bootstrap: show cached content immediately
     try {
-      const { apiService } = await import('@/src/_services/apiService');
-      const [sectRes, postsRes] = await Promise.all([
-        apiService.get(`/users/${activeUid}/sections`, { requesterId: currentUserId || undefined }),
-        apiService.get(`/users/${activeUid}/saved`),
-      ]);
-      if (sectRes?.success && Array.isArray(sectRes.data)) setCollections(sectRes.data);
-      const raw = postsRes?.data || postsRes || [];
-      if (Array.isArray(raw)) {
-        setAllSavedPosts(raw.map((p: any) => ({
-          id: p._id || p.id,
-          imageUrl: p.mediaUrl || p.imageUrl || (Array.isArray(p.mediaUrls) ? p.mediaUrls[0] : '') || '',
-        })));
+      const cached = await getCachedData<any>(SAVED_CACHE_KEY(activeUid));
+      if (cached && !hasLoadedOnceRef.current) {
+        if (Array.isArray(cached.collections)) setCollections(cached.collections);
+        if (Array.isArray(cached.allSavedPosts)) setAllSavedPosts(cached.allSavedPosts);
+        if (cached.likedPosts && typeof cached.likedPosts === 'object') setLikedPosts(cached.likedPosts);
+        if (cached.savedPosts && typeof cached.savedPosts === 'object') setSavedPosts(cached.savedPosts);
+        setLoading(false);
       }
+    } catch { }
+
+    const shouldThrottle =
+      !options?.force &&
+      hasLoadedOnceRef.current &&
+      Date.now() - lastLoadAtRef.current < MIN_RELOAD_MS;
+
+    if (shouldThrottle || isLoadingDataRef.current) {
+      return;
+    }
+
+    isLoadingDataRef.current = true;
+    const requesterId = currentUserId || activeUid;
+    if (!hasLoadedOnceRef.current) setLoading(true);
+
+    // If we're offline, don't block — rely on cache if available
+    if (!isOnline && hasLoadedOnceRef.current) {
+      isLoadingDataRef.current = false;
+      setLoading(false);
+      return;
+    }
+    try {
+      const [uidAlias, firebaseAlias] = await Promise.all([
+        AsyncStorage.getItem('uid'),
+        AsyncStorage.getItem('firebaseUid'),
+      ]);
+
+      const idCandidates = Array.from(new Set([
+        activeUid,
+        requesterId,
+        targetUserId || null,
+        uidAlias,
+        firebaseAlias,
+      ].filter(Boolean).map((v) => String(v))));
+      const cappedCandidates = idCandidates.slice(0, 3);
+
+      if (__DEV__) {
+        console.log('[saved.tsx] loadData id candidates:', cappedCandidates);
+      }
+
+      const sectionsById = new Map<string, any>();
+      const savedById = new Map<string, any>();
+
+      let hasSections = false;
+      let hasSaved = false;
+
+      for (const candidateId of cappedCandidates) {
+        const [sectRes, postsRes] = await Promise.all([
+          apiService.get(`/users/${candidateId}/sections`, {
+            viewerId: requesterId || undefined,
+            requesterId: requesterId || undefined,
+            requesterUserId: requesterId || undefined,
+          }),
+          apiService.get(`/users/${candidateId}/saved`, {
+            viewerId: requesterId || undefined,
+            requesterId: requesterId || undefined,
+            requesterUserId: requesterId || undefined,
+          }),
+        ]);
+
+        const sectionsData = sectRes?.success && Array.isArray(sectRes.data) ? sectRes.data : [];
+        const savedData = Array.isArray(postsRes?.data) ? postsRes.data : (Array.isArray(postsRes) ? postsRes : []);
+
+        if (__DEV__) {
+          console.log('[saved.tsx] candidate result:', {
+            candidateId,
+            sectionsCount: sectionsData.length,
+            savedCount: savedData.length,
+            sectionsSuccess: !!sectRes?.success,
+            savedSuccess: !!postsRes?.success,
+          });
+        }
+
+        sectionsData.forEach((section: any) => {
+          const sectionKey = String(section?._id || section?.id || `${section?.userId || 'u'}:${section?.name || 'section'}`);
+          if (sectionKey && !sectionsById.has(sectionKey)) {
+            sectionsById.set(sectionKey, section);
+          }
+        });
+
+        savedData.forEach((post: any) => {
+          const postKey = String(post?._id || post?.id || '');
+          if (postKey && !savedById.has(postKey)) {
+            savedById.set(postKey, post);
+          }
+        });
+
+        if (sectionsData.length > 0) hasSections = true;
+        if (savedData.length > 0) hasSaved = true;
+        if (hasSections && hasSaved) break;
+      }
+
+      const mergedSections = Array.from(sectionsById.values());
+      const mergedSavedRaw = Array.from(savedById.values());
+
+      setCollections(mergedSections);
+
+      if (__DEV__) {
+        console.log('[saved.tsx] selected best result:', {
+          bestSections: mergedSections.length,
+          bestSaved: mergedSavedRaw.length,
+        });
+      }
+
+      setAllSavedPosts(mergedSavedRaw.map((p: any) => ({
+        ...p,
+        id: p._id || p.id,
+        imageUrl: p.mediaUrl || p.imageUrl || (Array.isArray(p.mediaUrls) ? p.mediaUrls[0] : '') || '',
+      })));
+
+      // Initialize liked/saved maps
+      const likes: Record<string, boolean> = {};
+      const saves: Record<string, boolean> = {};
+      mergedSavedRaw.forEach((p: any) => {
+        const pid = p._id || p.id;
+        if (pid) {
+          likes[pid] = Array.isArray(p.likes) && p.likes.includes(currentUserId || "");
+          saves[pid] = true;
+        }
+      });
+      setLikedPosts(likes);
+      setSavedPosts(saves);
+
+      // Persist cache snapshot for offline mode
+      try {
+        await setCachedData(SAVED_CACHE_KEY(activeUid), {
+          collections: mergedSections,
+          allSavedPosts: mergedSavedRaw.map((p: any) => ({
+            ...p,
+            id: p._id || p.id,
+            imageUrl: p.mediaUrl || p.imageUrl || (Array.isArray(p.mediaUrls) ? p.mediaUrls[0] : '') || '',
+          })),
+          likedPosts: likes,
+          savedPosts: saves,
+        }, { ttl: 24 * 60 * 60 * 1000 });
+      } catch { }
     } catch (e) {
       console.error('[saved.tsx] Error loading data:', e);
     } finally {
+      isLoadingDataRef.current = false;
+      lastLoadAtRef.current = Date.now();
       setLoading(false);
+      hasLoadedOnceRef.current = true;
     }
-  }, [uid]);
+  }, [uid, currentUserId]);
 
   const loadGroups = useCallback(async () => {
     if (!currentUserId) return;
@@ -181,8 +354,15 @@ export default function SavedScreen() {
     setCreateModalVisible(false);
     // Explicitly pass the current uid to ensure we don't use a stale state
     if (uid) {
-      console.log('[saved.tsx] Refreshing data after modal close for uid:', uid);
-      loadData(uid);
+      if (justCreatedCollectionRef.current) {
+        justCreatedCollectionRef.current = false;
+        setTimeout(() => {
+          loadData(uid, { force: true });
+        }, 700);
+      } else {
+        console.log('[saved.tsx] Refreshing data after modal close for uid:', uid);
+        loadData(uid, { force: true });
+      }
     }
   }, [uid, loadData]);
 
@@ -191,10 +371,10 @@ export default function SavedScreen() {
     useCallback(() => {
       let isMounted = true;
       const checkUser = async () => {
-        const id = await AsyncStorage.getItem('userId');
+        const id = await resolveCanonicalUserId(targetUserId);
         if (!isMounted) return;
         setCurrentUserId(id);
-        const nextUid = targetUserId || id;
+        const nextUid = id;
         setUid(nextUid);
         if (nextUid) loadData(nextUid);
       };
@@ -209,19 +389,36 @@ export default function SavedScreen() {
     ? allSavedPosts.filter(p => activeCollection.postIds?.includes(p.id))
     : allSavedPosts;
 
-  const isOwner = (col: Collection) => col.userId === (currentUserId || uid);
+  const isOwner = (col: Collection) => {
+    const candidates = [currentUserId, uid].filter(Boolean).map(v => String(v));
+    return candidates.includes(String(col.userId));
+  };
   const isProfileOwner = !targetUserId || targetUserId === currentUserId;
+
+  const visibleCollections = collections.filter(col => {
+    if (isProfileOwner) return true;
+    // Public is always visible
+    if (!col.visibility || col.visibility === 'public') return true;
+    // Check collaborators for private/specific visibility
+    const collaborators = Array.isArray(col.collaborators) ? col.collaborators : [];
+    const viewerId = String(currentUserId || '');
+    return collaborators.some((c: any) => {
+      const cid = typeof c === 'string' ? c : (c.userId || c.uid || c._id || c.firebaseUid);
+      return String(cid) === viewerId;
+    });
+  });
 
   // ── Collection selection ──────────────────────────────────────────────────
 
   const selectCollection = (col: Collection | null) => {
+    hapticLight();
     setActiveCollection(col);
     setCollDropdownOpen(false);
   };
 
   // ── Edit handlers ─────────────────────────────────────────────────────────
 
-  const openEdit = (col: Collection) => {
+  const applyEditState = useCallback((col: Collection) => {
     setEditTarget(col);
     setEditName(col.name);
     setEditVisibility((col.visibility as any) || 'private');
@@ -238,33 +435,126 @@ export default function SavedScreen() {
     
     loadGroups();
     loadFollowers();
+  }, [loadGroups, loadFollowers]);
+
+  const openEdit = (col: Collection) => {
+    setQueuedDeleteTarget(null);
+
+    if ((Platform.OS as any) === 'ios') {
+      setQueuedEditTarget(col);
+      setCollDropdownOpen(false);
+      return;
+    }
+
+    if (collDropdownOpen) {
+      setCollDropdownOpen(false);
+      setTimeout(() => applyEditState(col), 40);
+      return;
+    }
+
+    applyEditState(col);
   };
+
+  const openDelete = (col: Collection) => {
+    setQueuedEditTarget(null);
+
+    if ((Platform.OS as any) === 'ios') {
+      setQueuedDeleteTarget(col);
+      setCollDropdownOpen(false);
+      return;
+    }
+
+    if (collDropdownOpen) {
+      setCollDropdownOpen(false);
+      setTimeout(() => setDeleteTarget(col), 40);
+      return;
+    }
+
+    setDeleteTarget(col);
+  };
+
+  useEffect(() => {
+    if ((Platform.OS as any) === 'ios') return;
+    if (collDropdownOpen || !queuedEditTarget) return;
+
+    const timer = setTimeout(() => {
+      setQueuedEditTarget(null);
+      applyEditState(queuedEditTarget);
+    }, (Platform.OS as any) === 'ios' ? 120 : 40);
+
+    return () => clearTimeout(timer);
+  }, [collDropdownOpen, queuedEditTarget, applyEditState]);
+
+  useEffect(() => {
+    if ((Platform.OS as any) === 'ios') return;
+    if (collDropdownOpen || !queuedDeleteTarget) return;
+
+    const timer = setTimeout(() => {
+      setQueuedDeleteTarget(null);
+      setDeleteTarget(queuedDeleteTarget);
+    }, 40);
+
+    return () => clearTimeout(timer);
+  }, [collDropdownOpen, queuedDeleteTarget]);
+
+  useEffect(() => {
+    const subscription = feedEventEmitter.addListener('feedUpdated', () => {
+      if (uid) loadData(uid);
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, [uid, loadData]);
 
   const saveEdit = async () => {
     if (!uid || !editTarget || !editName.trim()) return;
     setEditSaving(true);
     try {
-      const { apiService } = await import('@/src/_services/apiService');
-      const res = await apiService.put(`/users/${uid}/sections/${editTarget._id}`, {
+      const { updateUserSection } = await import('../../lib/firebaseHelpers');
+      const sectionIdentifier = String(editTarget?._id || editTarget?.name || '').trim();
+      const requester = String(currentUserId || uid || '');
+      const collaboratorsPayload = editCollaborators.map(u =>
+        typeof u === 'string' ? u : (u.firebaseUid || u._id || (u as any).userId || (u as any).uid)
+      ).filter(Boolean);
+
+      const res = await updateUserSection(uid, sectionIdentifier, {
         name: editName.trim(),
         visibility: editVisibility,
-        collaborators: editCollaborators.map(u => typeof u === 'string' ? u : (u.firebaseUid || u._id || (u as any).userId)),
+        collaborators: collaboratorsPayload,
         allowedUsers: editAllowedUsers,
         allowedGroups: tempSelectedGroups,
-        requesterId: currentUserId
-      });
+      }, requester);
+
       if (res?.success) {
         setCollections(prev => prev.map(c =>
           c._id === editTarget._id
-            ? { ...c, name: editName.trim(), visibility: editVisibility, collaborators: editCollaborators, allowedUsers: editAllowedUsers }
+            ? {
+                ...c,
+                name: editName.trim(),
+                visibility: editVisibility,
+                collaborators: editCollaborators,
+                allowedUsers: editAllowedUsers,
+                allowedGroups: tempSelectedGroups,
+              }
             : c
         ));
         if (activeCollection?._id === editTarget._id) {
-          setActiveCollection(prev => prev ? { ...prev, name: editName.trim(), visibility: editVisibility, collaborators: editCollaborators, allowedUsers: editAllowedUsers } : prev);
+          setActiveCollection(prev => prev
+            ? {
+                ...prev,
+                name: editName.trim(),
+                visibility: editVisibility,
+                collaborators: editCollaborators,
+                allowedUsers: editAllowedUsers,
+                allowedGroups: tempSelectedGroups,
+              }
+            : prev
+          );
         }
         setEditTarget(null);
         // Refresh data to be sure
-        loadData();
+        loadData(undefined, { force: true });
       }
     } catch (e) { console.error(e); }
     finally { setEditSaving(false); }
@@ -324,9 +614,51 @@ export default function SavedScreen() {
     setEditSubScreen('main');
   };
 
+  // ── Post Handlers (for Viewer) ─────────────────────────────────────────────
+
+  const handleLikePost = async (post: SavedPost) => {
+    if (!currentUserId) return;
+    const pid = post.id;
+    const isLiked = likedPosts[pid];
+    
+    // Optimistic update
+    setLikedPosts(prev => ({ ...prev, [pid]: !isLiked }));
+    
+    try {
+      const { likePost, unlikePost } = await import('../../lib/firebaseHelpers/post');
+      if (isLiked) await unlikePost(pid, currentUserId);
+      else await likePost(pid, currentUserId);
+    } catch (e) {
+      console.error("Error liking post:", e);
+      setLikedPosts(prev => ({ ...prev, [pid]: isLiked })); // Revert
+    }
+  };
+
+  const handleSavePost = async (post: SavedPost) => {
+    if (!currentUserId) return;
+    const pid = post.id;
+    const isSaved = savedPosts[pid];
+    
+    // Optimistic update
+    setSavedPosts(prev => ({ ...prev, [pid]: !isSaved }));
+    
+    try {
+      const { savePost, unsavePost } = await import('../../lib/firebaseHelpers/post');
+      if (isSaved) await unsavePost(pid, currentUserId);
+      else await savePost(pid, currentUserId);
+    } catch (e) {
+      console.error("Error saving post:", e);
+      setSavedPosts(prev => ({ ...prev, [pid]: isSaved })); // Revert
+    }
+  };
+
+  const handleSharePost = (post: any) => {
+    sharePost(post);
+  };
+
   // ── Title ─────────────────────────────────────────────────────────────────
 
-  const pageTitle = activeCollection ? activeCollection.name : 'All Collection';
+  const pageTitle = activeCollection?.name || 'All Collection';
 
   // ── Thumb helper ──────────────────────────────────────────────────────────
 
@@ -355,10 +687,14 @@ export default function SavedScreen() {
         numColumns={3}
         contentContainerStyle={styles.grid}
         scrollEnabled={false}
-        renderItem={({ item }) => (
+        renderItem={({ item, index }) => (
           <TouchableOpacity
             style={styles.gridItem}
-            onPress={() => router.push({ pathname: '/post-detail', params: { id: item.id } })}
+            onPress={() => {
+              hapticLight();
+              setSelectedPostIndex(index);
+              setPostViewerVisible(true);
+            }}
             activeOpacity={0.8}
           >
             <Image source={{ uri: item.imageUrl }} style={styles.gridImg} />
@@ -375,7 +711,28 @@ export default function SavedScreen() {
       transparent
       animationType="slide"
       onRequestClose={() => setCollDropdownOpen(false)}
+      onDismiss={() => {
+        if (queuedCreateModalOpen) {
+          setQueuedCreateModalOpen(false);
+          setTimeout(() => setCreateModalVisible(true), (Platform.OS as any) === 'ios' ? 140 : 50);
+          return;
+        }
+
+        if (queuedDeleteTarget) {
+          const target = queuedDeleteTarget;
+          setQueuedDeleteTarget(null);
+          setTimeout(() => setDeleteTarget(target), (Platform.OS as any) === 'ios' ? 140 : 50);
+          return;
+        }
+
+        if (queuedEditTarget) {
+          const target = queuedEditTarget;
+          setQueuedEditTarget(null);
+          setTimeout(() => applyEditState(target), (Platform.OS as any) === 'ios' ? 140 : 50);
+        }
+      }}
       statusBarTranslucent
+      presentationStyle="overFullScreen"
     >
       <TouchableWithoutFeedback onPress={() => setCollDropdownOpen(false)}>
         <View style={styles.sheetBackdrop} />
@@ -401,7 +758,13 @@ export default function SavedScreen() {
         <View style={styles.collSectionHeader}>
           <Text style={styles.collSectionTitle}>Collections</Text>
           {isProfileOwner && (
-            <TouchableOpacity onPress={() => { setCollDropdownOpen(false); setCreateModalVisible(true); }}>
+            <TouchableOpacity
+              onPress={() => {
+                hapticLight();
+                setQueuedCreateModalOpen(true);
+                setCollDropdownOpen(false);
+              }}
+            >
               <Text style={styles.newCollText}>New collection</Text>
             </TouchableOpacity>
           )}
@@ -409,47 +772,48 @@ export default function SavedScreen() {
 
         {/* Collections list */}
         <ScrollView style={{ maxHeight: SCREEN_H * 0.48 }} showsVerticalScrollIndicator={false}>
-          {collections.length === 0 ? (
+          {visibleCollections.length === 0 ? (
             <View style={{ alignItems: 'center', paddingVertical: 24 }}>
               <Text style={{ color: '#bbb', fontSize: 14 }}>No collections yet</Text>
             </View>
           ) : (
-            collections.map(col => {
+            visibleCollections.map(col => {
               const thumb = getCollThumb(col);
               const active = activeCollection?._id === col._id;
               return (
-                <TouchableOpacity
-                  key={col._id}
-                  style={styles.collRow}
-                  onPress={() => selectCollection(col)}
-                  activeOpacity={0.75}
-                >
-                  {/* Thumbnail */}
-                  {thumb ? (
-                    <ExpoImage source={{ uri: thumb }} style={styles.collThumb} contentFit="cover" />
-                  ) : (
-                    <View style={[styles.collThumb, styles.thumbPlaceholder]}>
-                      <Feather name="image" size={16} color="#ccc" />
-                    </View>
-                  )}
+                <View key={col._id} style={styles.collRow}>
+                  <TouchableOpacity
+                    style={styles.collRowMain}
+                    onPress={() => selectCollection(col)}
+                    activeOpacity={0.75}
+                  >
+                    {/* Thumbnail */}
+                    {thumb ? (
+                      <ExpoImage source={{ uri: thumb }} style={styles.collThumb} contentFit="cover" />
+                    ) : (
+                      <View style={[styles.collThumb, styles.thumbPlaceholder]}>
+                        <Feather name="image" size={16} color="#ccc" />
+                      </View>
+                    )}
 
-                  {/* Name */}
-                  <Text style={[styles.collName, active && { color: '#0A3D62', fontWeight: '700' }]} numberOfLines={1}>
-                    {col.name}
-                  </Text>
+                    {/* Name */}
+                    <Text style={[styles.collName, active && { color: '#0A3D62', fontWeight: '700' }]} numberOfLines={1}>
+                      {col.name}
+                    </Text>
 
-                  {/* Active check */}
-                  {active && <Feather name="check" size={16} color="#0A3D62" style={{ marginRight: 8 }} />}
+                    {/* Active check */}
+                    {active && <Feather name="check" size={16} color="#0A3D62" style={{ marginRight: 8 }} />}
+                  </TouchableOpacity>
 
                   {/* ⊗ Delete (owner only) */}
                   {isProfileOwner && isOwner(col) && (
                     <TouchableOpacity
                       style={styles.iconBtn}
-                      onPress={(e) => {
-                        e.stopPropagation();
-                        setCollDropdownOpen(false);
-                        setDeleteTarget(col);
+                      onPress={() => {
+                        openDelete(col);
                       }}
+                      hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                      activeOpacity={0.7}
                     >
                       <Ionicons name="close-circle-outline" size={22} color="#aaa" />
                     </TouchableOpacity>
@@ -459,15 +823,16 @@ export default function SavedScreen() {
                   {isProfileOwner && isOwner(col) && (
                     <TouchableOpacity
                       style={styles.iconBtn}
-                      onPress={(e) => {
-                        e.stopPropagation();
+                      onPress={() => {
                         openEdit(col);
                       }}
+                      hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                      activeOpacity={0.7}
                     >
                       <Feather name="edit-2" size={17} color="#aaa" />
                     </TouchableOpacity>
                   )}
-                </TouchableOpacity>
+                </View>
               );
             })
           )}
@@ -493,10 +858,10 @@ export default function SavedScreen() {
         </TouchableWithoutFeedback>
 
         <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-          enabled={Platform.OS === 'ios'}
+          behavior={(Platform.OS as any) === 'ios' ? 'padding' : undefined}
+          enabled={(Platform.OS as any) === 'ios'}
           style={{ justifyContent: 'flex-end', flex: 1 }}
-          keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
+          keyboardVerticalOffset={(Platform.OS as any) === 'ios' ? 0 : 0}
         >
           <View style={[styles.sheet, { paddingBottom: insets.bottom + 8, minHeight: SCREEN_H * 0.5 }]}>
             <View style={styles.dragHandle} />
@@ -505,11 +870,20 @@ export default function SavedScreen() {
               <>
                 {/* Header */}
                 <View style={styles.editHeader}>
-                  <TouchableOpacity onPress={() => setEditTarget(null)}>
+                  <TouchableOpacity
+                    onPress={() => setEditTarget(null)}
+                    activeOpacity={0.7}
+                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                  >
                     <Text style={styles.editCancel}>Cancel</Text>
                   </TouchableOpacity>
                   <Text style={styles.editTitle}>Edit collection</Text>
-                  <TouchableOpacity onPress={saveEdit} disabled={editSaving || !editName.trim()}>
+                  <TouchableOpacity
+                    onPress={saveEdit}
+                    disabled={editSaving || !editName.trim()}
+                    activeOpacity={0.7}
+                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                  >
                     <Text style={[styles.editSave, (!editName.trim() || editSaving) && { color: '#ccc' }]}>
                       {editSaving ? '...' : 'Save'}
                     </Text>
@@ -689,10 +1063,20 @@ export default function SavedScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
+      {showBanner && (
+        <OfflineBanner text="You’re offline — showing saved collections" />
+      )}
       {/* Top bar */}
       <View style={styles.topBar}>
         <Text style={styles.topTitle} numberOfLines={1}>{pageTitle}</Text>
-        <TouchableOpacity style={styles.dropBtn} onPress={() => setCollDropdownOpen(true)} activeOpacity={0.8}>
+        <TouchableOpacity
+          style={styles.dropBtn}
+          onPress={() => {
+            hapticLight();
+            setCollDropdownOpen(true);
+          }}
+          activeOpacity={0.8}
+        >
           <Text style={styles.dropBtnLabel}>Collections</Text>
           <Feather name="chevron-down" size={14} color="#0A3D62" />
         </TouchableOpacity>
@@ -715,7 +1099,78 @@ export default function SavedScreen() {
         onClose={handleModalClose}
         postId=""
         postImageUrl={undefined}
+        currentUserId={currentUserId || uid || undefined}
+        onCollectionCreated={(collection) => {
+          justCreatedCollectionRef.current = true;
+          setCollections(prev => [collection, ...prev.filter(c => c._id !== collection._id)]);
+        }}
       />
+
+      {/* Instagram-style Post Viewer */}
+      {React.createElement(PostViewerModal as any, {
+        visible: postViewerVisible,
+        onClose: () => setPostViewerVisible(false),
+        posts: displayedPosts,
+        selectedPostIndex: selectedPostIndex,
+        profile: null, // Multiple authors in saved feed, modal will handle user info if it can
+        authUser: currentUserId ? { uid: currentUserId } : null,
+        likedPosts: likedPosts,
+        savedPosts: savedPosts,
+        handleLikePost: handleLikePost,
+        handleSavePost: handleSavePost,
+        handleSharePost: handleSharePost,
+        setCommentModalPostId: (id: any) => setCommentModalPostId(id || ''),
+        setCommentModalAvatar: setCommentModalAvatar,
+        setCommentModalVisible: setCommentModalVisible,
+        title: "Saved Post",
+      })}
+
+      <Modal
+        visible={commentModalVisible}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => {
+          hapticLight();
+          setCommentModalVisible(false);
+        }}
+      >
+        <KeyboardAvoidingView
+          behavior={(Platform.OS as any) === 'ios' ? 'padding' : 'height'}
+          keyboardVerticalOffset={getKeyboardOffset()}
+          style={{ flex: 1 }}
+        >
+          <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
+            <TouchableOpacity
+              activeOpacity={1}
+              style={{ flex: 1 }}
+              onPress={() => {
+                hapticLight();
+                setCommentModalVisible(false);
+              }}
+            />
+            <View style={{ backgroundColor: '#fff', height: '80%', borderTopLeftRadius: 20, borderTopRightRadius: 20 }}>
+              <View style={{ width: 40, height: 4, backgroundColor: '#eee', borderRadius: 2, alignSelf: 'center', marginVertical: 10 }} />
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 16, paddingBottom: 10, borderBottomWidth: 0.5, borderBottomColor: '#eee' }}>
+                <Text style={{ fontWeight: '700', fontSize: 16 }}>Comments</Text>
+                <TouchableOpacity
+                  onPress={() => {
+                    hapticLight();
+                    setCommentModalVisible(false);
+                  }}
+                >
+                  <Ionicons name="close" size={24} color="#333" />
+                </TouchableOpacity>
+              </View>
+              <CommentSection
+                postId={commentModalPostId}
+                postOwnerId="" // Optional
+                currentAvatar={commentModalAvatar}
+                currentUser={currentUserId ? { uid: currentUserId } : null}
+              />
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
 
       {/* Delete modal */}
       <CollectionDeleteModal
@@ -723,6 +1178,7 @@ export default function SavedScreen() {
         onClose={() => setDeleteTarget(null)}
         collection={deleteTarget}
         allCollections={collections}
+        currentUserId={currentUserId || uid || undefined}
         onDeleted={(id) => {
           setCollections(prev => prev.filter(c => c._id !== id));
           setDeleteTarget(null);
@@ -836,6 +1292,11 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: '#f8f8f8',
+  },
+  collRowMain: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   collThumb: {
     width: 48, height: 48,

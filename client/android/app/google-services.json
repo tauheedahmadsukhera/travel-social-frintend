@@ -1,0 +1,134 @@
+{
+  "project_info": {
+    "project_number": "709095117662",
+    "project_id": "travel-app-3da72",
+    "storage_bucket": "travel-app-3da72.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:709095117662:android:b7caaab8bf36859817f5cf",
+        "android_client_info": {
+          "package_name": "com.tauhee56.travesocial"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "709095117662-1batvuovr6j923r350ahkqfs05b937ab.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.tauhee56.travesocial",
+            "certificate_hash": "5e8f16062ea3cd2c4a0d547876baa6f38cabf625"
+          }
+        },
+        {
+          "client_id": "709095117662-1le6kgokd6har48d1it3bjfabd847ut8.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.tauhee56.travesocial",
+            "certificate_hash": "262dd5fa13b04d82022bfce3fd7c8f5c2b0e662e"
+          }
+        },
+        {
+          "client_id": "709095117662-2jtqjk8941lgf6n90csgk8u1mkm0a0jq.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.tauhee56.travesocial",
+            "certificate_hash": "2906b6a528cbad0f44408e8ee1e18d93470960b2"
+          }
+        },
+        {
+          "client_id": "709095117662-cj4grphit49l58bsvmain83hfilj61ue.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.tauhee56.travesocial",
+            "certificate_hash": "6e7cdb2b1cb12267d7660e053f60e5934ff64ba2"
+          }
+        },
+        {
+          "client_id": "709095117662-h0cmc7u8do2blv7tebflcam25u50hmb1.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.tauhee56.travesocial",
+            "certificate_hash": "284a059454863ea379bef9241d6daae023f9ce93"
+          }
+        },
+        {
+          "client_id": "709095117662-h8d1akdrb8ip2u3mtn00n1qavie3pone.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.tauhee56.travesocial",
+            "certificate_hash": "0fb41ea93556535ce58090216e8a8e752ec16f10"
+          }
+        },
+        {
+          "client_id": "709095117662-o5p9suvugd577mvh9qmkepke4urd0ntd.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.tauhee56.travesocial",
+            "certificate_hash": "0b93ec07ab6fd32a47cff75bebc6110ae3262529"
+          }
+        },
+        {
+          "client_id": "709095117662-p72r29hf6s9b1sm95hk91r4g1s8j1fiv.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.tauhee56.travesocial",
+            "certificate_hash": "190009d302fb1c8a67a1c08668de1e46ddc11784"
+          }
+        },
+        {
+          "client_id": "709095117662-pqj5mkt24t9hkb06msei85q9ch17ou0i.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.tauhee56.travesocial",
+            "certificate_hash": "9cfe74df55185d796db5ee94c451dbcae4fcc2ad"
+          }
+        },
+        {
+          "client_id": "709095117662-r2scunnkulll0hej5471n7r6ij176mbp.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.tauhee56.travesocial",
+            "certificate_hash": "326291e4d59ba1b0a6900863a55958cf5e1a07f3"
+          }
+        },
+        {
+          "client_id": "709095117662-ujmdf405mlcsj8va2u28a767utt9p2ds.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.tauhee56.travesocial",
+            "certificate_hash": "7e07060c8c96c9ad0d9a8e39155f31046556c558"
+          }
+        },
+        {
+          "client_id": "709095117662-2l84b3ua08t9icu8tpqtpchrmtdciep0.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyB8nimZaka3PwCUrGpUgJkt7BtkiDSVKyg"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "709095117662-2l84b3ua08t9icu8tpqtpchrmtdciep0.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "709095117662-k35juagf7ihkae81tfm9si43jkg7g177.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.tauhee56.travesocial"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

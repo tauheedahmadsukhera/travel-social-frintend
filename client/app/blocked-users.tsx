@@ -6,6 +6,10 @@ import { ActivityIndicator, Alert, FlatList, StyleSheet, Text, TouchableOpacity,
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { userService } from '../lib/userService';
+import { DEFAULT_AVATAR_URL } from '@/lib/api';
+import { useAppDialog } from '@/src/_components/AppDialogProvider';
+import { safeRouterBack } from '@/lib/safeRouterBack';
+
 
 interface BlockedUser {
     id: string;
@@ -22,6 +26,7 @@ export default function BlockedUsersScreen() {
     const [loading, setLoading] = useState(true);
     const [unblocking, setUnblocking] = useState<string | null>(null);
     const [userId, setUserId] = useState<string | null>(null);
+    const { showSuccess } = useAppDialog();
 
     useEffect(() => {
         const init = async () => {
@@ -79,7 +84,7 @@ export default function BlockedUsersScreen() {
                             const success = await userService.unblockUser(userId, targetUserId);
                             if (success) {
                                 setBlockedUsers(prev => prev.filter(u => u.userId !== targetUserId));
-                                Alert.alert('Success', 'User unblocked');
+                                showSuccess('User unblocked');
                             } else {
                                 throw new Error('Unblock failed');
                             }
@@ -97,7 +102,7 @@ export default function BlockedUsersScreen() {
         <SafeAreaView style={styles.container} edges={['top']}>
             {/* Header */}
             <View style={styles.header}>
-                <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+                <TouchableOpacity onPress={() => safeRouterBack()} style={styles.backBtn}>
                     <Feather name="arrow-left" size={24} color="#000" />
                 </TouchableOpacity>
                 <Text style={styles.headerTitle}>Blocked Users</Text>
@@ -125,7 +130,7 @@ export default function BlockedUsersScreen() {
                     renderItem={({ item }) => (
                         <View style={styles.userItem}>
                             <ExpoImage
-                                source={{ uri: item.avatar || 'https://via.placeholder.com/50x50.png?text=User' }}
+                                source={{ uri: item.avatar || DEFAULT_AVATAR_URL }}
                                 style={styles.avatar}
                                 contentFit="cover"
                                 transition={200}

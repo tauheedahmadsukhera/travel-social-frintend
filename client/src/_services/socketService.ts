@@ -13,9 +13,9 @@ let reconnectAttempts = 0;
 const MAX_RECONNECT_ATTEMPTS = 20;
 
 /**
- * Initialize socket connection
+ * Initialize socket connection (JWT in handshake — server verifies identity).
  */
-export function initializeSocket(userId: string): Socket {
+export async function initializeSocket(userId: string): Promise<Socket> {
   if (socket && socket.connected && currentUserId === userId) {
     console.log('[Socket] Already connected for user:', userId);
     return socket;
@@ -37,10 +37,14 @@ export function initializeSocket(userId: string): Socket {
   const API_BASE = getAPIBaseURL();
   const SOCKET_URL = API_BASE.replace('/api', ''); // Remove /api suffix
 
+  const token = (await AsyncStorage.getItem('token')) || '';
+
   console.log('[Socket] Connecting to:', SOCKET_URL, 'for user:', userId);
 
   socket = io(SOCKET_URL, {
-    transports: ['polling', 'websocket'],
+    // Prefer WebSocket first (less HTTP long-poll overhead, closer to production chat apps).
+    transports: ['websocket', 'polling'],
+    auth: { token },
     reconnection: true,
     reconnectionAttempts: 20,
     reconnectionDelay: 1000,
@@ -48,7 +52,7 @@ export function initializeSocket(userId: string): Socket {
     timeout: 30000,
     autoConnect: true,
     forceNew: true,
-    rememberUpgrade: false,
+    rememberUpgrade: true,
     withCredentials: false,
   });
 
@@ -75,10 +79,10 @@ export function initializeSocket(userId: string): Socket {
     console.error('[Socket] Connection error:', error.message);
     reconnectAttempts++;
 
-    // Force websocket retry after a few polling failures.
-    if (socket && reconnectAttempts === 3) {
+    // After failures, allow polling-first fallback (some networks block WS).
+    if (socket && reconnectAttempts === 4) {
       try {
-        socket.io.opts.transports = ['websocket', 'polling'];
+        socket.io.opts.transports = ['polling', 'websocket'];
       } catch {
         // best effort
       }
@@ -87,6 +91,10 @@ export function initializeSocket(userId: string): Socket {
     if (reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
       console.error('[Socket] Max reconnection attempts reached');
     }
+  });
+
+  socket.on('socketAuthError', (payload) => {
+    console.warn('[Socket] Auth rejected:', payload?.message || payload);
   });
 
   socket.on('reconnect', (attemptNumber) => {

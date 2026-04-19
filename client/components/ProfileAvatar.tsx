@@ -2,6 +2,8 @@ import { Feather } from '@expo/vector-icons';
 import { Image as ExpoImage } from 'expo-image';
 import React from 'react';
 import { StyleSheet, TouchableOpacity, View } from 'react-native';
+import { DEFAULT_AVATAR_URL } from '@/lib/api';
+
 
 interface ProfileAvatarProps {
   avatarUrl: string;
@@ -21,7 +23,7 @@ const ProfileAvatar: React.FC<ProfileAvatarProps> = ({
   <View style={styles.avatarContainer}>
     <TouchableOpacity activeOpacity={0.8} onPress={onAvatarPress}>
       <ExpoImage
-        source={{ uri: avatarUrl || 'https://via.placeholder.com/120x120.png?text=User' }}
+        source={{ uri: avatarUrl || DEFAULT_AVATAR_URL }}
         style={styles.avatar}
         contentFit="cover"
         transition={200}

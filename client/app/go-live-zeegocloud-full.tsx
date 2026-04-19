@@ -1,4 +1,5 @@
 import { DEFAULT_AVATAR_URL } from '../lib/api';
+import { safeRouterBack } from '@/lib/safeRouterBack';
 /**
  * Go Live Screen - ZeegoCloud with Full Features
  * Features: Comments, Viewers, Map, Share, etc.
@@ -296,7 +297,7 @@ export default function GoLiveScreen() {
 
               // TODO: Update backend that stream ended
 
-              router.back();
+              safeRouterBack();
             } catch (error) {
               logger.error('End stream error:', error);
             }
@@ -403,7 +404,7 @@ export default function GoLiveScreen() {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+          <TouchableOpacity onPress={() => safeRouterBack()} style={styles.backButton}>
             <Ionicons name="arrow-back" size={24} color="#000" />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Go Live</Text>

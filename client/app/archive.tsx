@@ -6,6 +6,10 @@ import Swipeable from 'react-native-gesture-handler/Swipeable';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useUser } from '@/src/_components/UserContext';
+import { DEFAULT_AVATAR_URL } from '@/lib/api';
+import { hapticLight, hapticMedium } from '@/lib/haptics';
+import { safeRouterBack } from '@/lib/safeRouterBack';
+
 
 export default function Archive() {
   const router = useRouter();
@@ -104,7 +108,13 @@ export default function Archive() {
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: '#fff' }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingTop: 12, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: '#f5f5f5', backgroundColor: '#fff' }}>
-        <TouchableOpacity onPress={() => router.back()} style={{ padding: 6 }}>
+        <TouchableOpacity
+          onPress={() => {
+            hapticLight();
+            safeRouterBack();
+          }}
+          style={{ padding: 6 }}
+        >
           <Feather name="x" size={22} color="#FF8800" />
         </TouchableOpacity>
         <Text style={{ flex: 1, textAlign: 'center', fontSize: 20, fontWeight: '700', color: '#111', marginLeft: -22 }}>Archive Chats</Text>
@@ -133,6 +143,7 @@ export default function Archive() {
                 <TouchableOpacity
                   style={{ backgroundColor: '#FF8800', justifyContent: 'center', alignItems: 'center', width: 100, height: '100%', borderRadius: 12 }}
                   onPress={async () => {
+                    hapticMedium();
                     if (!uid) return;
                     // @ts-ignore
                     const mod: { unarchiveConversation: (id: string, uid: string) => Promise<any> } = await import('../lib/firebaseHelpers/archive');
@@ -147,6 +158,7 @@ export default function Archive() {
               <TouchableOpacity
                 style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 12, paddingHorizontal: 16, borderBottomWidth: 1, borderBottomColor: '#eee' }}
                 onPress={() => {
+                  hapticLight();
                   const otherId = typeof item?.otherUser?.id === 'string'
                     ? item.otherUser.id
                     : (Array.isArray(item?.participants)
@@ -172,7 +184,7 @@ export default function Archive() {
                 }}
               >
                 <View style={{ width: 56, height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center', marginRight: 12 }}>
-                  <Image source={{ uri: (item.otherUser && item.otherUser.avatar) ? item.otherUser.avatar : 'https://via.placeholder.com/200x200.png?text=Profile' }} style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: '#eee' }} />
+                  <Image source={{ uri: (item.otherUser && item.otherUser.avatar) ? item.otherUser.avatar : DEFAULT_AVATAR_URL }} style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: '#eee' }} />
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text style={{ fontSize: 16, fontWeight: '600', color: '#222' }}>{item.otherUser && (item.otherUser.displayName || item.otherUser.name) ? (item.otherUser.displayName || item.otherUser.name) : 'Unknown User'}</Text>

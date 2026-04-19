@@ -1,4 +1,4 @@
-﻿import { Feather, Ionicons } from '@expo/vector-icons';
+import { Feather, Ionicons } from '@expo/vector-icons';
 import { Image as ExpoImage } from 'expo-image';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
@@ -7,8 +7,13 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { API_BASE_URL } from '../lib/api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { followUser, unfollowUser } from '../lib/firebaseHelpers/follow';
+import { DEFAULT_AVATAR_URL } from '@/lib/api';
+import { hapticLight, hapticMedium } from '@/lib/haptics';
+import { useAppDialog } from '@/src/_components/AppDialogProvider';
+import { safeRouterBack } from '@/lib/safeRouterBack';
 
-const DEFAULT_AVATAR = 'https://via.placeholder.com/200x200.png?text=Profile';
+
+const DEFAULT_AVATAR = DEFAULT_AVATAR_URL;
 const API_URL = API_BASE_URL;
 
 type UserItem = {
@@ -27,6 +32,7 @@ export default function FriendsScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const { showSuccess } = useAppDialog();
 
   useEffect(() => {
     const loadUserId = async () => {
@@ -130,6 +136,7 @@ export default function FriendsScreen() {
   const handleFollowToggle = async (targetUserId: string, isCurrentlyFollowing: boolean) => {
     if (!currentUserId || targetUserId === currentUserId) return;
 
+    hapticMedium();
     setFollowLoadingIds(prev => new Set(prev).add(targetUserId));
 
     try {
@@ -174,6 +181,7 @@ export default function FriendsScreen() {
   const handleUnblock = async (targetUserId: string) => {
     if (!currentUserId) return;
 
+    hapticLight();
     Alert.alert(
       'Unblock User',
       'You will start seeing content from this user again.',
@@ -182,6 +190,7 @@ export default function FriendsScreen() {
         {
           text: 'Unblock',
           onPress: async () => {
+            hapticMedium();
             try {
               // Call backend API to unblock
               const response = await fetch(`${API_URL}/users/${currentUserId}/block/${targetUserId}`, {
@@ -192,7 +201,7 @@ export default function FriendsScreen() {
 
               if (data.success) {
                 setBlockedUsers(prev => prev.filter(u => u.uid !== targetUserId));
-                Alert.alert('Success', 'User unblocked');
+                showSuccess('User unblocked');
               } else {
                 Alert.alert('Error', 'Failed to unblock user');
               }
@@ -208,6 +217,7 @@ export default function FriendsScreen() {
   const handleRemoveFollower = async (targetUserId: string) => {
     if (!currentUserId || !isOwnProfile) return;
 
+    hapticLight();
     Alert.alert(
       'Remove Follower',
       'This person will be removed from your followers. They won\'t be notified.',
@@ -217,13 +227,14 @@ export default function FriendsScreen() {
           text: 'Remove',
           style: 'destructive',
           onPress: async () => {
+            hapticMedium();
             try {
               // Remove from your followers (unfollow them from you)
               await unfollowUser(targetUserId, currentUserId);
               setFollowers(prev => prev.filter(u => u.uid !== targetUserId));
               // Update friends list
               setFriends(prev => prev.filter(u => u.uid !== targetUserId));
-              Alert.alert('Success', 'Follower removed');
+              showSuccess('Follower removed');
             } catch (e) {
               Alert.alert('Error', 'Failed to remove follower');
             }
@@ -270,7 +281,10 @@ export default function FriendsScreen() {
     return (
       <TouchableOpacity
         style={styles.userItem}
-        onPress={() => router.push(`/user-profile?id=${item.uid}`)}
+        onPress={() => {
+          hapticLight();
+          router.push(`/user-profile?id=${item.uid}`);
+        }}
         activeOpacity={0.7}
       >
         {avatarUri ? (
@@ -278,7 +292,8 @@ export default function FriendsScreen() {
             source={{ uri: avatarUri }}
             style={styles.avatar}
             contentFit="cover"
-            transition={200}
+            cachePolicy="memory-disk"
+            transition={150}
           />
         ) : (
           <View style={styles.avatarFallback}>
@@ -384,7 +399,13 @@ export default function FriendsScreen() {
     <SafeAreaView style={styles.container} edges={['top']}>
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+        <TouchableOpacity
+          onPress={() => {
+            hapticLight();
+            safeRouterBack();
+          }}
+          style={styles.backBtn}
+        >
           <Feather name="arrow-left" size={24} color="#000" />
         </TouchableOpacity>
         <Text style={styles.headerTitle} numberOfLines={1}>{profileName}</Text>
@@ -395,7 +416,10 @@ export default function FriendsScreen() {
       <View style={styles.tabsContainer}>
         <TouchableOpacity
           style={[styles.tab, activeTab === 'followers' && styles.activeTab]}
-          onPress={() => setActiveTab('followers')}
+          onPress={() => {
+            hapticLight();
+            setActiveTab('followers');
+          }}
         >
           <Text style={[styles.tabText, activeTab === 'followers' && styles.activeTabText]}>
             {followers.length} Followers
@@ -404,7 +428,10 @@ export default function FriendsScreen() {
 
         <TouchableOpacity
           style={[styles.tab, activeTab === 'following' && styles.activeTab]}
-          onPress={() => setActiveTab('following')}
+          onPress={() => {
+            hapticLight();
+            setActiveTab('following');
+          }}
         >
           <Text style={[styles.tabText, activeTab === 'following' && styles.activeTabText]}>
             {following.length} Following
@@ -414,7 +441,10 @@ export default function FriendsScreen() {
         {isOwnProfile && (
           <TouchableOpacity
             style={[styles.tab, activeTab === 'blocked' && styles.activeTab]}
-            onPress={() => setActiveTab('blocked')}
+            onPress={() => {
+              hapticLight();
+              setActiveTab('blocked');
+            }}
           >
             <Text style={[styles.tabText, activeTab === 'blocked' && styles.activeTabText]}>
               Blocked
@@ -434,7 +464,12 @@ export default function FriendsScreen() {
           onChangeText={setSearchQuery}
         />
         {searchQuery.length > 0 && (
-          <TouchableOpacity onPress={() => setSearchQuery('')}>
+          <TouchableOpacity
+            onPress={() => {
+              hapticLight();
+              setSearchQuery('');
+            }}
+          >
             <Feather name="x" size={18} color="#999" />
           </TouchableOpacity>
         )}
@@ -453,6 +488,10 @@ export default function FriendsScreen() {
           contentContainerStyle={styles.listContent}
           ListEmptyComponent={renderEmptyState}
           showsVerticalScrollIndicator={false}
+          removeClippedSubviews={true}
+          initialNumToRender={10}
+          maxToRenderPerBatch={10}
+          windowSize={10}
         />
       )}
     </SafeAreaView>

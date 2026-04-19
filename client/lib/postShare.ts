@@ -63,7 +63,7 @@ export async function shareProfile(input: { userId: string; name?: string; usern
   const username = typeof input === 'string' ? '' : (typeof input?.username === 'string' ? input.username.trim() : '');
   const label = name || username || 'this user';
 
-  const message = `Check out ${label}'s profile on Trave Social!\n\n${bestLink}`;
+  const message = `Check out ${label}'s profile on Trips!\n\n${bestLink}`;
   await Share.share({ message, url: bestLink, title: 'Share Profile' });
 }
 

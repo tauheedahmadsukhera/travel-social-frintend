@@ -1,3 +1,4 @@
+import { DEFAULT_AVATAR_URL } from '@/lib/api';
 /**
  * Check if a user is an approved follower
  */
@@ -8,23 +9,6 @@ export async function isApprovedFollower(userId: string, checkUserId: string) {
     return data.isApproved || false;
   } catch (error: any) {
     return false;
-  }
-}
-
-/**
- * Update a user section (for EditSectionsModal)
- */
-export async function updateUserSection(userId: string, section: { name: string, postIds: string[], coverImage?: string }) {
-  try {
-    const res = await fetch(`/api/users/${userId}/sections`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: section.name, postIds: section.postIds || [], coverImage: section.coverImage || '' })
-    });
-    const data = await res.json();
-    return data;
-  } catch (error: any) {
-    return { success: false, error: error.message };
   }
 }
 
@@ -87,9 +71,28 @@ export async function getUserProfile(uid: string) {
       return { success: false, error: res.error || 'User not found' };
     }
 
+    const normalizeRemoteUrl = (value: any): string => {
+      if (typeof value !== 'string') return '';
+      const trimmed = value.trim();
+      if (!trimmed) return '';
+      const lower = trimmed.toLowerCase();
+      if (lower === 'null' || lower === 'undefined' || lower === 'n/a' || lower === 'na') return '';
+      if (lower.startsWith('http://')) return `https://${trimmed.slice(7)}`;
+      if (lower.startsWith('//')) return `https:${trimmed}`;
+      return trimmed;
+    };
+
     const userData = res.data;
-    const defaultAvatar = 'https://firebasestorage.googleapis.com/v0/b/travel-app-3da72.firebasestorage.app/o/default%2Fdefault-pic.jpg?alt=media&token=7177f487-a345-4e45-9a56-732f03dbf65d';
-    const userAvatar = userData.avatar || userData.photoURL || defaultAvatar;
+    const defaultAvatar = DEFAULT_AVATAR_URL;
+    const userAvatar = normalizeRemoteUrl(userData.avatar || userData.photoURL || userData.profilePicture) || defaultAvatar;
+    
+    console.log('[getUserProfile] Avatar resolution for', uid, ':', {
+      responseAvatar: userData.avatar,
+      responsePhotoURL: userData.photoURL,
+      responseProfilePicture: userData.profilePicture,
+      resolvedAvatar: userAvatar,
+      isDefault: userAvatar === defaultAvatar
+    });
     const profile = {
       id: userData._id || userData.uid,
       uid: userData.uid,
@@ -125,7 +128,7 @@ export async function updateUserProfile(uid: string, data: any) {
 
     let avatarValue = data?.avatar;
     if (!avatarValue || (typeof avatarValue === 'string' && avatarValue.trim() === '')) {
-      avatarValue = 'https://firebasestorage.googleapis.com/v0/b/travel-app-3da72.firebasestorage.app/o/default%2Fdefault-pic.jpg?alt=media&token=7177f487-a345-4e45-9a56-732f03dbf65d';
+      avatarValue = DEFAULT_AVATAR_URL;
     }
     const safeData = {
       ...data,

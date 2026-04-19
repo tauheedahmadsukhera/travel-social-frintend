@@ -4,10 +4,12 @@ import {
   TIKTOK_CLIENT_KEY,
   TIKTOK_CLIENT_SECRET,
 } from '@env';
+import Constants from 'expo-constants';
 import * as WebBrowser from 'expo-web-browser';
 import { GoogleAuthProvider, OAuthProvider, signInWithCredential, signInWithPopup } from 'firebase/auth';
 import { Alert, Platform } from 'react-native';
 import { auth } from '../config/firebase';
+import { GOOGLE_SIGN_IN_CONFIG } from '../config/environment';
 import { DEFAULT_AVATAR_URL } from '@/lib/api';
 
 
@@ -58,12 +60,31 @@ export async function signInWithGoogle() {
     // For mobile (iOS/Android)
     if (GoogleSignin) {
       try {
-        // Configure Google Sign-In
+        // Expo Go is signed with Expo's keystore, not com.tauhee56.travesocial + your debug SHA-1 → DEVELOPER_ERROR forever.
+        if (Platform.OS === 'android' && Constants.appOwnership === 'expo') {
+          return {
+            success: false,
+            error:
+              'Google Sign-In does not work in Expo Go on Android. Use a dev build (npx expo run:android or your EAS dev client APK), or use email login.',
+          };
+        }
+
+        const webClientId = GOOGLE_SIGN_IN_CONFIG.webClientId?.trim();
+        const iosClientId = GOOGLE_SIGN_IN_CONFIG.iosClientId?.trim();
+        if (!webClientId) {
+          return {
+            success: false,
+            error:
+              'Google Sign-In is not configured (missing EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID). Set it in EAS env or .env and rebuild.',
+          };
+        }
+
+        // Configure Google Sign-In (IDs from EAS / EXPO_PUBLIC_* or defaults in config/environment)
         GoogleSignin.configure({
-          webClientId: '709095117662-2l84b3ua08t9icu8tpqtpchrmtdciep0.apps.googleusercontent.com',
+          webClientId,
           offlineAccess: true,
-          iosClientId: '709095117662-k35juagf7ihkae81tfm9si43jkg7g177.apps.googleusercontent.com', // iOS Client ID from GoogleService-Info.plist
-          forceCodeForRefreshToken: true, // Force refresh token
+          ...(iosClientId ? { iosClientId } : {}),
+          forceCodeForRefreshToken: true,
         });
 
         // Check if device supports Google Play Services (Android only)
@@ -124,14 +145,18 @@ export async function signInWithGoogle() {
 
         // Check if it's Android SHA-1 certificate issue
         if (Platform.OS === 'android' && (configError.code === '10' || configError.message?.includes('DEVELOPER_ERROR'))) {
-          console.warn('⚠️ Google Sign-In (DEVELOPER_ERROR): Register the **debug** SHA-1 for com.tauhee56.travesocial in Firebase (and Google Cloud OAuth Android client if you use one).');
-          console.warn('This app signs debug builds with android/app/debug.keystore (not always the same as ~/.android/debug.keystore).');
-          console.warn('From client folder run: npm run get-sha1   → copy SHA-1 into Firebase → Project settings → Your Android app → Add fingerprint.');
-          console.warn('Also add the same SHA-1 on the Android-type OAuth 2.0 client in Google Cloud Console → Credentials, if Sign-In still fails.');
-          console.warn('EAS/Play store builds: add that keystore’s SHA-1 too (different from local debug).');
+          console.warn(
+            '⚠️ Google Sign-In (DEVELOPER_ERROR): Android signing certificate does not match Google/Firebase OAuth for this package.'
+          );
+          console.warn(
+            '1) Use a development build (expo run:android / EAS dev client), not Expo Go. 2) Run: npm run get-sha1 — add that SHA-1 to Firebase Android app + Google Cloud Console → Credentials → Android OAuth client for com.tauhee56.travesocial.'
+          );
+          console.warn(
+            '3) Download fresh google-services.json from Firebase and replace client/android/app/google-services.json, then rebuild. 4) Release/EAS: add that keystore SHA-1 too.'
+          );
 
           errorMessage =
-            'Google Sign-In on Android needs the correct debug SHA-1 in Firebase (run npm run get-sha1 from the client folder), then reinstall the app. You can use email login until that is done.';
+            'Google Sign-In on Android: use a dev build (not Expo Go), add the SHA-1 from npm run get-sha1 to Firebase and Google Cloud OAuth, refresh google-services.json, reinstall. Or use email login.';
         } else if (configError.code === '12501') {
           errorMessage = 'Sign in cancelled';
         } else if (configError.code === '12500') {

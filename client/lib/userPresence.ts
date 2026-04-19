@@ -5,6 +5,7 @@
 
 import { apiService } from '@/src/_services/apiService';
 import { db, doc, updateDoc } from './firebaseCompatibility';
+import { AppState } from 'react-native';
 
 export interface UserPresence {
   userId: string;
@@ -24,10 +25,7 @@ export async function updateUserPresence(userId: string, conversationId?: string
       conversationId: conversationId || null,
     });
   } catch (error) {
-    // Silently fail if backend not reachable - presence is not critical
-    if (__DEV__) {
-      console.log('Presence update skipped (backend not reachable)');
-    }
+    // Presence is best-effort in this backend.
   }
 }
 
@@ -38,7 +36,7 @@ export async function updateUserOffline(userId: string) {
   try {
     await apiService.post('/presence/offline', { userId });
   } catch (error) {
-    console.error('Error updating offline status:', error);
+    // Presence is best-effort in this backend.
   }
 }
 
@@ -46,9 +44,45 @@ export async function updateUserOffline(userId: string) {
  * Subscribe to user's online status - returns real-time updates
  */
 export function subscribeToUserPresence(userId: string, callback: (presence: UserPresence | null) => void) {
-  // TODO: Replace with WebSocket/Socket.io real-time presence
-  console.warn('subscribeToUserPresence not implemented for REST backend. Use WebSocket.');
-  return () => {};
+  if (!userId) {
+    callback(null);
+    return () => {};
+  }
+
+  let cancelled = false;
+  let intervalId: any = null;
+
+  const refreshPresence = async () => {
+    if (cancelled) return;
+    const presence = await getUserPresence(userId);
+    if (!cancelled) {
+      callback(presence);
+    }
+  };
+
+  const start = () => {
+    if (intervalId) return;
+    void refreshPresence();
+    intervalId = setInterval(refreshPresence, 15000);
+  };
+  const stop = () => {
+    if (!intervalId) return;
+    clearInterval(intervalId);
+    intervalId = null;
+  };
+
+  // Foreground-only presence polling
+  start();
+  const sub = AppState.addEventListener('change', (state) => {
+    if (state === 'active') start();
+    else stop();
+  });
+
+  return () => {
+    cancelled = true;
+    stop();
+    sub.remove();
+  };
 }
 
 /**
@@ -66,7 +100,6 @@ export async function getUserPresence(userId: string): Promise<UserPresence | nu
       typing: !!data.typing,
     };
   } catch (error) {
-    console.error('Error getting presence:', error);
     return null;
   }
 }
@@ -115,6 +148,6 @@ export async function updateTypingStatus(userId: string, conversationId: string,
       activeInConversation: conversationId,
     });
   } catch (error) {
-    console.error('Error updating typing status:', error);
+    if (__DEV__) console.error('Error updating typing status:', error);
   }
 }

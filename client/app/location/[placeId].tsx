@@ -1,8 +1,9 @@
+import { DEFAULT_AVATAR_URL } from '../../lib/api';
 import { Feather, Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Dimensions, FlatList, Image, Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { ActivityIndicator, Animated, Dimensions, FlatList, Image, Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import PostCard from '@/src/_components/PostCard';
 import NotificationsModal from '@/src/_components/NotificationsModal';
 import StoriesViewer from '@/src/_components/StoriesViewer';
@@ -10,10 +11,17 @@ import VerifiedBadge from '@/src/_components/VerifiedBadge';
 import { apiService } from '@/src/_services/apiService';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { feedEventEmitter } from '../../lib/feedEventEmitter';
+import { hapticLight } from '../../lib/haptics';
+import {
+  extractStoryListFromResponseBody,
+  hydrateStoryDocumentsIfNeeded,
+  storyForStoriesViewer,
+} from '../../lib/storyViewer';
+import { safeRouterBack } from '@/lib/safeRouterBack';
 
 
 const { width } = Dimensions.get('window');
-const DEFAULT_AVATAR_URL = 'https://via.placeholder.com/200x200.png?text=Profile';
+
 
 type Post = {
   id: string;
@@ -73,8 +81,9 @@ type SubLocation = {
 };
 
 export default function LocationDetailsScreen() {
-  const { placeId, locationName, locationAddress } = useLocalSearchParams();
+  const { placeId, locationName, locationAddress, scope, regionId, regionKey } = useLocalSearchParams();
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const [placeDetails, setPlaceDetails] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [stories, setStories] = useState<Story[]>([]);
@@ -89,12 +98,126 @@ export default function LocationDetailsScreen() {
   const [showStoriesViewer, setShowStoriesViewer] = useState(false);
   const [selectedStories, setSelectedStories] = useState<Story[]>([]);
   const [notificationsModalVisible, setNotificationsModalVisible] = useState(false);
-  const [logoUrl, setLogoUrl] = useState<string | null>('https://res.cloudinary.com/dinwxxnzm/image/upload/v1766418070/logo/logo.png');
+
+  // Scroll animation state
+  const safeTop = Math.max(insets.top, 12);
+  const totalHeaderHeight = safeTop + 48; // Approx back button row height
+
+  const headerHeightRef = React.useRef<number>(totalHeaderHeight);
+  const animatedHeaderHeight = React.useRef(new Animated.Value(totalHeaderHeight)).current;
+  const animatedHeaderTranslateY = React.useRef(new Animated.Value(0)).current;
+
+  // Sync on mount or safe area change
+  useEffect(() => {
+    headerHeightRef.current = totalHeaderHeight;
+    animatedHeaderHeight.setValue(totalHeaderHeight);
+  }, [totalHeaderHeight, animatedHeaderHeight]);
+
+  // Tracks last *applied* animation target (not initial UI state), so applyHeaderState(false) can run after a hide.
+  const headerVisibilityAppliedRef = React.useRef<boolean | null>(null);
+
+  const applyHeaderState = React.useCallback((hidden: boolean) => {
+    if (headerVisibilityAppliedRef.current === hidden) return;
+    headerVisibilityAppliedRef.current = hidden;
+    const h = headerHeightRef.current;
+    if (!h) return;
+    // Same easing both ways avoids a “flash” when show/hide toggles near scroll top (bounce).
+    const duration = 160;
+
+    Animated.parallel([
+      Animated.timing(animatedHeaderHeight, {
+        toValue: hidden ? 0 : h,
+        duration,
+        useNativeDriver: false,
+      }),
+      Animated.timing(animatedHeaderTranslateY, {
+        toValue: hidden ? -h : 0,
+        duration,
+        useNativeDriver: false,
+      }),
+    ]).start();
+  }, [animatedHeaderHeight, animatedHeaderTranslateY]);
+
+  const lastScrollYRef = React.useRef(0);
+  const lastEmitTsRef = React.useRef(0);
 
   const onStoryPress = (stories: Story[], initialIndex: number) => {
     setSelectedStories(stories);
     setShowStoriesViewer(true);
   };
+
+  const regionIdStr = String(regionId || placeId || '').toLowerCase();
+  const isRegionScope = String(scope || '').toLowerCase() === 'region';
+
+  const inferRegionKey = React.useCallback((rid: string, rname: string) => {
+    const rawId = String(rid || '').trim().toLowerCase();
+    const rawName = String(rname || '').trim().toLowerCase();
+    if (rawId === 'americas' || rawName === 'americas') return 'americas';
+    if (rawId === 'america' || rawName === 'america') return 'americas';
+    if (rawId === 'europe' || rawName === 'europe') return 'europe';
+    if (rawId === 'asia' || rawName === 'asia') return 'asia';
+    if (rawId === 'africa' || rawName === 'africa') return 'africa';
+    if (rawId === 'oceania' || rawName === 'oceania') return 'oceania';
+    return '';
+  }, []);
+
+  const getCountriesForRegion = React.useCallback(
+    async (rid: string, rname: string): Promise<string[]> => {
+      const cacheKey = `region_countries_v1_${String(rid || rname || 'unknown').toLowerCase()}`;
+      const ONE_WEEK_MS = 7 * 24 * 60 * 60 * 1000;
+
+      try {
+        const cachedRaw = await AsyncStorage.getItem(cacheKey);
+        if (cachedRaw) {
+          const cached = JSON.parse(cachedRaw);
+          const ts = Number(cached?.ts || 0);
+          const data = cached?.data;
+          if (Array.isArray(data) && data.length > 0 && Date.now() - ts < ONE_WEEK_MS) {
+            return data.map(String);
+          }
+        }
+      } catch { }
+
+      const explicitKey = String(regionKey || '').trim().toLowerCase();
+      const region = explicitKey || inferRegionKey(rid, rname);
+      // If no explicit regionKey was provided, we can't safely expand automatically.
+      if (!region) {
+        // Special-case: Japan behaves like a single country region for our UI convenience.
+        const nm = String(rname || '').trim();
+        if (String(rid || '').toLowerCase() === 'japan' || nm.toLowerCase() === 'japan') return ['Japan'];
+        return [];
+      }
+
+      try {
+        const res = await fetch(`https://restcountries.com/v3.1/region/${encodeURIComponent(region)}`);
+        const json: any = await res.json();
+        const names = Array.isArray(json)
+          ? json
+            .map((c: any) => c?.name?.common || c?.name?.official)
+            .filter((x: any) => typeof x === 'string' && x.trim().length > 0)
+          : [];
+
+        const uniq: string[] = [];
+        const seen = new Set<string>();
+        for (const n of names) {
+          const key = String(n).trim().toLowerCase();
+          if (!key || seen.has(key)) continue;
+          seen.add(key);
+          uniq.push(String(n).trim());
+        }
+
+        // Cache for later opens
+        try {
+          await AsyncStorage.setItem(cacheKey, JSON.stringify({ ts: Date.now(), data: uniq }));
+        } catch { }
+
+        return uniq;
+      } catch {
+        return [];
+      }
+    },
+    [inferRegionKey, regionKey]
+  );
 
   // Load current user when component mounts
   useEffect(() => {
@@ -137,8 +260,12 @@ export default function LocationDetailsScreen() {
         };
         setPlaceDetails(placeDetails);
 
-        // Fetch posts from Firebase that match this location
-        await fetchLocationPosts(locationName as string);
+        if (isRegionScope) {
+          await fetchRegionPosts(regionIdStr, locationName as string);
+        } else {
+          // Fetch posts from backend that match this location
+          await fetchLocationPosts(locationName as string);
+        }
 
         // Fetch stories from Firebase that match this location
         await fetchLocationStories(locationName as string);
@@ -149,7 +276,7 @@ export default function LocationDetailsScreen() {
       setLoading(false);
     }
     if (locationName) fetchDetails();
-  }, [placeId, locationName, locationAddress]);
+  }, [placeId, locationName, locationAddress, isRegionScope, regionIdStr]);
 
   const extractSubLocationName = (locationName: string, locationAddress: string): string => {
     // Extract city/area name from location
@@ -173,14 +300,50 @@ export default function LocationDetailsScreen() {
   const fetchLocationPosts = async (searchLocationName: string) => {
     try {
       const viewerId = await AsyncStorage.getItem('userId');
+      const locationAddressValue = Array.isArray(locationAddress) ? locationAddress[0] : locationAddress;
+      const routePlaceIdRaw = typeof placeId === 'string' ? placeId : Array.isArray(placeId) ? placeId[0] : '';
+      const routePlaceId = String(routePlaceIdRaw || '').trim();
 
       let metaHasVerifiedVisits = false;
 
+      const normalize = (v: any) => String(v || '').trim().toLowerCase();
+      const primarySearchPart =
+        String(searchLocationName || '')
+          .split(',')
+          .map((p) => p.trim())
+          .filter(Boolean)[0] || String(searchLocationName || '');
+      const primaryAddressPart =
+        String(locationAddressValue || '')
+          .split(',')
+          .map((p) => p.trim())
+          .filter(Boolean)[0] || String(locationAddressValue || '');
+      const rawNeedles = [searchLocationName, primarySearchPart, primaryAddressPart];
+      const needles = Array.from(new Set(rawNeedles.map(normalize).filter((v) => v.length >= 3)));
+
+      const postMatchesLocationQuery = (post: any) => {
+        if (routePlaceId) {
+          const sp = String(post?.locationData?.placeId || '').trim();
+          if (sp && sp === routePlaceId) return true;
+        }
+        if (!needles.length) return false;
+        const haystack = [
+          post?.location,
+          post?.locationName,
+          post?.locationData?.name,
+          post?.locationData?.address,
+          post?.locationData?.city,
+          post?.locationData?.country,
+          ...(Array.isArray(post?.locationKeys) ? post.locationKeys : []),
+        ]
+          .map(normalize)
+          .filter(Boolean);
+        return needles.some((needle) => haystack.some((hay) => hay.includes(needle)));
+      };
+
       const all: any[] = [];
       const pageSize = 50;
-      const maxPages = 5;
-
-      for (let page = 0; page < maxPages; page++) {
+      const MAX_LOCATION_API_PAGES = 300;
+      for (let page = 0; page < MAX_LOCATION_API_PAGES; page++) {
         const skip = page * pageSize;
         const response = await apiService.getPostsByLocation(searchLocationName, skip, pageSize, viewerId || undefined);
         const next = response?.success && Array.isArray(response?.data) ? response.data : [];
@@ -188,13 +351,52 @@ export default function LocationDetailsScreen() {
         if (next.length < pageSize) break;
       }
 
-      // Normalize posts to ensure they have an 'id' field
-      const locationPosts = all.map((post: any) => ({
-        ...post,
-        id: post.id || post._id,
-      }));
+      const byId = new Map<string, any>();
+      const addPost = (post: any) => {
+        const id = String(post?.id || post?._id || '').trim();
+        if (!id) return;
+        if (!byId.has(id)) byId.set(id, { ...post, id: post.id || post._id });
+      };
+      for (const post of all) addPost(post);
 
-      console.log(`[Location] Found ${locationPosts.length} posts for "${searchLocationName}"`);
+      const FEED_PAGE = 100;
+      const MAX_FEED_PAGES = 50;
+      for (let fp = 0; fp < MAX_FEED_PAGES; fp++) {
+        const feedRes: any = await apiService.getPosts({
+          skip: fp * FEED_PAGE,
+          limit: FEED_PAGE,
+          viewerId: viewerId || undefined,
+          requesterUserId: viewerId || undefined,
+        });
+        const batch =
+          feedRes?.success && Array.isArray(feedRes?.data) ? feedRes.data : Array.isArray(feedRes) ? feedRes : [];
+        if (!batch.length) break;
+        for (const post of batch) {
+          if (postMatchesLocationQuery(post)) addPost(post);
+        }
+        if (batch.length < FEED_PAGE) break;
+      }
+
+      let locationPosts = Array.from(byId.values());
+      locationPosts.sort((a: any, b: any) => {
+        const ta =
+          a?.createdAt && typeof a.createdAt === 'string'
+            ? Date.parse(a.createdAt)
+            : a?.createdAt?.toDate?.()
+              ? a.createdAt.toDate().getTime()
+              : 0;
+        const tb =
+          b?.createdAt && typeof b.createdAt === 'string'
+            ? Date.parse(b.createdAt)
+            : b?.createdAt?.toDate?.()
+              ? b.createdAt.toDate().getTime()
+              : 0;
+        return (tb || 0) - (ta || 0);
+      });
+
+      console.log(
+        `[Location] "${searchLocationName}": API pages ~${Math.ceil(all.length / pageSize)}, merged ${locationPosts.length} posts (API rows ${all.length})`
+      );
 
       setAllPosts(locationPosts);
       setFilteredPosts(locationPosts);
@@ -241,6 +443,12 @@ export default function LocationDetailsScreen() {
         posts
       }));
 
+      subLocations.sort((a: any, b: any) => {
+        const diff = (b?.count || 0) - (a?.count || 0);
+        if (diff !== 0) return diff;
+        return String(a?.name || '').localeCompare(String(b?.name || ''));
+      });
+
       setSubLocations(subLocations);
 
       // Count verified visits (if meta not available)
@@ -265,33 +473,187 @@ export default function LocationDetailsScreen() {
     }
   };
 
+  const fetchRegionPosts = async (rid: string, regionName: string) => {
+    try {
+      const viewerId = await AsyncStorage.getItem('userId');
+      const countries = await getCountriesForRegion(rid, regionName);
+
+      if (countries.length === 0) {
+        await fetchLocationPosts(regionName);
+        return;
+      }
+
+      const pageSize = 50;
+      const MAX_PAGES_PER_COUNTRY = 300;
+      const maxCountries = 25; // protect device/network (increase if needed)
+
+      const expandCountryAliases = (name: string): string[] => {
+        const n = String(name || '').trim();
+        const nl = n.toLowerCase();
+        if (!n) return [];
+        if (nl === 'united states' || nl === 'united states of america' || nl === 'usa') {
+          return ['United States', 'United States of America', 'USA'];
+        }
+        if (nl === 'united kingdom' || nl === 'uk' || nl === 'great britain') {
+          return ['United Kingdom', 'UK', 'Great Britain'];
+        }
+        return [n];
+      };
+
+      const pickedRaw = countries.slice(0, maxCountries);
+      const picked: string[] = [];
+      const seenPick = new Set<string>();
+      for (const c of pickedRaw) {
+        for (const alias of expandCountryAliases(c)) {
+          const key = alias.trim().toLowerCase();
+          if (!key || seenPick.has(key)) continue;
+          seenPick.add(key);
+          picked.push(alias);
+        }
+      }
+      const allPostsOut: any[] = [];
+
+      // small concurrency cap (avoid flooding)
+      const chunkSize = 3;
+      for (let i = 0; i < picked.length; i += chunkSize) {
+        const chunk = picked.slice(i, i + chunkSize);
+        const settled = await Promise.allSettled(
+          chunk.map(async (countryName) => {
+            const all: any[] = [];
+            for (let page = 0; page < MAX_PAGES_PER_COUNTRY; page++) {
+              const skip = page * pageSize;
+              const response = await apiService.getPostsByLocation(countryName, skip, pageSize, viewerId || undefined);
+              const next = response?.success && Array.isArray(response?.data) ? response.data : [];
+              all.push(...next);
+              if (next.length < pageSize) break;
+            }
+            return all;
+          })
+        );
+        for (const r of settled) {
+          if (r.status === 'fulfilled' && Array.isArray(r.value)) {
+            allPostsOut.push(...r.value);
+          }
+        }
+      }
+
+      const seen = new Set<string>();
+      const normalized: any[] = [];
+      for (const post of allPostsOut) {
+        const id = String(post?.id || post?._id || '');
+        if (!id) continue;
+        if (seen.has(id)) continue;
+        seen.add(id);
+        normalized.push({ ...post, id });
+      }
+
+      normalized.sort((a: any, b: any) => {
+        const ta = (a?.createdAt && typeof a.createdAt === 'string') ? Date.parse(a.createdAt) : (a?.createdAt?.toDate?.() ? a.createdAt.toDate().getTime() : 0);
+        const tb = (b?.createdAt && typeof b.createdAt === 'string') ? Date.parse(b.createdAt) : (b?.createdAt?.toDate?.() ? b.createdAt.toDate().getTime() : 0);
+        return (tb || 0) - (ta || 0);
+      });
+
+      setAllPosts(normalized as any);
+      setFilteredPosts(normalized as any);
+      setTotalVisits(normalized.length);
+
+      const verifiedCount = normalized.filter((p: any) => p?.locationData?.verified).length;
+      setVerifiedVisits(verifiedCount);
+
+      // Sub locations (same as single location)
+      const subLocationMap = new Map<string, any[]>();
+      (normalized as any[]).forEach((post: any) => {
+        const locStr =
+          post?.locationData?.name ||
+          post?.locationName ||
+          (typeof post?.location === 'string' ? post.location : post?.location?.name) ||
+          '';
+        const subLocName = extractSubLocationName(
+          locStr,
+          post?.locationData?.address || ''
+        );
+        if (!subLocationMap.has(subLocName)) subLocationMap.set(subLocName, []);
+        subLocationMap.get(subLocName)?.push(post);
+      });
+
+      const subs = Array.from(subLocationMap.entries()).map(([name, posts]) => ({
+        name,
+        count: posts.length,
+        thumbnail: posts[0]?.imageUrl || 'https://via.placeholder.com/60',
+        posts,
+      }));
+      subs.sort((a: any, b: any) => {
+        const diff = (b?.count || 0) - (a?.count || 0);
+        if (diff !== 0) return diff;
+        return String(a?.name || '').localeCompare(String(b?.name || ''));
+      });
+      setSubLocations(subs as any);
+
+      if ((normalized as any[]).length > 0) {
+        const mostLiked = (normalized as any[]).reduce((prev: any, curr: any) =>
+          (curr.likesCount || 0) > (prev.likesCount || 0) ? curr : prev
+        );
+        if (mostLiked?.imageUrl) setMostLikedPostImage(mostLiked.imageUrl);
+      }
+    } catch (error) {
+      console.error('Error fetching region posts:', error);
+      setAllPosts([]);
+      setFilteredPosts([]);
+      setSubLocations([]);
+      setTotalVisits(0);
+      setVerifiedVisits(0);
+    }
+  };
+
   const fetchLocationStories = async (searchLocationName: string) => {
     try {
-      // Fetch stories from AsyncStorage or backend if available
-      // For now, we'll attempt to fetch from a stories endpoint if it exists
-      const response = await apiService.get('/stories?skip=0&limit=100');
+      const pid = typeof placeId === 'string' ? placeId : Array.isArray(placeId) ? placeId[0] : '';
+      const addr = typeof locationAddress === 'string' ? locationAddress : Array.isArray(locationAddress) ? locationAddress[0] : '';
 
-      if (response.success && response.data) {
-        // Normalize stories to ensure they have an 'id' field
-        const normalizedStories = response.data.map((story: any) => ({
-          ...story,
-          id: story.id || story._id,
-        }));
+      const mergeUnique = (a: any[], b: any[]) => {
+        const seen = new Set<string>();
+        const out: any[] = [];
+        for (const x of [...a, ...b]) {
+          const k = String((x as any)?.id || (x as any)?._id || '').trim();
+          if (!k) continue;
+          if (seen.has(k)) continue;
+          seen.add(k);
+          out.push(x);
+        }
+        return out;
+      };
 
-        const locationStories = normalizedStories.filter((story: any) => {
-          const storyLocation =
-            story?.locationData?.name ||
-            story?.location ||
-            '';
+      const [feedRes, activeRes] = await Promise.all([
+        apiService.get('/stories?skip=0&limit=100').catch(() => null),
+        apiService.get('/stories/active').catch(() => null),
+      ]);
 
-          return storyLocation.toLowerCase().includes(searchLocationName.toLowerCase());
-        });
+      let rawList = extractStoryListFromResponseBody(feedRes);
+      if (rawList.length === 0) rawList = extractStoryListFromResponseBody(feedRes?.data ?? feedRes);
+      const activeList = extractStoryListFromResponseBody(activeRes);
+      rawList = mergeUnique(rawList, activeList);
 
-        console.log(`[Location] Found ${locationStories.length} stories for "${searchLocationName}"`);
-        setStories(locationStories);
-      } else {
-        setStories([]);
-      }
+      rawList = await hydrateStoryDocumentsIfNeeded(rawList);
+
+      const normalizedStories = rawList.map((story: any, idx: number) => storyForStoriesViewer(story, idx));
+
+      const needle = String(searchLocationName || '').toLowerCase().trim();
+      const needleAddr = String(addr || '').toLowerCase().trim();
+      const pidLower = String(pid || '').toLowerCase().trim();
+
+      const locationStories = normalizedStories.filter((story: any) => {
+        const name = String(story?.locationData?.name || story?.location || '').toLowerCase();
+        const storyAddr = String(story?.locationData?.address || '').toLowerCase();
+        const storyPid = String(story?.locationData?.placeId || '').toLowerCase();
+        if (pidLower && storyPid && storyPid === pidLower) return true;
+        if (needle && name.includes(needle)) return true;
+        if (needleAddr && (name.includes(needleAddr) || storyAddr.includes(needleAddr))) return true;
+        if (needleAddr && needle && storyAddr.includes(needle)) return true;
+        return false;
+      });
+
+      console.log(`[Location] Found ${locationStories.length} stories for "${searchLocationName}"`);
+      setStories(locationStories);
     } catch (error) {
       console.log('Stories endpoint not available or no stories:', error);
       setStories([]);
@@ -315,71 +677,96 @@ export default function LocationDetailsScreen() {
 
   if (loading) {
     return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: '#fff' }}>
-        <ActivityIndicator size="large" color="#0A3D62" style={{ marginTop: 40 }} />
-      </SafeAreaView>
+      <View style={{ flex: 1, backgroundColor: '#fff' }}>
+        <ActivityIndicator size="large" color="#0A3D62" style={{ marginTop: 40 + insets.top }} />
+      </View>
     );
   }
 
   if (!placeDetails) {
     return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: '#fff' }}>
-        <Text style={{ margin: 24, fontSize: 16, color: '#666' }}>No details found.</Text>
-      </SafeAreaView>
+      <View style={{ flex: 1, backgroundColor: '#fff' }}>
+        <Text style={{ margin: 24, marginTop: 40 + insets.top, fontSize: 16, color: '#666' }}>No details found.</Text>
+      </View>
     );
   }
 
   return (
-    <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
+    <View style={styles.container}>
       {/* Header */}
-      <View style={[styles.header, { justifyContent: 'space-between' }]}>
-        <TouchableOpacity
-          onPress={() => router.back()}
-          style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 8 }}
-        >
-          <View style={{ position: 'relative', height: 32, justifyContent: 'center', minWidth: 120 }}>
-            {/* Base Text Logo - Always visible immediately */}
-            <Text style={{
-              fontSize: 18,
-              fontWeight: '900',
-              color: '#0A3D62',
-              letterSpacing: -0.5
-            }}>
-              Trave<Text style={{ color: '#667eea' }}>Social</Text>
-            </Text>
-
-            {/* Branding Image - Loads on top if available */}
-            <Image
-              source={{ uri: logoUrl || 'https://res.cloudinary.com/dinwxxnzm/image/upload/v1766418070/logo/logo.png' }}
-              style={{
-                position: 'absolute',
-                top: 0,
-                left: 0,
-                right: 0,
-                bottom: 0,
-                backgroundColor: 'transparent'
-              }}
-              resizeMode="contain"
-            />
-          </View>
+      <Animated.View
+        style={{
+          height: animatedHeaderHeight,
+          transform: [{ translateY: animatedHeaderTranslateY }],
+          overflow: 'hidden',
+          zIndex: 10,
+        }}
+      >
+        <View style={[styles.header, { justifyContent: 'space-between', paddingTop: safeTop, height: totalHeaderHeight }]}>
+          <TouchableOpacity
+            onPress={() => {
+              hapticLight();
+              safeRouterBack();
+            }}
+            style={styles.backButton}
+          >
+          <Feather name="arrow-left" size={28} color="#000" />
         </TouchableOpacity>
         <View style={styles.headerRightIcons}>
-          <TouchableOpacity style={styles.headerIconBtn} onPress={() => router.push('/passport' as any)}>
+          <TouchableOpacity
+            style={styles.headerIconBtn}
+            onPress={() => {
+              hapticLight();
+              router.push('/passport' as any);
+            }}
+          >
             <Feather name="briefcase" size={20} color="#000" />
           </TouchableOpacity>
-          <TouchableOpacity style={styles.headerIconBtn} onPress={() => router.push('/inbox' as any)}>
+          <TouchableOpacity
+            style={styles.headerIconBtn}
+            onPress={() => {
+              hapticLight();
+              router.push('/inbox' as any);
+            }}
+          >
             <Feather name="message-square" size={20} color="#000" />
             <View style={styles.badge} />
           </TouchableOpacity>
-          <TouchableOpacity style={styles.headerIconBtn} onPress={() => setNotificationsModalVisible(true)}>
+          <TouchableOpacity
+            style={styles.headerIconBtn}
+            onPress={() => {
+              hapticLight();
+              setNotificationsModalVisible(true);
+            }}
+          >
             <Feather name="bell" size={20} color="#000" />
           </TouchableOpacity>
         </View>
-      </View>
+        </View>
+      </Animated.View>
 
       <FlatList
         data={filteredPosts}
-        keyExtractor={(item) => item.id || item._id || `post - ${Math.random()}`}
+        scrollEventThrottle={16}
+        onScroll={(e) => {
+          const y = e.nativeEvent.contentOffset?.y ?? 0;
+          const prevY = lastScrollYRef.current;
+          lastScrollYRef.current = y;
+
+          const delta = y - prevY;
+          if (Math.abs(delta) < 6) return; // ignore jitters
+
+          // Hysteresis: avoids rapid show/hide when rubber-banding at the top (blink).
+          if (y <= 8) {
+            applyHeaderState(false);
+          } else if (y > 56) {
+            applyHeaderState(true);
+          }
+        }}
+        keyExtractor={(item, index) => {
+          const id = String(item?.id || item?._id || '').trim();
+          return id || `post-${index}`;
+        }}
         ListHeaderComponent={
           <>
             {/* Location Header Card */}
@@ -424,11 +811,11 @@ export default function LocationDetailsScreen() {
                       onPress={() => onStoryPress && onStoryPress(stories, index)}
                     >
                       <Image
-                        source={{ uri: story.imageUrl || story.userAvatar }}
+                        source={{ uri: story.imageUrl || story.userAvatar || '' }}
                         style={styles.storyAvatar}
                       />
                       <Text style={styles.storyUserName} numberOfLines={1}>
-                        {story.userName.toLowerCase()}
+                        {(story.userName || 'user').toLowerCase()}
                       </Text>
                     </TouchableOpacity>
                   ))}
@@ -502,7 +889,7 @@ export default function LocationDetailsScreen() {
         visible={notificationsModalVisible}
         onClose={() => setNotificationsModalVisible(false)}
       />
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -516,8 +903,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 20,
-    paddingVertical: 12,
+    paddingBottom: 12,
     backgroundColor: '#fff',
+    zIndex: 10,
   },
   headerLogoText: {
     fontSize: 22,

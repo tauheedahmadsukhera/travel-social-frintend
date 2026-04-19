@@ -9,7 +9,7 @@ export const logger = {
    */
   info: (title: string, message?: string) => {
     const msg = message ? `${title}: ${message}` : title;
-    console.log(`🔵 [INFO] ${msg}`);
+    if (__DEV__) console.log(`🔵 [INFO] ${msg}`);
   },
 
   /**
@@ -41,14 +41,14 @@ export const logger = {
    */
   success: (title: string, message?: string) => {
     const msg = message ? `${title}: ${message}` : title;
-    console.log(`🟢 [SUCCESS] ${msg}`);
+    if (__DEV__) console.log(`🟢 [SUCCESS] ${msg}`);
   },
 
   /**
    * 🔍 Debug - Detailed debugging info
    */
   debug: (title: string, data?: any) => {
-    if (process.env.NODE_ENV === 'development') {
+    if (__DEV__) {
       console.log(`🔍 [DEBUG] ${title}`, data);
     }
   },

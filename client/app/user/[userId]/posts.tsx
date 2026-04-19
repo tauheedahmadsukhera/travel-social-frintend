@@ -6,13 +6,16 @@ import { ActivityIndicator, FlatList, StyleSheet, Text, TouchableOpacity, View }
 import { SafeAreaView } from 'react-native-safe-area-context';
 import PostCard from '../../../src/_components/PostCard';
 import { apiService } from '../../../src/_services/apiService';
-import { feedEventEmitter } from '../../../lib/feedEventEmitter';
+import { feedEventEmitter } from '@/lib/feedEventEmitter';
+import { getCachedData, setCachedData, useNetworkStatus, useOfflineBanner } from '../../../hooks/useOffline';
+import { safeRouterBack } from '@/lib/safeRouterBack';
 
 
 
 const PAGE_SIZE = 20;
 const INITIAL_PAGE_SIZE = 100;
 const MAX_INITIAL_PAGES = 5;
+const HEADER_H = 52;
 
 export default function UserPostsScreen() {
   const params = useLocalSearchParams();
@@ -30,6 +33,7 @@ export default function UserPostsScreen() {
 
   const listRef = useRef<FlatList>(null);
   const didScrollToTargetRef = useRef(false);
+  const pendingScrollIndexRef = useRef<number | null>(null);
 
   const [viewerId, setViewerId] = useState<string | null>(null);
   const [profile, setProfile] = useState<any>(null);
@@ -39,6 +43,38 @@ export default function UserPostsScreen() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(true);
   const [skip, setSkip] = useState(0);
+  const { isOnline } = useNetworkStatus();
+  const { showBanner } = useOfflineBanner();
+
+  const single = useMemo(() => {
+    return (params as any)?.single === 'true' || (params as any)?.single === true;
+  }, [params]);
+
+  const CACHE_KEY = useMemo(() => {
+    const uid = String(userId || 'unknown');
+    const pid = postId ? `_${String(postId)}` : '';
+    const mode = single ? '_single' : '';
+    return `user_posts_v2_${uid}${pid}${mode}`;
+  }, [postId, single, userId]);
+
+  // Cache-first boot: show cached posts immediately (works offline).
+  useEffect(() => {
+    if (!userId) return;
+    (async () => {
+      try {
+        const cached = await getCachedData<any>(CACHE_KEY);
+        if (cached) {
+          if (cached.profile !== undefined) setProfile(cached.profile);
+          if (Array.isArray(cached.posts) && cached.posts.length > 0) {
+            setPosts(cached.posts);
+            setSkip(typeof cached.skip === 'number' ? cached.skip : cached.posts.length);
+            if (typeof cached.hasMore === 'boolean') setHasMore(cached.hasMore);
+            setLoading(false);
+          }
+        }
+      } catch { }
+    })();
+  }, [CACHE_KEY, userId]);
 
   useEffect(() => {
     (async () => {
@@ -56,13 +92,14 @@ export default function UserPostsScreen() {
 
     (async () => {
       try {
+        if (!isOnline && profile) return;
         const res = await apiService.get(`/users/${userId}`, viewerId ? { requesterUserId: viewerId } : undefined);
         if (res?.success) setProfile(res?.data || null);
       } catch {
         setProfile(null);
       }
     })();
-  }, [userId, viewerId]);
+  }, [isOnline, profile, userId, viewerId]);
 
   const normalizePosts = useCallback((arr: any[]) => {
     return (Array.isArray(arr) ? arr : []).map((p: any) => ({
@@ -88,18 +125,27 @@ export default function UserPostsScreen() {
     const idx = allPosts.findIndex((p: any) => String(p?.id || p?._id || '') === String(postId));
     if (idx < 0) return;
 
+    pendingScrollIndexRef.current = idx;
+  }, [postId]);
+
+  // Perform the scroll only after the FlatList has data rendered.
+  useEffect(() => {
+    const idx = pendingScrollIndexRef.current;
+    if (idx == null) return;
+    if (!Array.isArray(posts) || posts.length === 0) return;
+    if (idx < 0 || idx >= posts.length) return;
+    if (didScrollToTargetRef.current) return;
+
     didScrollToTargetRef.current = true;
     requestAnimationFrame(() => {
       try {
-        listRef.current?.scrollToIndex({ index: idx, animated: false, viewPosition: 0 });
+        // Instagram-like: land exactly on the tapped post (no "half previous post" visible)
+        listRef.current?.scrollToIndex({ index: idx, animated: false, viewPosition: 0, viewOffset: HEADER_H });
       } catch {
       }
     });
-  }, [postId]);
+  }, [posts]);
 
-  const single = useMemo(() => {
-    return (params as any)?.single === 'true' || (params as any)?.single === true;
-  }, [params]);
 
   const fetchInitial = useCallback(async () => {
     if (!userId) return;
@@ -108,6 +154,11 @@ export default function UserPostsScreen() {
     didScrollToTargetRef.current = false;
 
     try {
+      if (!isOnline && posts.length > 0) {
+        setLoading(false);
+        return;
+      }
+
       if (single && postId) {
         // Fetch only the specific post
         const res = await apiService.get(`/posts/${postId}`);
@@ -116,6 +167,9 @@ export default function UserPostsScreen() {
         setPosts(normalized);
         setSkip(normalized.length);
         setHasMore(false); // No more posts to fetch in single mode
+        try {
+          await setCachedData(CACHE_KEY, { profile, posts: normalized, skip: normalized.length, hasMore: false }, { ttl: 24 * 60 * 60 * 1000 });
+        } catch { }
         return;
       }
 
@@ -150,6 +204,9 @@ export default function UserPostsScreen() {
       setPosts(merged);
       setSkip(nextSkip);
       setHasMore(lastBatchSize >= limit);
+      try {
+        await setCachedData(CACHE_KEY, { profile, posts: merged, skip: nextSkip, hasMore: lastBatchSize >= limit }, { ttl: 24 * 60 * 60 * 1000 });
+      } catch { }
     } catch {
       setPosts([]);
       setSkip(0);
@@ -157,12 +214,13 @@ export default function UserPostsScreen() {
     } finally {
       setLoading(false);
     }
-  }, [mergeDedup, normalizePosts, postId, single, tryScrollToPost, userId, viewerId]);
+  }, [CACHE_KEY, isOnline, mergeDedup, normalizePosts, postId, posts.length, profile, single, tryScrollToPost, userId, viewerId]);
 
   const fetchMore = useCallback(async () => {
     if (!userId) return;
     if (loading || loadingMore) return;
     if (!hasMore) return;
+    if (!isOnline) return;
 
     setLoadingMore(true);
     try {
@@ -188,7 +246,7 @@ export default function UserPostsScreen() {
     } finally {
       setLoadingMore(false);
     }
-  }, [hasMore, loading, loadingMore, mergeDedup, normalizePosts, skip, tryScrollToPost, userId, viewerId]);
+  }, [hasMore, isOnline, loading, loadingMore, mergeDedup, normalizePosts, skip, tryScrollToPost, userId, viewerId]);
 
   useEffect(() => {
     if (!userId) return;
@@ -204,9 +262,34 @@ export default function UserPostsScreen() {
         console.log('[UserPosts] Post deleted event received:', event.postId);
         setPosts(prev => prev.filter(p => (p.id || p._id) !== event.postId));
       }
+      if (event.type === 'POST_UPDATED' && event.postId) {
+        const patch = event.data && typeof event.data === 'object' ? event.data : {};
+        const apply = (p: any) => {
+          if (!p) return p;
+          const ids = [String(p.id || ''), String(p._id || ''), String((p as any).postId || '')].filter(Boolean);
+          if (!ids.includes(String(event.postId))) return p;
+          return {
+            ...p,
+            ...(patch.caption !== undefined ? { caption: patch.caption } : null),
+            ...(patch.content !== undefined ? { content: patch.content } : null),
+            updatedAt: new Date().toISOString(),
+          };
+        };
+        setPosts(prev => (Array.isArray(prev) ? prev.map(apply) : prev));
+      }
     });
     return unsub;
   }, []);
+
+  // Generic refresh signal used after edits/deletes to refetch from server.
+  useEffect(() => {
+    // @ts-ignore - fbemitter untyped
+    const sub = feedEventEmitter.addListener('feedUpdated', () => {
+      if (!isOnline) return;
+      fetchInitial().catch(() => {});
+    });
+    return () => sub.remove();
+  }, [fetchInitial, isOnline]);
 
 
   const onEndReached = () => {
@@ -216,7 +299,7 @@ export default function UserPostsScreen() {
   if (!userId) {
     return (
       <SafeAreaView style={styles.loading} edges={['top', 'bottom']}>
-        <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
+        <TouchableOpacity style={styles.backBtn} onPress={() => safeRouterBack()}>
           <Ionicons name="arrow-back" size={22} color="#111" />
         </TouchableOpacity>
         <Text style={styles.missingText}>Missing userId</Text>
@@ -234,8 +317,13 @@ export default function UserPostsScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
+      {showBanner && posts.length > 0 && (
+        <View style={styles.offlineBanner}>
+          <Text style={styles.offlineBannerText}>You’re offline — showing cached posts</Text>
+        </View>
+      )}
       <View style={styles.header}>
-        <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
+        <TouchableOpacity style={styles.backBtn} onPress={() => safeRouterBack()}>
           <Ionicons name="arrow-back" size={22} color="#111" />
         </TouchableOpacity>
         <Text style={styles.title} numberOfLines={1}>
@@ -248,6 +336,11 @@ export default function UserPostsScreen() {
         ref={listRef}
         data={posts}
         keyExtractor={(item: any, index: number) => String(item?.id || item?._id || `post-${index}`)}
+        initialNumToRender={3}
+        maxToRenderPerBatch={4}
+        windowSize={5}
+        updateCellsBatchingPeriod={40}
+        removeClippedSubviews
         renderItem={({ item }: { item: any }) => (
           <PostCard
             post={item}
@@ -265,10 +358,14 @@ export default function UserPostsScreen() {
           ) : null
         }
         onScrollToIndexFailed={(info) => {
+          if (!Array.isArray(posts) || posts.length === 0) return;
+          if (info.index < 0 || info.index >= posts.length) return;
           const offset = info.averageItemLength * info.index;
           listRef.current?.scrollToOffset({ offset, animated: false });
           setTimeout(() => {
-            listRef.current?.scrollToIndex({ index: info.index, animated: false });
+            if (!Array.isArray(posts) || posts.length === 0) return;
+            if (info.index < 0 || info.index >= posts.length) return;
+            listRef.current?.scrollToIndex({ index: info.index, animated: false, viewPosition: 0, viewOffset: HEADER_H });
           }, 150);
         }}
       />
@@ -292,4 +389,15 @@ const styles = StyleSheet.create({
   title: { flex: 1, fontSize: 16, fontWeight: '700', color: '#111' },
   footer: { paddingVertical: 16, alignItems: 'center' },
   missingText: { marginTop: 12, color: '#666', fontSize: 14 },
+  offlineBanner: {
+    marginHorizontal: 12,
+    marginTop: 8,
+    marginBottom: 4,
+    backgroundColor: '#111',
+    borderRadius: 12,
+    paddingVertical: 9,
+    paddingHorizontal: 12,
+    opacity: 0.92,
+  },
+  offlineBannerText: { color: '#fff', fontWeight: '700', textAlign: 'center' },
 });

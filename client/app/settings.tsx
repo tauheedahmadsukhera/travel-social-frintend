@@ -3,6 +3,8 @@ import { useRouter } from 'expo-router';
 import React from 'react';
 import { Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { hapticLight } from '@/lib/haptics';
+import { safeRouterBack } from '@/lib/safeRouterBack';
 
 export default function SettingsScreen() {
   const router = useRouter();
@@ -11,7 +13,13 @@ export default function SettingsScreen() {
     <SafeAreaView style={styles.container} edges={['top']}>
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+        <TouchableOpacity
+          onPress={() => {
+            hapticLight();
+            safeRouterBack();
+          }}
+          style={styles.backBtn}
+        >
           <Feather name="arrow-left" size={24} color="#000" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Settings</Text>
@@ -22,6 +30,7 @@ export default function SettingsScreen() {
         <TouchableOpacity
           style={styles.feedbackBtn}
           onPress={() => {
+            hapticLight();
             Alert.alert(
               'Send Feedback',
               'Email your feedback or report an issue to support@travesocial.com',
@@ -44,7 +53,13 @@ export default function SettingsScreen() {
         </TouchableOpacity>
 
         {/* Story Settings Section */}
-        <TouchableOpacity style={styles.settingsItem} onPress={() => router.push('/story-settings' as any)}>
+        <TouchableOpacity
+          style={styles.settingsItem}
+          onPress={() => {
+            hapticLight();
+            router.push('/story-settings' as any);
+          }}
+        >
           <Feather name="camera" size={20} color="#FFB800" style={{ marginRight: 12 }} />
           <View style={{ flex: 1 }}>
             <Text style={styles.settingsTitle}>Story Settings</Text>
@@ -54,7 +69,13 @@ export default function SettingsScreen() {
         </TouchableOpacity>
 
         {/* Blocked Users Section */}
-        <TouchableOpacity style={[styles.settingsItem, { backgroundColor: '#fff5f5', borderColor: '#ffcfcf' }]} onPress={() => router.push('/blocked-users' as any)}>
+        <TouchableOpacity
+          style={[styles.settingsItem, { backgroundColor: '#fff5f5', borderColor: '#ffcfcf' }]}
+          onPress={() => {
+            hapticLight();
+            router.push('/blocked-users' as any);
+          }}
+        >
           <Feather name="slash" size={20} color="#e74c3c" style={{ marginRight: 12 }} />
           <View style={{ flex: 1 }}>
             <Text style={styles.settingsTitle}>Blocked Users</Text>
@@ -65,7 +86,7 @@ export default function SettingsScreen() {
 
         {/* App Version & About Section */}
         <View style={styles.aboutBox}>
-          <Text style={styles.aboutTitle}>About trave-social</Text>
+          <Text style={styles.aboutTitle}>About Trips</Text>
           <Text style={styles.aboutText}>Version 1.0.0</Text>
           <Text style={styles.aboutText}>© 2025 tauhee56. All rights reserved.</Text>
           <Text style={styles.aboutText}>For help or feedback, email support@travesocial.com</Text>
@@ -74,12 +95,24 @@ export default function SettingsScreen() {
         {/* Legal Section */}
         <View style={styles.legalBox}>
           <Text style={styles.legalTitle}>Legal</Text>
-          <TouchableOpacity style={styles.legalItem} onPress={() => router.push('/legal/privacy' as any)}>
+          <TouchableOpacity
+            style={styles.legalItem}
+            onPress={() => {
+              hapticLight();
+              router.push('/legal/privacy' as any);
+            }}
+          >
             <Feather name="shield" size={18} color="#667eea" style={{ marginRight: 10 }} />
             <Text style={styles.legalText}>Privacy Policy</Text>
             <Feather name="chevron-right" size={18} color="#ccc" style={{ marginLeft: 'auto' }} />
           </TouchableOpacity>
-          <TouchableOpacity style={styles.legalItem} onPress={() => router.push('/legal/terms' as any)}>
+          <TouchableOpacity
+            style={styles.legalItem}
+            onPress={() => {
+              hapticLight();
+              router.push('/legal/terms' as any);
+            }}
+          >
             <Feather name="file-text" size={18} color="#667eea" style={{ marginRight: 10 }} />
             <Text style={styles.legalText}>Terms of Service</Text>
             <Feather name="chevron-right" size={18} color="#ccc" style={{ marginLeft: 'auto' }} />

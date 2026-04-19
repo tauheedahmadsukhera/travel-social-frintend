@@ -1,16 +1,20 @@
+import { DEFAULT_AVATAR_URL } from '../lib/api';
 import { Feather } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
 import React from 'react';
-import { FlatList, Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Image as ExpoImage } from 'expo-image';
+import { FlatList, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useNotifications } from '../hooks/useNotifications';
 import AcceptDeclineButtons from '@/src/_components/AcceptDeclineButtons';
 import { getNotificationActionText } from '../lib/notificationText';
+import { hapticLight, hapticMedium } from '@/lib/haptics';
+import { safeRouterBack } from '@/lib/safeRouterBack';
 
 export default function NotificationsScreen() {
     // Default avatar from Firebase Storage
-    const DEFAULT_AVATAR_URL = 'https://via.placeholder.com/200x200.png?text=Profile';
+    
   const router = useRouter();
   const [userId, setUserId] = React.useState<string>('');
 
@@ -92,6 +96,7 @@ export default function NotificationsScreen() {
   }
 
   function handleNotificationClick(item: any) {
+    hapticLight();
     let navRoute = '';
     if (item.type === 'follow' || item.type === 'follow-request' || item.type === 'follow-approved' || item.type === 'new-follower') {
       navRoute = `/user-profile/${item.senderId}`;
@@ -149,11 +154,21 @@ export default function NotificationsScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()}>
+        <TouchableOpacity
+          onPress={() => {
+            hapticLight();
+            safeRouterBack();
+          }}
+        >
           <Feather name="arrow-left" size={20} color="#007aff" />
         </TouchableOpacity>
         <Text style={styles.title}>Notifications</Text>
-        <TouchableOpacity onPress={() => router.push('/passport' as any)}>
+        <TouchableOpacity
+          onPress={() => {
+            hapticLight();
+            router.push('/passport' as any);
+          }}
+        >
           <Feather name="briefcase" size={20} color="#000" />
         </TouchableOpacity>
       </View>
@@ -163,6 +178,7 @@ export default function NotificationsScreen() {
         <TouchableOpacity
           style={{ backgroundColor: '#007aff', padding: 8, borderRadius: 8 }}
           onPress={async () => {
+            hapticMedium();
             try {
               // TODO: Implement backend API call to mark all notifications as read
               await markAllAsRead();
@@ -176,6 +192,7 @@ export default function NotificationsScreen() {
         <TouchableOpacity
           style={{ backgroundColor: '#FF3B30', padding: 8, borderRadius: 8 }}
           onPress={async () => {
+            hapticMedium();
             try {
               // TODO: Implement backend API call to delete all notifications
               alert('Feature coming soon - backend API needed');
@@ -196,7 +213,14 @@ export default function NotificationsScreen() {
       ) : (
         <FlatList
           data={notifications}
-          keyExtractor={(n: any) => String(n?._id || n?.id || Math.random())}
+          keyExtractor={(n: any, index: number) => {
+            const base = String(n?._id || n?.id || '');
+            if (base) return base;
+            const created = String(n?.createdAt || '');
+            const sender = String(n?.senderId || n?.fromUserId || '');
+            const type = String(n?.type || '');
+            return `notif_${type}_${sender}_${created}_${index}`;
+          }}
           initialNumToRender={15}
           maxToRenderPerBatch={10}
           windowSize={7}
@@ -210,7 +234,13 @@ export default function NotificationsScreen() {
                 <View style={[styles.iconContainer, { backgroundColor: getNotificationColor(item.type) + '15' }]}>
                   <Feather name={getNotificationIcon(item.type) as any} size={20} color={getNotificationColor(item.type)} />
                 </View>
-                <Image source={{ uri: item.senderAvatar && item.senderAvatar.trim() !== "" ? item.senderAvatar : DEFAULT_AVATAR_URL }} style={styles.nAvatar} />
+                <ExpoImage 
+                  source={{ uri: item.senderAvatar && item.senderAvatar.trim() !== "" ? item.senderAvatar : DEFAULT_AVATAR_URL }} 
+                  style={styles.nAvatar}
+                  contentFit="cover"
+                  transition={200}
+                  cachePolicy="memory-disk"
+                />
                 <View style={{ flex: 1 }}>
                   <Text style={styles.nTitle}>
                     <Text style={{ fontWeight: '700', color: '#FF6B00' }}>{String(item?.senderName || 'Someone')}</Text>

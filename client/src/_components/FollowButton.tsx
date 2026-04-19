@@ -1,3 +1,4 @@
+import * as Haptics from 'expo-haptics';
 import React from 'react';
 import { ActivityIndicator, StyleSheet, Text, TouchableOpacity } from 'react-native';
 
@@ -13,7 +14,14 @@ const FollowButton: React.FC<FollowButtonProps> = ({ status, loading, onPress })
   if (status === 'approved') label = 'Following';
 
   return (
-    <TouchableOpacity style={styles.button} onPress={onPress} disabled={loading}>
+    <TouchableOpacity
+      style={styles.button}
+      onPress={() => {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+        onPress();
+      }}
+      disabled={loading}
+    >
       {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.text}>{label}</Text>}
     </TouchableOpacity>
   );

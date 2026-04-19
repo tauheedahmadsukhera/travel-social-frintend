@@ -14,6 +14,7 @@ import {
     Keyboard,
     KeyboardAvoidingView,
     Modal,
+    PanResponder,
     Platform,
     ScrollView,
     StyleSheet,
@@ -69,6 +70,31 @@ interface Props {
 
 export default function SaveToCollectionModal({ visible, onClose, postId, postImageUrl, currentUserId, onSaveChange, initialGloballySaved = true, onCollectionCreated }: Props) {
     const insets = useSafeAreaInsets();
+    const sheetTranslateY = useRef(new Animated.Value(0)).current;
+    const sheetPanResponder = useRef(
+        PanResponder.create({
+            onStartShouldSetPanResponder: () => false,
+            onMoveShouldSetPanResponder: (_evt, gesture) => {
+                return gesture.dy > 10 && Math.abs(gesture.dy) > Math.abs(gesture.dx);
+            },
+            onPanResponderMove: (_evt, gesture) => {
+                if (gesture.dy > 0) sheetTranslateY.setValue(gesture.dy);
+            },
+            onPanResponderRelease: (_evt, gesture) => {
+                const shouldClose = gesture.dy > 120;
+                if (shouldClose) {
+                    Animated.timing(sheetTranslateY, { toValue: 0, duration: 120, useNativeDriver: true }).start(() => {
+                        onClose();
+                    });
+                } else {
+                    Animated.spring(sheetTranslateY, { toValue: 0, useNativeDriver: true, damping: 22, stiffness: 220 }).start();
+                }
+            },
+            onPanResponderTerminate: () => {
+                Animated.spring(sheetTranslateY, { toValue: 0, useNativeDriver: true, damping: 22, stiffness: 220 }).start();
+            },
+        })
+    ).current;
 
     // Screen
     const [screen, setScreen] = useState<Screen>('list');
@@ -796,7 +822,12 @@ export default function SaveToCollectionModal({ visible, onClose, postId, postIm
             statusBarTranslucent
             presentationStyle="overFullScreen"
         >
-            <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+            <TouchableWithoutFeedback
+                onPress={() => {
+                    Keyboard.dismiss();
+                    onClose();
+                }}
+            >
                 <View style={styles.backdrop} />
             </TouchableWithoutFeedback>
 
@@ -806,7 +837,14 @@ export default function SaveToCollectionModal({ visible, onClose, postId, postIm
                 style={styles.kavWrapper}
                 keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
             >
-                <View style={[styles.sheet, { paddingBottom: insets.bottom + 8 }]}>
+                <Animated.View
+                    style={[
+                        styles.sheet,
+                        { paddingBottom: insets.bottom + 8 },
+                        { transform: [{ translateY: sheetTranslateY }] },
+                    ]}
+                    {...sheetPanResponder.panHandlers}
+                >
                     <KeyboardBackground />
                     {/* Drag handle */}
                     <View style={styles.dragHandle} />
@@ -826,7 +864,7 @@ export default function SaveToCollectionModal({ visible, onClose, postId, postIm
                             </View>
                         </Animated.View>
                     )}
-                </View>
+                </Animated.View>
             </KeyboardAvoidingView>
         </Modal>
     );

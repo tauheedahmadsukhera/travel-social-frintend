@@ -10,6 +10,7 @@ import { useEffect, useState } from 'react';
 import { AppState, AppStateStatus } from 'react-native';
 import { startConversationsPolling, startMessagesPolling, stopPolling } from '../lib/pollingService';
 import { getCachedUserProfile, cacheUserProfile } from '../lib/redisCache';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 interface UseInboxPollingOptions {
   pollingInterval?: number;
@@ -20,24 +21,65 @@ export function useInboxPolling(
   userId: string | null,
   options: UseInboxPollingOptions = {}
 ) {
-  const { pollingInterval = 3000, autoStart = true } = options; // 3 seconds instead of 15
-
-  console.log('🟡 useInboxPolling INIT: userId=', userId, 'autoStart=', autoStart, 'pollingInterval=', pollingInterval);
+  // Default to a calmer poll interval to reduce loading/spinner churn and battery usage.
+  const { pollingInterval = 12000, autoStart = true } = options;
 
   const [conversations, setConversations] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // True once we have a definitive result (data received or a real failure).
+  // Prevents showing "empty inbox" during cold starts / first open jitter.
+  const [ready, setReady] = useState(false);
   const [appState, setAppState] = useState<AppStateStatus>('active');
+
+  const cacheKey = userId ? `inboxConversationsCache_v1_${userId}` : null;
+
+  // If userId changes (common: null -> real id), reset readiness for the new session.
+  useEffect(() => {
+    if (!userId) {
+      setReady(false);
+      setLoading(false);
+      return;
+    }
+    setReady(false);
+    setLoading(true);
+    setError(null);
+  }, [userId]);
+
+  // Warm start from cache to avoid blank/loading on every open
+  useEffect(() => {
+    if (!cacheKey) return;
+    let mounted = true;
+    (async () => {
+      try {
+        const raw = await AsyncStorage.getItem(cacheKey);
+        if (!raw) return;
+        const parsed = JSON.parse(raw);
+        const ts = Number(parsed?.ts || 0);
+        const data = parsed?.data;
+        if (!Array.isArray(data) || data.length === 0) return;
+        // Cache is used for instant UI; allow it to be stale and refresh in background.
+        // Instagram-style behavior: show last list immediately.
+        // (We still refresh via polling once active.)
+        const ONE_DAY_MS = 24 * 60 * 60 * 1000;
+        if (ts && Date.now() - ts > ONE_DAY_MS) {
+          // Keep showing stale cache; polling will correct it.
+        }
+        if (!mounted) return;
+        setConversations(data);
+        setLoading(false);
+        setReady(true);
+      } catch { }
+    })();
+    return () => { mounted = false; };
+  }, [cacheKey]);
 
 
   useEffect(() => {
     if (!userId || !autoStart) {
-      console.log('🟡 useInboxPolling SKIP: userId or autoStart false');
       setLoading(false);
       return;
     }
-
-    console.log('🟡 useInboxPolling STARTING for userId:', userId);
 
     // Subscribe to app state changes
     const subscription = AppState.addEventListener('change', setAppState);
@@ -48,16 +90,17 @@ export function useInboxPolling(
 
     // Start polling when app is active
     if (appState === 'active') {
-      console.log(`📱 Starting inbox polling for user: ${userId}`);
-      
       startConversationsPolling(
         userId,
         (data) => {
-          console.log('🟢 CALLBACK FIRED: received', data.length, 'conversations');
           if (!isMounted) return;
 
           // Always update conversations on every poll so inbox stays fresh.
           setConversations(data);
+          // Persist cache asynchronously
+          if (cacheKey) {
+            AsyncStorage.setItem(cacheKey, JSON.stringify({ ts: Date.now(), data })).catch(() => {});
+          }
 
           // Only use loadingEnded to stop the initial loading spinner.
           if (!loadingEnded) {
@@ -66,10 +109,10 @@ export function useInboxPolling(
           }
 
           setError(null);
+          setReady(true);
         },
         pollingInterval
       ).then(unsub => {
-        console.log('🟢 startConversationsPolling RESOLVED');
         if (isMounted) {
           unsubscribeFn = unsub;
         }
@@ -81,21 +124,21 @@ export function useInboxPolling(
           setLoading(false);
           setError(err.message || 'Failed to load conversations');
           setConversations([]); // Show empty state
+          setReady(true);
         }
       });
     } else {
       // Stop polling when app goes to background
-      console.log('📵 Stopping inbox polling - app backgrounded');
       stopPolling(`conversations-${userId}`);
     }
 
     // EMERGENCY TIMEOUT: Force loading off after 3 seconds NO MATTER WHAT
     const emergencyTimeout = setTimeout(() => {
       if (isMounted && !loadingEnded) {
-        console.warn('🔴 EMERGENCY TIMEOUT: Force loading off after 3s');
+        if (__DEV__) console.warn('🔴 EMERGENCY TIMEOUT: Force loading off after 3s');
         loadingEnded = true;
         setLoading(false);
-        if (!error) setError(null);
+        // Do NOT mark ready here; we haven't received data or a real failure yet.
       }
     }, 3000);
 
@@ -103,14 +146,13 @@ export function useInboxPolling(
       isMounted = false;
       clearTimeout(emergencyTimeout);
       if (unsubscribeFn) {
-        console.log('🧹 Cleaning up inbox polling');
         unsubscribeFn();
       }
       subscription.remove();
     };
   }, [userId, autoStart, pollingInterval, appState]);
 
-  return { conversations, loading, error };
+  return { conversations, loading, error, ready };
 }
 
 /**

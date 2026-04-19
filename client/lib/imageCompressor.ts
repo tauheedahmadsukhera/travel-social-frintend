@@ -23,8 +23,8 @@ export interface CompressedImage {
  */
 export async function compressImage(
   imageUri: string,
-  quality: number = 0.8,
-  maxWidth: number = 2048
+  quality: number = 0.75,
+  maxWidth: number = 1080
 ): Promise<CompressedImage> {
   try {
     console.log(`[imageCompressor] Starting compression for: ${imageUri}`);
@@ -141,7 +141,7 @@ export async function optimizeImagesForUpload(
   try {
     const results = await Promise.all(
       imageUris.map(async (uri) => ({
-        compressed: await compressImage(uri, 0.8, 2048),
+        compressed: await compressImage(uri, 0.75, 1080),
         thumbnail: await createThumbnail(uri, 200),
       }))
     );

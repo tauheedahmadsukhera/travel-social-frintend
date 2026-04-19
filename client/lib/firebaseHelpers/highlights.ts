@@ -1,4 +1,4 @@
-// Highlight-related Firestore helpers
+import { apiService } from '../../src/_services/apiService';
 
 /**
  * Create a new highlight
@@ -7,21 +7,25 @@ export async function createHighlight(
   userId: string,
   name: string,
   coverImage: string,
-  storyIds: string[] = []
+  storyIds: string[] = [],
+  visibility: string = 'Public'
 ) {
   try {
-    const res = await fetch(`/api/highlights`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userId, title: name, items: storyIds.map(id => ({ id, coverImage })) })
+    const res = await apiService.post('/highlights', { 
+      userId, 
+      title: name, 
+      coverImage, 
+      // Send both shapes for backend compatibility.
+      stories: storyIds,
+      storyIds,
+      visibility
     });
-    const data = await res.json();
     
-    // Unwrap response
-    const highlightData = data?.data || data;
-    const highlightId = highlightData?._id || highlightData?.id || data?.id;
+    // apiService already returns res.data or the data object based on its implementation
+    const highlightData = res?.data || res;
+    const highlightId = highlightData?._id || highlightData?.id;
     
-    return { success: data.success, highlightId, highlight: highlightData };
+    return { success: res.success !== false, highlightId, highlight: highlightData };
   } catch (error: any) {
     console.error('❌ createHighlight error:', error);
     return { success: false, error: error.message };
@@ -33,13 +37,8 @@ export async function createHighlight(
  */
 export async function addStoryToHighlight(highlightId: string, storyId: string) {
   try {
-    const res = await fetch(`/api/highlights/${highlightId}/stories`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ storyId })
-    });
-    const data = await res.json();
-    return data;
+    const res = await apiService.post(`/highlights/${highlightId}/stories`, { storyId });
+    return res;
   } catch (error: any) {
     console.error('❌ addStoryToHighlight error:', error);
     return { success: false, error: error.message };
@@ -51,12 +50,8 @@ export async function addStoryToHighlight(highlightId: string, storyId: string) 
  */
 export async function removeStoryFromHighlight(highlightId: string, storyId: string) {
   try {
-    const res = await fetch(`/api/highlights/${highlightId}/stories/${storyId}`, {
-      method: 'DELETE',
-      headers: { 'Content-Type': 'application/json' }
-    });
-    const data = await res.json();
-    return data;
+    const res = await apiService.delete(`/highlights/${highlightId}/stories/${storyId}`);
+    return res;
   } catch (error: any) {
     console.error('❌ removeStoryFromHighlight error:', error);
     return { success: false, error: error.message };
@@ -71,13 +66,11 @@ export async function updateHighlight(
   updates: { name?: string; coverImage?: string }
 ) {
   try {
-    const res = await fetch(`/api/highlights/${highlightId}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ title: updates.name, coverImage: updates.coverImage })
+    const res = await apiService.patch(`/highlights/${highlightId}`, { 
+      title: updates.name, 
+      coverImage: updates.coverImage 
     });
-    const data = await res.json();
-    return data;
+    return res;
   } catch (error: any) {
     console.error('❌ updateHighlight error:', error);
     return { success: false, error: error.message };
@@ -89,13 +82,8 @@ export async function updateHighlight(
  */
 export async function deleteHighlight(highlightId: string, userId: string) {
   try {
-    const res = await fetch(`/api/highlights/${highlightId}`, {
-      method: 'DELETE',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userId })
-    });
-    const data = await res.json();
-    return data;
+    const res = await apiService.delete(`/highlights/${highlightId}`, { userId });
+    return res;
   } catch (error: any) {
     console.error('❌ deleteHighlight error:', error);
     return { success: false, error: error.message };

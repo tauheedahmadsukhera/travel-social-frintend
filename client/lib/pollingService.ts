@@ -42,31 +42,33 @@ export async function startConversationsPolling(
 
   const poll = async () => {
     try {
-      console.log(`🔄 Polling conversations for userId: ${userId}`);
+      if (__DEV__) console.log(`🔄 Polling conversations for userId: ${userId}`);
       
       // Pass userId as query parameter
       const response = await apiService.get(`/conversations?userId=${userId}`);
       
-      console.log('📡 Conversations API summary:', {
-        success: !!response?.success,
-        count: Array.isArray(response?.data) ? response.data.length : 0,
-      });
+      if (__DEV__) {
+        console.log('📡 Conversations API summary:', {
+          success: !!response?.success,
+          count: Array.isArray(response?.data) ? response.data.length : 0,
+        });
+      }
       
       // apiService returns response.data directly, so response is { success, data: [] }
       // NOT response.data.data
       let conversations = response?.data;
       
       if (!response?.success) {
-        console.warn('⚠️ API returned success:false', response?.error || 'unknown error');
+        if (__DEV__) console.warn('⚠️ API returned success:false', response?.error || 'unknown error');
         conversations = [];
       }
       
       if (!Array.isArray(conversations)) {
-        console.warn('⚠️ Conversations not an array, got:', typeof conversations, JSON.stringify(conversations).substring(0, 100));
+        if (__DEV__) console.warn('⚠️ Conversations not an array, got:', typeof conversations, JSON.stringify(conversations).substring(0, 100));
         conversations = [];
       }
 
-      console.log(`✅ Got ${conversations.length} conversations`);
+      if (__DEV__) console.log(`✅ Got ${conversations.length} conversations`);
       
       // Call callback with raw conversations
       callback(conversations);
@@ -97,7 +99,7 @@ export async function startConversationsPolling(
     await Promise.race([poll(), timeoutPromise]);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    console.warn('⚠️ Initial poll failed, will retry:', message);
+    if (__DEV__) console.warn('⚠️ Initial poll failed, will retry:', message);
     callback([]); // Unblock loading
   }
 
@@ -149,7 +151,7 @@ export async function startMessagesPolling(
         poller.lastError = undefined;
       }
     } catch (error: any) {
-      console.error('Messages polling error:', error);
+      if (__DEV__) console.error('Messages polling error:', error);
       const poller = activePollers.get(pollerId);
       if (poller) {
         poller.lastError = error.message;
@@ -209,7 +211,7 @@ export async function startNotificationsPolling(
         poller.lastError = undefined;
       }
     } catch (error: any) {
-      console.error('Notifications polling error:', error);
+      if (__DEV__) console.error('Notifications polling error:', error);
       const poller = activePollers.get(pollerId);
       if (poller) {
         poller.lastError = error.message;

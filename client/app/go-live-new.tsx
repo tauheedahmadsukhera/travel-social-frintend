@@ -15,14 +15,17 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
+import { safeRouterBack } from '@/lib/safeRouterBack';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { generateRoomId } from '../config/zeegocloud';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import ZeegocloudLiveHost from '@/src/_components/ZeegocloudLiveHost';
+import { DEFAULT_AVATAR_URL } from '@/lib/api';
+
 
 const { width, height } = Dimensions.get('window');
 
-const DEFAULT_AVATAR = 'https://via.placeholder.com/150';
+const DEFAULT_AVATAR = DEFAULT_AVATAR_URL;
 
 export default function GoLive() {
   const router = useRouter();
@@ -75,7 +78,7 @@ export default function GoLive() {
       setIsInitializing(true);
       if (!userId) {
         Alert.alert('Error', 'Please login first');
-        router.back();
+        safeRouterBack();
         return;
       }
 
@@ -104,7 +107,7 @@ export default function GoLive() {
           onPress: () => {
             setIsStreaming(false);
             setRoomId('');
-            router.back();
+            safeRouterBack();
           },
         },
       ]
@@ -230,7 +233,7 @@ export default function GoLive() {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.setupHeader}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+        <TouchableOpacity onPress={() => safeRouterBack()} style={styles.backBtn}>
           <Ionicons name="close" size={28} color="#fff" />
         </TouchableOpacity>
         <Text style={styles.setupTitle}>Live Video</Text>

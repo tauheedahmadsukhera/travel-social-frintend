@@ -4,7 +4,9 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Alert, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { logAnalyticsEvent } from '../../lib/analytics';
+import { AuthBrandHeader } from '@/src/_components/auth/AuthBrandHeader';
 import CustomButton from '@/src/_components/auth/CustomButton';
+import { safeRouterBack } from '@/lib/safeRouterBack';
 
 export default function PhoneOTPScreen() {
   const router = useRouter();
@@ -76,17 +78,8 @@ export default function PhoneOTPScreen() {
       // Simulate API call
       await new Promise(resolve => setTimeout(resolve, 1000));
       
-      // On success, navigate to home or show success
-      Alert.alert(
-        'Verification Successful! âœ…',
-        'You have been logged in successfully.',
-        [
-          {
-            text: 'Continue',
-            onPress: () => router.replace('/(tabs)/home')
-          }
-        ]
-      );
+      // Instagram-like: no success popup, just continue
+      router.replace('/(tabs)/home');
       logAnalyticsEvent('auth_phone_otp_verify_success');
     } catch (err: any) {
       setError(err.message || 'Verification failed. Please try again.');
@@ -124,7 +117,7 @@ export default function PhoneOTPScreen() {
             {/* Header */}
             <View style={styles.header}>
               <TouchableOpacity 
-                onPress={() => router.back()}
+                onPress={() => safeRouterBack()}
                 style={styles.backButton}
               >
                 <Ionicons name="arrow-back" size={24} color="#000" />
@@ -133,10 +126,10 @@ export default function PhoneOTPScreen() {
 
             {/* Title */}
             <View style={styles.titleSection}>
-              <Text style={styles.title}>Enter verification code</Text>
-              <Text style={styles.subtitle}>
-                Please enter the 6-digit code sent via SMS to {phone}
-              </Text>
+              <AuthBrandHeader
+                title="Enter verification code"
+                subtitle={`Please enter the 6-digit code sent via SMS to ${phone}`}
+              />
             </View>
 
             {/* SMS Icon */}
@@ -217,17 +210,6 @@ const styles = StyleSheet.create({
   },
   titleSection: {
     marginBottom: 12,
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: '#000',
-    marginBottom: 12,
-  },
-  subtitle: {
-    fontSize: 14,
-    color: '#666',
-    lineHeight: 20,
   },
   iconContainer: {
     alignItems: 'center',

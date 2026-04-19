@@ -4,7 +4,9 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Alert, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { logAnalyticsEvent } from '../../lib/analytics';
+import { AuthBrandHeader } from '@/src/_components/auth/AuthBrandHeader';
 import CustomButton from '@/src/_components/auth/CustomButton';
+import { safeRouterBack } from '@/lib/safeRouterBack';
 
 export default function EmailOTPScreen() {
   const router = useRouter();
@@ -99,16 +101,8 @@ export default function EmailOTPScreen() {
             await updateUserProfile(user.uid, { phoneNumber: phone });
           }
 
-          Alert.alert(
-            'Account Created! ðŸŽ‰',
-            'Your account has been created successfully. You can now login with your email.',
-            [
-              {
-                text: 'Continue',
-                onPress: () => router.replace('/(tabs)/home')
-              }
-            ]
-          );
+          // Instagram-like: no success popup, just continue
+          router.replace('/(tabs)/home');
           logAnalyticsEvent('auth_email_otp_signup_success');
         } else {
           setError(result.error || 'Signup failed');
@@ -116,16 +110,8 @@ export default function EmailOTPScreen() {
         }
       } else {
         // For login flow
-        Alert.alert(
-          'Verification Successful! âœ…',
-          'You have been logged in successfully.',
-          [
-            {
-              text: 'Continue',
-              onPress: () => router.replace('/(tabs)/home')
-            }
-          ]
-        );
+        // Instagram-like: no success popup, just continue
+        router.replace('/(tabs)/home');
         logAnalyticsEvent('auth_email_otp_verify_success');
       }
     } catch (err: any) {
@@ -174,7 +160,7 @@ export default function EmailOTPScreen() {
             {/* Header */}
             <View style={styles.header}>
               <TouchableOpacity 
-                onPress={() => router.back()}
+                onPress={() => safeRouterBack()}
                 style={styles.backButton}
               >
                 <Ionicons name="arrow-back" size={24} color="#000" />
@@ -183,10 +169,10 @@ export default function EmailOTPScreen() {
 
             {/* Title */}
             <View style={styles.titleSection}>
-              <Text style={styles.title}>Enter verification code</Text>
-              <Text style={styles.subtitle}>
-                Please enter the 6-digit code sent to {email}
-              </Text>
+              <AuthBrandHeader
+                title="Enter verification code"
+                subtitle={`Please enter the 6-digit code sent to ${email}`}
+              />
             </View>
 
             {/* Email Icon */}
@@ -269,17 +255,6 @@ const styles = StyleSheet.create({
   },
   titleSection: {
     marginBottom: 15,
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: '700',
-    color: '#000',
-    marginBottom: 8,
-  },
-  subtitle: {
-    fontSize: 14,
-    color: '#666',
-    lineHeight: 20,
   },
   iconContainer: {
     alignItems: 'center',

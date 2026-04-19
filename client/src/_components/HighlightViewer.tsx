@@ -1,9 +1,13 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { Dimensions, Image, Modal, StyleSheet, Text, TouchableOpacity, View, ActivityIndicator, Alert, SafeAreaView, Platform, Animated, KeyboardAvoidingView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { getHighlightStories } from '../../lib/firebaseHelpers/index';
-import { removeStoryFromHighlight } from '../../lib/firebaseHelpers/highlights';
+import { getHighlightStories } from '../../lib/firebaseHelpers/core';
+import { flattenStoryPayload, getCachedHighlightStories, pickStoryId, pickStoryMedia } from '../../lib/storyViewer';
 import CommentSection from './CommentSection';
+import { Video, ResizeMode } from 'expo-av';
+import { highlightManager } from '../../lib/highlightManager';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { feedEventEmitter } from '../../lib/feedEventEmitter';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -33,6 +37,7 @@ const HighlightViewer: React.FC<HighlightViewerProps> = ({ visible, highlightId,
   const [loading, setLoading] = useState(false);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [deleting, setDeleting] = useState(false);
+  const [localUid, setLocalUid] = useState<string | null>(null);
   const [isPaused, setIsPaused] = useState(false);
   const [showComments, setShowComments] = useState(false);
   const [isLiked, setIsLiked] = useState(false);
@@ -48,30 +53,74 @@ const HighlightViewer: React.FC<HighlightViewerProps> = ({ visible, highlightId,
   }, [visible]);
 
   useEffect(() => {
+    let mounted = true;
+    if (!visible) return;
+    (async () => {
+      try {
+        const uid = await AsyncStorage.getItem('userId');
+        if (mounted) setLocalUid(uid ? String(uid) : null);
+      } catch {
+        if (mounted) setLocalUid(null);
+      }
+    })();
+    return () => { mounted = false; };
+  }, [visible]);
+
+  useEffect(() => {
     if (highlightId && visible) {
       setLoading(true);
       getHighlightStories(highlightId).then((res: any) => {
-        if (res?.success) {
-          const storyArray = Array.isArray(res.stories) ? res.stories : (res.data?.stories || res.data || []);
-          const normalized = (Array.isArray(storyArray) ? storyArray : []).slice().sort((a: any, b: any) => {
-            const ta = Date.parse(String(a?.createdAt || a?.timestamp || 0)) || 0;
-            const tb = Date.parse(String(b?.createdAt || b?.timestamp || 0)) || 0;
-            return ta - tb; // oldest first
-          });
-          setStories(normalized);
-        } else if (res?.stories || res?.data?.stories) {
-          const arr = Array.isArray(res.stories) ? res.stories : (Array.isArray(res.data?.stories) ? res.data.stories : []);
-          const normalized = arr.slice().sort((a: any, b: any) => {
+        const storyArray = Array.isArray(res?.stories)
+          ? res.stories
+          : Array.isArray(res?.data?.stories)
+            ? res.data.stories
+            : Array.isArray(res?.data)
+              ? res.data
+              : [];
+        const normalized = (Array.isArray(storyArray) ? storyArray : [])
+          .map((raw: any, idx: number) => {
+            const flat = flattenStoryPayload(raw);
+            const media = pickStoryMedia(flat);
+            const sid = pickStoryId(flat, raw, idx);
+            return {
+              ...flat,
+              id: sid,
+              _id: flat._id || flat.id || sid,
+              imageUrl: media.mediaType === 'video' ? (media.imageUrl || media.videoUrl || '') : (media.imageUrl || ''),
+              videoUrl: media.mediaType === 'video' ? media.videoUrl : undefined,
+              mediaType: media.mediaType,
+            } as Story;
+          })
+          .slice()
+          .sort((a: any, b: any) => {
             const ta = Date.parse(String(a?.createdAt || a?.timestamp || 0)) || 0;
             const tb = Date.parse(String(b?.createdAt || b?.timestamp || 0)) || 0;
             return ta - tb;
           });
-          setStories(normalized);
-        } else {
-          setStories([]);
-        }
-        setLoading(false);
-        setCurrentIndex(0);
+        (async () => {
+          // If backend is empty (e.g. 24h expiry or eventual consistency), fall back to local archive.
+          if (normalized.length === 0 && highlightId) {
+            const cached = await getCachedHighlightStories(highlightId);
+            const cachedNorm = (Array.isArray(cached) ? cached : []).map((raw: any, idx: number) => {
+              const flat = flattenStoryPayload(raw);
+              const media = pickStoryMedia(flat);
+              const sid = pickStoryId(flat, raw, idx);
+              return {
+                ...flat,
+                id: sid,
+                _id: flat._id || flat.id || sid,
+                imageUrl: media.mediaType === 'video' ? (media.imageUrl || media.videoUrl || '') : (media.imageUrl || ''),
+                videoUrl: media.mediaType === 'video' ? media.videoUrl : undefined,
+                mediaType: media.mediaType,
+              } as Story;
+            });
+            setStories(cachedNorm);
+          } else {
+            setStories(normalized);
+          }
+          setLoading(false);
+          setCurrentIndex(0);
+        })();
       });
     }
   }, [highlightId, visible]);
@@ -116,9 +165,12 @@ const HighlightViewer: React.FC<HighlightViewerProps> = ({ visible, highlightId,
   };
 
   const resolveStoryUri = (s: Story) => {
-    const type = String(s?.mediaType || '').toLowerCase();
-    if (type === 'video') return s.videoUrl || s.mediaUrl || s.thumbnailUrl || s.imageUrl || '';
-    return s.imageUrl || s.thumbnailUrl || s.mediaUrl || s.videoUrl || '';
+    const flat = flattenStoryPayload(s as any);
+    const media = pickStoryMedia(flat);
+    if (media.mediaType === 'video') {
+      return media.imageUrl || media.videoUrl || String(flat.userAvatar || '');
+    }
+    return media.imageUrl || String(flat.userAvatar || '');
   };
 
   const handleNext = () => {
@@ -155,25 +207,38 @@ const HighlightViewer: React.FC<HighlightViewerProps> = ({ visible, highlightId,
           onPress: async () => {
             setDeleting(true);
             try {
-              const storyId = stories[currentIndex].id || stories[currentIndex]._id;
+              const storyAtPress = stories[currentIndex];
+              const storyId = storyAtPress?.id || storyAtPress?._id;
               if (!storyId) {
                 Alert.alert('Error', 'Story id not found');
                 return;
               }
-              const result = await removeStoryFromHighlight(highlightId, storyId);
-              
-              if (result.success || result.data) {
-                // Remove from local state
-                const newStories = stories.filter((_, idx) => idx !== currentIndex);
-                setStories(newStories);
-                
-                if (newStories.length === 0) {
-                  onClose();
-                } else if (currentIndex >= newStories.length) {
-                  setCurrentIndex(newStories.length - 1);
-                }
+              const mediaHint = String((storyAtPress as any)?.videoUrl || (storyAtPress as any)?.imageUrl || (storyAtPress as any)?.mediaUrl || '');
+
+              // ✅ Instagram-like: remove instantly in UI, then sync server.
+              const removedIndex = currentIndex;
+              const nextStories = stories.filter((_, idx) => idx !== removedIndex);
+              setStories(nextStories);
+              if (nextStories.length === 0) {
+                // Remove highlight from profile immediately (don't wait for refetch)
+                try { feedEventEmitter.emitHighlightDeleted(String(highlightId)); } catch {}
+                // If highlight becomes empty, close viewer immediately.
+                onClose();
               } else {
-                Alert.alert('Error', 'Failed to delete story');
+                setCurrentIndex((idx) => Math.min(idx, nextStories.length - 1));
+              }
+
+              const result = await highlightManager.removeStoryFromHighlight({
+                highlightId,
+                storyId: String(storyId),
+                mediaUrlHint: mediaHint || undefined,
+                autoDeleteHighlightIfEmpty: true,
+                userId: String(userId || localUid || ''),
+              });
+
+              // Don't block UX on server failure in production.
+              if (result.error && __DEV__) {
+                console.warn('[HighlightViewer] Server remove failed:', result.error);
               }
             } catch (error: any) {
               Alert.alert('Error', 'Failed to delete story: ' + error.message);
@@ -232,11 +297,24 @@ const HighlightViewer: React.FC<HighlightViewerProps> = ({ visible, highlightId,
           </View>
         ) : (
           <View style={styles.storyContainer}>
-            <Image
-              source={{ uri: resolveStoryUri(stories[currentIndex]) }}
-              style={styles.storyImage}
-              resizeMode="cover"
-            />
+            {String(stories[currentIndex]?.mediaType || '').toLowerCase() === 'video' &&
+            (stories[currentIndex] as any)?.videoUrl ? (
+              <Video
+                source={{ uri: String((stories[currentIndex] as any).videoUrl) }}
+                style={styles.storyImage}
+                resizeMode={ResizeMode.COVER}
+                shouldPlay={!isPaused && !showComments}
+                isLooping
+                isMuted={false}
+                useNativeControls={false}
+              />
+            ) : (
+              <Image
+                source={{ uri: resolveStoryUri(stories[currentIndex]) }}
+                style={styles.storyImage}
+                resizeMode="cover"
+              />
+            )}
             
             {/* Progress bar */}
             <View style={styles.progressBarContainer}>
@@ -273,7 +351,7 @@ const HighlightViewer: React.FC<HighlightViewerProps> = ({ visible, highlightId,
               </View>
               
               <View style={styles.topActions}>
-                {userId && (
+                {(userId || localUid) && (
                   <TouchableOpacity
                     style={styles.actionBtn}
                     onPress={handleDeleteStory}

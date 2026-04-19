@@ -20,6 +20,8 @@
         "EXPO_PUBLIC_FIREBASE_APP_ID": "1:709095117662:web:5f00f45bb4e392ee17f5cf",
         "EXPO_PUBLIC_FIREBASE_MEASUREMENT_ID": "G-PFZRL4FDFD",
         "EXPO_PUBLIC_GOOGLE_MAPS_API_KEY": "AIzaSyCQ1Fe55xOwt9fFfAiGIDVoEt01i2hL-zs",
+        "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "709095117662-2l84b3ua08t9icu8tpqtpchrmtdciep0.apps.googleusercontent.com",
+        "EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID": "709095117662-k35juagf7ihkae81tfm9si43jkg7g177.apps.googleusercontent.com",
         "EXPO_PUBLIC_API_BASE_URL": "https://travel-social-backend.onrender.com/api",
         "appAuthRedirectScheme": "trave-social"
       }
@@ -38,6 +40,8 @@
         "EXPO_PUBLIC_FIREBASE_APP_ID": "1:709095117662:web:5f00f45bb4e392ee17f5cf",
         "EXPO_PUBLIC_FIREBASE_MEASUREMENT_ID": "G-PFZRL4FDFD",
         "EXPO_PUBLIC_GOOGLE_MAPS_API_KEY": "AIzaSyCQ1Fe55xOwt9fFfAiGIDVoEt01i2hL-zs",
+        "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "709095117662-2l84b3ua08t9icu8tpqtpchrmtdciep0.apps.googleusercontent.com",
+        "EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID": "709095117662-k35juagf7ihkae81tfm9si43jkg7g177.apps.googleusercontent.com",
         "EXPO_PUBLIC_API_BASE_URL": "https://travel-social-backend.onrender.com/api",
         "appAuthRedirectScheme": "trave-social"
       }
@@ -59,6 +63,8 @@
         "EXPO_PUBLIC_FIREBASE_APP_ID": "1:709095117662:web:5f00f45bb4e392ee17f5cf",
         "EXPO_PUBLIC_FIREBASE_MEASUREMENT_ID": "G-PFZRL4FDFD",
         "EXPO_PUBLIC_GOOGLE_MAPS_API_KEY": "AIzaSyCQ1Fe55xOwt9fFfAiGIDVoEt01i2hL-zs",
+        "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "709095117662-2l84b3ua08t9icu8tpqtpchrmtdciep0.apps.googleusercontent.com",
+        "EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID": "709095117662-k35juagf7ihkae81tfm9si43jkg7g177.apps.googleusercontent.com",
         "EXPO_PUBLIC_API_BASE_URL": "https://travel-social-backend.onrender.com/api",
         "appAuthRedirectScheme": "trave-social"
       }
@@ -77,6 +83,8 @@
         "EXPO_PUBLIC_FIREBASE_APP_ID": "1:709095117662:web:5f00f45bb4e392ee17f5cf",
         "EXPO_PUBLIC_FIREBASE_MEASUREMENT_ID": "G-PFZRL4FDFD",
         "EXPO_PUBLIC_GOOGLE_MAPS_API_KEY": "AIzaSyCQ1Fe55xOwt9fFfAiGIDVoEt01i2hL-zs",
+        "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "709095117662-2l84b3ua08t9icu8tpqtpchrmtdciep0.apps.googleusercontent.com",
+        "EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID": "709095117662-k35juagf7ihkae81tfm9si43jkg7g177.apps.googleusercontent.com",
         "EXPO_PUBLIC_API_BASE_URL": "https://travel-social-backend.onrender.com/api",
         "appAuthRedirectScheme": "trave-social"
       }

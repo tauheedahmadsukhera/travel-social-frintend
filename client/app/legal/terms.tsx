@@ -3,6 +3,7 @@ import React from 'react';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { safeRouterBack } from '@/lib/safeRouterBack';
 
 export default function TermsOfServiceScreen() {
   const router = useRouter();
@@ -10,7 +11,7 @@ export default function TermsOfServiceScreen() {
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+        <TouchableOpacity onPress={() => safeRouterBack()} style={styles.backButton}>
           <Ionicons name="arrow-back" size={24} color="#000" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Terms of Service</Text>
@@ -22,13 +23,13 @@ export default function TermsOfServiceScreen() {
 
         <Text style={styles.sectionTitle}>1. Acceptance of Terms</Text>
         <Text style={styles.paragraph}>
-          By accessing or using Trave Social, you agree to be bound by these Terms of Service. 
+          By accessing or using Trips, you agree to be bound by these Terms of Service. 
           If you do not agree, do not use the App.
         </Text>
 
         <Text style={styles.sectionTitle}>2. Description of Service</Text>
         <Text style={styles.paragraph}>
-          Trave Social is a social media platform that allows users to:{'\n'}
+          Trips is a social media platform that allows users to:{'\n'}
           • Create and share posts with photos and locations{'\n'}
           • Follow other users and view their content{'\n'}
           • Send direct messages{'\n'}
@@ -127,7 +128,7 @@ export default function TermsOfServiceScreen() {
         </Text>
 
         <Text style={styles.paragraph}>
-          By using Trave Social, you agree to these Terms of Service.
+          By using Trips, you agree to these Terms of Service.
         </Text>
 
         <TouchableOpacity 

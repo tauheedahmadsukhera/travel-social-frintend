@@ -1,54 +1,105 @@
 import { Feather } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import React from 'react';
-import { Dimensions, FlatList, Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import React, { useEffect, useMemo, useState } from 'react';
+import { ActivityIndicator, Modal, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-
-
-const { width } = Dimensions.get('window');
+import StoriesViewer from '@/src/_components/StoriesViewer';
+import { getHighlightStories } from '../../lib/firebaseHelpers/core';
+import { getCachedHighlightStories, storyForStoriesViewer } from '../../lib/storyViewer';
+import { safeRouterBack } from '@/lib/safeRouterBack';
 
 export default function HighlightScreen() {
   const params = useLocalSearchParams();
   const router = useRouter();
   const id = (params.id as string) || 'unknown';
 
-  // Use backend highlights if available
-  // For demo, show empty state if no images
-  // You can fetch highlight images from backend here
-  const images: string[] = [];
+  const [loading, setLoading] = useState(true);
+  const [stories, setStories] = useState<any[]>([]);
+  const [viewerVisible, setViewerVisible] = useState(false);
+
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        setLoading(true);
+        const res = await getHighlightStories(id);
+        let list = Array.isArray(res?.stories) ? res.stories : [];
+        if (list.length === 0) {
+          const cached = await getCachedHighlightStories(id);
+          if (Array.isArray(cached) && cached.length > 0) list = cached;
+        }
+        if (!mounted) return;
+        setStories(list);
+        setViewerVisible(Array.isArray(list) && list.length > 0);
+      } catch {
+        if (mounted) setStories([]);
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    })();
+    return () => { mounted = false; };
+  }, [id]);
+
+  const viewerStories = useMemo(() => {
+    return (Array.isArray(stories) ? stories : []).map((s: any, i: number) => storyForStoriesViewer(s, i));
+  }, [stories]);
 
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()}>
-          <Feather name="arrow-left" size={24} color="#FF6B00" />
+        <TouchableOpacity onPress={() => safeRouterBack()} style={styles.backBtn}>
+          <Feather name="arrow-left" size={24} color="#111" />
         </TouchableOpacity>
-        <Text style={styles.title}>{id.charAt(0).toUpperCase() + id.slice(1)} Highlight</Text>
-        <View style={{ width: 24 }} />
+        <Text style={styles.title}>Highlight</Text>
+        <View style={{ width: 44 }} />
       </View>
-      <View style={styles.card}>
-        {images.length === 0 ? (
-          <Text style={styles.empty}>No highlight images found.</Text>
-        ) : (
-          <FlatList
-            data={images}
-            numColumns={3}
-            keyExtractor={(i) => i}
-            renderItem={({ item }) => (
-              <Image source={{ uri: item }} style={styles.gridImage} />
-            )}
-          />
-        )}
-      </View>
+
+      {loading ? (
+        <View style={styles.center}>
+          <ActivityIndicator size="large" color="#111" />
+          <Text style={styles.loadingText}>Loading highlight...</Text>
+        </View>
+      ) : viewerStories.length === 0 ? (
+        <View style={styles.center}>
+          <Text style={styles.empty}>No stories in this highlight.</Text>
+        </View>
+      ) : (
+        <View style={styles.center}>
+          <TouchableOpacity style={styles.openBtn} onPress={() => setViewerVisible(true)} activeOpacity={0.85}>
+            <Text style={styles.openBtnText}>Open Highlight</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
+      <Modal visible={viewerVisible} transparent={false} animationType="fade" onRequestClose={() => setViewerVisible(false)}>
+        <StoriesViewer
+          stories={viewerStories}
+          initialIndex={0}
+          onClose={() => {
+            setViewerVisible(false);
+            safeRouterBack();
+          }}
+        />
+      </Modal>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#fff', padding: 18 },
-  header: { flexDirection: 'row', alignItems: 'center', padding: 8, borderBottomWidth: 1, borderBottomColor: '#eee', marginBottom: 12 },
-  title: { fontWeight: '700', fontSize: 22, marginLeft: 12, color: '#FF6B00' },
-  card: { backgroundColor: '#f7f7f7', borderRadius: 16, padding: 18, shadowColor: '#000', shadowOpacity: 0.08, shadowRadius: 8, elevation: 8, flex: 1 },
-  gridImage: { width: width / 3 - 12, height: width / 3 - 12, backgroundColor: '#eee', margin: 6, borderRadius: 8 },
-  empty: { color: '#999', fontSize: 16, textAlign: 'center', marginTop: 32 },
+  container: { flex: 1, backgroundColor: '#fff' },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: '#eee',
+  },
+  backBtn: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
+  title: { fontWeight: '800', fontSize: 18, marginLeft: 6, color: '#111', flex: 1 },
+  center: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 24 },
+  loadingText: { marginTop: 10, color: '#777' },
+  empty: { color: '#777', fontSize: 15, textAlign: 'center' },
+  openBtn: { backgroundColor: '#111', paddingHorizontal: 18, paddingVertical: 12, borderRadius: 12 },
+  openBtnText: { color: '#fff', fontWeight: '800' },
 });

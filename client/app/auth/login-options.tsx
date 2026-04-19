@@ -1,11 +1,13 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
-import { Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { handleSocialAuthResult, signInWithApple, signInWithGoogle, signInWithSnapchat, signInWithTikTok } from '../../services/socialAuthService';
+import { AuthBrandHeader } from '@/src/_components/auth/AuthBrandHeader';
 import CustomButton from '@/src/_components/auth/CustomButton';
 import SocialButton from '@/src/_components/auth/SocialButton';
+import { safeRouterBack } from '@/lib/safeRouterBack';
 
 export default function LoginOptionsScreen() {
   const router = useRouter();
@@ -61,7 +63,7 @@ export default function LoginOptionsScreen() {
           {/* Header */}
           <View style={styles.header}>
             <TouchableOpacity
-              onPress={() => router.back()}
+              onPress={() => safeRouterBack()}
               style={styles.backButton}
             >
               <Ionicons name="arrow-back" size={24} color="#000" />
@@ -70,32 +72,7 @@ export default function LoginOptionsScreen() {
 
           {/* Title Section */}
           <View style={styles.titleSection}>
-            <View style={{ position: 'relative', height: 60, width: 220, justifyContent: 'center', alignItems: 'center', marginBottom: 12 }}>
-              {/* Base Text Logo - Always visible immediately */}
-              <Text style={{
-                fontSize: 36,
-                fontWeight: '900',
-                color: '#0A3D62',
-                letterSpacing: -1
-              }}>
-                Trave<Text style={{ color: '#667eea' }}>Social</Text>
-              </Text>
-
-              {/* Branding Image - Loads on top if available */}
-              <Image
-                source={{ uri: 'https://res.cloudinary.com/dinwxxnzm/image/upload/v1766418070/logo/logo.png' }}
-                style={{
-                  position: 'absolute',
-                  top: 0,
-                  left: 0,
-                  right: 0,
-                  bottom: 0,
-                  backgroundColor: 'transparent'
-                }}
-                resizeMode="contain"
-              />
-            </View>
-            <Text style={styles.subtitle}>How would you like to login?</Text>
+            <AuthBrandHeader subtitle="How would you like to login?" />
           </View>
 
           {/* Login Method Selection */}
@@ -190,10 +167,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 20,
     marginTop: 10,
-  },
-  subtitle: {
-    fontSize: 14,
-    color: '#666',
   },
   methodContainer: {
     marginBottom: 15,

@@ -7,20 +7,57 @@
 import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 
-// Get environment variables
-const env = Constants.expoConfig?.extra || process.env;
+// Expo only inlines EXPO_PUBLIC_* when accessed statically (process.env.EXPO_PUBLIC_FOO).
+// Dynamic lookups like process.env[key] will be undefined in production bundles.
+function getExpoPublicVar(key: string): string {
+  switch (key) {
+    case 'EXPO_PUBLIC_FIREBASE_API_KEY':
+      return process.env.EXPO_PUBLIC_FIREBASE_API_KEY || '';
+    case 'EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN':
+      return process.env.EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN || '';
+    case 'EXPO_PUBLIC_FIREBASE_PROJECT_ID':
+      return process.env.EXPO_PUBLIC_FIREBASE_PROJECT_ID || '';
+    case 'EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET':
+      return process.env.EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET || '';
+    case 'EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID':
+      return process.env.EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID || '';
+    case 'EXPO_PUBLIC_FIREBASE_APP_ID':
+      return process.env.EXPO_PUBLIC_FIREBASE_APP_ID || '';
+    case 'EXPO_PUBLIC_FIREBASE_MEASUREMENT_ID':
+      return process.env.EXPO_PUBLIC_FIREBASE_MEASUREMENT_ID || '';
+    case 'EXPO_PUBLIC_GOOGLE_MAPS_API_KEY':
+      return process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY || '';
+    case 'EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID':
+      return process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID || '';
+    case 'EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID':
+      return process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID || '';
+    case 'EXPO_PUBLIC_API_BASE_URL':
+      return process.env.EXPO_PUBLIC_API_BASE_URL || '';
+    case 'EXPO_PUBLIC_AGORA_APP_ID':
+      return process.env.EXPO_PUBLIC_AGORA_APP_ID || '';
+    case 'EXPO_PUBLIC_AGORA_TOKEN_URL':
+      return process.env.EXPO_PUBLIC_AGORA_TOKEN_URL || '';
+    default:
+      return '';
+  }
+}
+
+// Get environment variables (merge config.extra + process.env)
+const env = { ...(process.env as any), ...(Constants.expoConfig?.extra as any) };
 
 // Ensure keys are loaded from environment (fail loudly if missing in production)
 const isDevelopment = process.env.NODE_ENV !== 'production';
 
+/* eslint-disable expo/no-dynamic-env-var -- generic lookup; every call site passes a static key literal */
 function getEnvVar(key: string, defaultValue?: string): string {
   const isPlaceholder = (val: unknown): boolean => {
-    if (typeof val !== 'string') {
-      return false;
+    if (!val || typeof val !== 'string') {
+      return true; // Treat undefined/null/non-string as placeholder so it falls back
     }
     const normalized = val.trim().toLowerCase();
+    // treating empty string as a placeholder to allow fallback
     if (!normalized) {
-      return false;
+      return true;
     }
     return (
       normalized === 'set_in_env' ||
@@ -33,19 +70,31 @@ function getEnvVar(key: string, defaultValue?: string): string {
   };
 
   const configValue = env[key];
-  const processValue = process.env[key];
-  const value = !isPlaceholder(configValue)
-    ? configValue
-    : !isPlaceholder(processValue)
-      ? processValue
-      : '';
+  // Prefer static EXPO_PUBLIC_* access for production safety.
+  const processValue = key.startsWith('EXPO_PUBLIC_') ? getExpoPublicVar(key) : (process.env as any)[key];
+  
+  let value = '';
+  if (!isPlaceholder(configValue)) {
+    value = configValue as string;
+  } else if (!isPlaceholder(processValue)) {
+    value = processValue as string;
+  }
+
   if (!value && !isDevelopment && defaultValue === undefined) {
+    console.error(`❌ [environment] Critical variable missing: ${key}`);
     throw new Error(`Missing critical environment variable: ${key}`);
   }
+  
+  // In development, don't spam warnings for optional/empty vars.
+  // Only warn when the app expects a non-empty value (no default provided).
+  if (__DEV__ && defaultValue === undefined && isPlaceholder(value)) {
+    console.warn(`⚠️ [environment] Variable ${key} has a placeholder value: "${value}"`);
+  }
+
   return value || defaultValue || '';
 }
+/* eslint-enable expo/no-dynamic-env-var */
 
-// Firebase Configuration (must come from environment)
 export const FIREBASE_CONFIG = {
   apiKey: getEnvVar('EXPO_PUBLIC_FIREBASE_API_KEY', ''),
   authDomain: getEnvVar('EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN', ''),
@@ -56,9 +105,34 @@ export const FIREBASE_CONFIG = {
   measurementId: getEnvVar('EXPO_PUBLIC_FIREBASE_MEASUREMENT_ID', '')
 } as const;
 
+if (__DEV__) {
+  console.log('🔥 [environment] Firebase Config initialized');
+  console.log('🔥 [environment] Project ID:', FIREBASE_CONFIG.projectId || 'MISSING');
+  console.log('🔥 [environment] API Key present:', !!FIREBASE_CONFIG.apiKey);
+}
+
 // Google Maps Configuration
+// Prefer EXPO_PUBLIC_* (Expo inlines at bundle time). Only use legacy keys if explicitly set.
+const EXPO_GOOGLE_MAPS_KEY = getEnvVar('EXPO_PUBLIC_GOOGLE_MAPS_API_KEY', '');
+const LEGACY_GOOGLE_MAPS_KEY =
+  EXPO_GOOGLE_MAPS_KEY ||
+  String(env['GOOGLE_MAPS_API_KEY'] || process.env.GOOGLE_MAPS_API_KEY || '').trim() ||
+  String(env['GOOGLE_MAP_API_KEY'] || process.env.GOOGLE_MAP_API_KEY || '').trim();
+
+/** Web client (type 3) from Firebase `google-services.json` — required for native Google Sign-In + Firebase ID token. */
+const DEFAULT_GOOGLE_WEB_CLIENT_ID =
+  '709095117662-2l84b3ua08t9icu8tpqtpchrmtdciep0.apps.googleusercontent.com';
+/** iOS OAuth client from Firebase / GoogleService-Info.plist — used by @react-native-google-signin on iOS. */
+const DEFAULT_GOOGLE_IOS_CLIENT_ID =
+  '709095117662-k35juagf7ihkae81tfm9si43jkg7g177.apps.googleusercontent.com';
+
+export const GOOGLE_SIGN_IN_CONFIG = {
+  webClientId: getEnvVar('EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID', DEFAULT_GOOGLE_WEB_CLIENT_ID),
+  iosClientId: getEnvVar('EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID', DEFAULT_GOOGLE_IOS_CLIENT_ID),
+} as const;
+
 export const GOOGLE_MAPS_CONFIG = {
-  apiKey: getEnvVar('EXPO_PUBLIC_GOOGLE_MAPS_API_KEY', getEnvVar('GOOGLE_MAPS_API_KEY', getEnvVar('GOOGLE_MAP_API_KEY', ''))),
+  apiKey: LEGACY_GOOGLE_MAPS_KEY,
   provider: 'google' as const,
 } as const;
 
@@ -71,7 +145,7 @@ export const AGORA_CONFIG = {
 
 // App Configuration
 export const APP_CONFIG = {
-  name: 'Travel Social',
+  name: 'Trips',
   version: '1.0.0',
   environment: process.env.NODE_ENV || 'development',
 } as const;
@@ -124,9 +198,12 @@ export const PAGINATION = {
   messagesPerPage: 50,
 } as const;
 
-// Default Assets
+// Default Assets (avatar derived from API base — avoid importing lib/api here; that caused a circular module graph and wrong API_BASE_URL in release)
 export const DEFAULT_ASSETS = {
-  avatar: 'https://firebasestorage.googleapis.com/v0/b/travel-app-3da72.firebasestorage.app/o/default%2Fdefault-pic.jpg?alt=media&token=7177f487-a345-4e45-9a56-732f03dbf65d',
+  get avatar() {
+    const base = getAPIBaseURL().replace(/\/api\/?$/, '');
+    return `${base}/assests/avatardefault.webp`;
+  },
   placeholder: 'https://via.placeholder.com/600x600.png?text=No+Media',
 } as const;
 
@@ -204,22 +281,48 @@ export const STORAGE_KEYS = {
 // API Base URL Helper
 export function getAPIBaseURL(): string {
   const prodUrl = 'https://travel-social-backend.onrender.com/api';
-  const localIp = 'http://192.168.100.209:5000/api';
+  const localIp = 'http://10.36.246.154:5000/api';
   // Avoid runtime crashes in release when env resolution fails.
   const envUrl = process.env.EXPO_PUBLIC_API_BASE_URL || getEnvVar('EXPO_PUBLIC_API_BASE_URL', '');
+  const normalizedEnvUrl = String(envUrl || '').trim().toLowerCase();
+  const envLooksLocal = /(localhost|127\.0\.0\.1|192\.168\.|10\.|172\.(1[6-9]|2\d|3[0-1])\.)/.test(normalizedEnvUrl);
+
+  // Derive Metro host IP for Expo Go/dev-client to avoid stale hardcoded LAN IP.
+  const hostUri = String((Constants as any)?.expoConfig?.hostUri || (Constants as any)?.manifest2?.extra?.expoGo?.debuggerHost || '');
+  const hostIp = hostUri.includes(':') ? hostUri.split(':')[0] : hostUri;
+  const derivedLocalUrl = hostIp ? `http://${hostIp}:5000/api` : '';
 
   if (__DEV__) {
     console.log('📡 [environment] EXPO_PUBLIC_API_BASE_URL from env:', envUrl || 'Not set');
-    console.log('📡 [environment] Using Local IP Fallback:', localIp);
-    // Force local IP in dev for now to bypass cache issues
-    return envUrl || localIp || prodUrl;
+    if (derivedLocalUrl && envLooksLocal && envUrl && String(envUrl).trim() !== derivedLocalUrl) {
+      console.log('📡 [environment] Detected stale local env URL, using derived host URL instead:', derivedLocalUrl);
+      return derivedLocalUrl;
+    }
+    if (envUrl) {
+      console.log('📡 [environment] Using env URL in dev:', envUrl);
+      return envUrl;
+    }
+    if (derivedLocalUrl) {
+      console.log('📡 [environment] Using derived local URL in dev:', derivedLocalUrl);
+      return derivedLocalUrl;
+    }
+    if (envLooksLocal) {
+      console.log('📡 [environment] Using fallback local env URL in dev:', envUrl);
+      return envUrl;
+    }
+    console.log('📡 [environment] Falling back to hardcoded local IP in dev:', localIp);
+    return localIp || prodUrl;
   }
+
+  // Production safety: never allow a local/LAN URL to ship by accident.
+  if (envLooksLocal) return prodUrl;
 
   return envUrl || prodUrl;
 }
 
 export default {
   FIREBASE_CONFIG,
+  GOOGLE_SIGN_IN_CONFIG,
   GOOGLE_MAPS_CONFIG,
   AGORA_CONFIG,
   APP_CONFIG,

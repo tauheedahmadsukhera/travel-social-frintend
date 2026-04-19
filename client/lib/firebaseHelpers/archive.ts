@@ -34,3 +34,11 @@ export async function deleteConversation(conversationId: string, userId: string)
     return { success: false, error: error.message };
   }
 }
+
+export async function clearConversation(conversationId: string) {
+  try {
+    return await apiService.post(`/conversations/${conversationId}/clear`);
+  } catch (error: any) {
+    return { success: false, error: error.message };
+  }
+}

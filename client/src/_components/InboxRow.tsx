@@ -1,6 +1,7 @@
 import { Feather } from '@expo/vector-icons';
 import React, { useEffect, useState } from 'react';
-import { Image, Text, TouchableOpacity, View } from 'react-native';
+import { Text, TouchableOpacity, View } from 'react-native';
+import { Image as ExpoImage } from 'expo-image';
 import { getFormattedActiveStatus, subscribeToUserPresence, UserPresence } from '../../lib/userPresence';
 import { useUserProfile } from '../_hooks/useUserProfile';
 import MessageBubble from './MessageBubble';
@@ -16,14 +17,43 @@ export default function InboxRow({ item, router, unread, formatTime, DEFAULT_AVA
     otherUserId = item.participants.find((uid: string) => uid !== item.currentUserId) || '';
   }
   
-  console.log('ðŸ“± InboxRow rendering:', { otherUserId, participantsCount: item.participants?.length, currentUserId: item.currentUserId });
+  if (__DEV__) {
+    console.log('📱 InboxRow rendering:', { otherUserId, participantsCount: item.participants?.length, currentUserId: item.currentUserId });
+  }
   
   const { profile, loading } = useUserProfile(otherUserId);
-  
-  const username = profile?.username || 'User';
+
+  const isLikelyOpaqueId = (value: any) => {
+    const s = String(value || '').trim();
+    if (!s) return false;
+    if (/^\+?\d{6,}$/.test(s)) return true;
+    if (/^[a-f0-9]{24}$/i.test(s)) return true;
+    return false;
+  };
+
+  const isPlaceholderName = (value: any) => {
+    const s = String(value || '').trim();
+    if (!s) return true;
+    const lower = s.toLowerCase();
+    return lower === 'user' || lower === 'unknown';
+  };
+
+  const username = (() => {
+    const candidates = [profile?.displayName, profile?.name, profile?.username]
+      .map((v: any) => (typeof v === 'string' ? v.trim() : ''))
+      .filter(Boolean);
+    for (const c of candidates) {
+      if (isLikelyOpaqueId(c)) continue;
+      if (isPlaceholderName(c)) continue;
+      return c;
+    }
+    return 'User';
+  })();
   const avatar = profile?.avatar;
   
-  console.log('ðŸ‘¤ InboxRow profile loaded:', { username, avatarExists: !!avatar, profileLoading: loading });
+  if (__DEV__) {
+    console.log('👤 InboxRow profile loaded:', { username, avatarExists: !!avatar, profileLoading: loading });
+  }
   
   // Track user's active status
   const [presence, setPresence] = useState<UserPresence | null>(null);
@@ -49,10 +79,10 @@ export default function InboxRow({ item, router, unread, formatTime, DEFAULT_AVA
       style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 12, paddingHorizontal: 16 }}
       onPress={() => {
         if (!otherUserId) {
-          console.warn('âŒ No otherUserId, cannot navigate to DM');
+          console.warn('❌ No otherUserId, cannot navigate to DM');
           return;
         }
-        console.log('ðŸ”µ Navigating to DM:', { conversationId: item.id, otherUserId });
+        if (__DEV__) console.log('🔵 Navigating to DM:', { conversationId: item.id, otherUserId });
         router.push({ 
           pathname: '/dm', 
           params: { 
@@ -64,7 +94,7 @@ export default function InboxRow({ item, router, unread, formatTime, DEFAULT_AVA
       }}
     >
       <View style={[{ width: 64, height: 64, borderRadius: 32, alignItems: 'center', justifyContent: 'center', marginRight: 12 }, unread > 0 && { borderWidth: 2, borderColor: '#0A3D62' }]}>
-        <Image 
+        <ExpoImage 
           key={safeAvatar + username}
           source={{ uri: safeAvatar }} 
           style={{ 
@@ -74,8 +104,11 @@ export default function InboxRow({ item, router, unread, formatTime, DEFAULT_AVA
             backgroundColor: '#eee', 
             borderWidth: 2, 
             borderColor: '#ccc' 
-          }} 
-          onError={() => console.log('âŒ Avatar image failed to load:', safeAvatar)}
+          }}
+          contentFit="cover"
+          cachePolicy="memory-disk"
+          transition={0}
+          onError={() => { if (__DEV__) console.log('❌ Avatar image failed to load:', safeAvatar); }}
         />
       </View>
       <View style={{ flex: 1, borderBottomWidth: 0, paddingRight: 8 }}>
@@ -101,6 +134,7 @@ export default function InboxRow({ item, router, unread, formatTime, DEFAULT_AVA
               formatTime={formatTime}
               compact={true}
               showTail={false}
+              id={`inbox_preview_${item.id}`}
             />
           </View>
           {unread > 0 ? (

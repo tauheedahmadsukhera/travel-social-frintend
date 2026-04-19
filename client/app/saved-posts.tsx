@@ -6,6 +6,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { API_BASE_URL } from '../lib/api';
+import { useAppDialog } from '@/src/_components/AppDialogProvider';
+import { safeRouterBack } from '@/lib/safeRouterBack';
 
 export default function SavedPostsScreen() {
   const router = useRouter();
@@ -16,6 +18,7 @@ export default function SavedPostsScreen() {
   const [userId, setUserId] = useState<string | null>(null);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const { showSuccess } = useAppDialog();
 
   const isOwner = !targetUserId || targetUserId === currentUserId;
 
@@ -90,7 +93,7 @@ export default function SavedPostsScreen() {
       const json = await response.json();
       if (json.success) {
         setSavedPosts(savedPosts.filter(post => post._id !== postId));
-        Alert.alert('Success', 'Post unsaved');
+        showSuccess('Post unsaved');
       } else {
         Alert.alert('Error', 'Failed to unsave post');
       }
@@ -201,7 +204,7 @@ export default function SavedPostsScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()}>
+        <TouchableOpacity onPress={() => safeRouterBack()}>
           <Ionicons name="chevron-back" size={28} color="#222" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Saved Posts</Text>

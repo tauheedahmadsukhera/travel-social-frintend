@@ -64,12 +64,19 @@ export default function CollectionDeleteModal({
         if (!uid) return;
         setLoading(true);
         try {
-            const res = await apiService.delete(`/users/${uid}/sections/${collection._id}`, {
+            const payload = {
                 ...(targetId ? { migrateToSectionId: targetId } : {}),
                 requesterId: uid,
                 requesterUserId: uid,
                 viewerId: uid,
-            });
+            };
+
+            // Some backends address sections by `_id`, others by `name`.
+            // Try `_id` first, then fall back to `name`.
+            let res = await apiService.delete(`/users/${uid}/sections/${encodeURIComponent(collection._id)}`, payload);
+            if (!res?.success) {
+                res = await apiService.delete(`/users/${uid}/sections/${encodeURIComponent(collection.name)}`, payload);
+            }
 
             if (res?.success) {
                 onDeleted(collection._id);

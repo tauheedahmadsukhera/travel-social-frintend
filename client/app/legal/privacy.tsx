@@ -3,6 +3,7 @@ import React from 'react';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { safeRouterBack } from '@/lib/safeRouterBack';
 
 export default function PrivacyPolicyScreen() {
   const router = useRouter();
@@ -10,7 +11,7 @@ export default function PrivacyPolicyScreen() {
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+        <TouchableOpacity onPress={() => safeRouterBack()} style={styles.backButton}>
           <Ionicons name="arrow-back" size={24} color="#000" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Privacy Policy</Text>
@@ -22,7 +23,7 @@ export default function PrivacyPolicyScreen() {
 
         <Text style={styles.sectionTitle}>1. Introduction</Text>
         <Text style={styles.paragraph}>
-          Welcome to Trave Social. We respect your privacy and are committed to protecting your personal data. 
+          Welcome to Trips. We respect your privacy and are committed to protecting your personal data. 
           This privacy policy explains how we collect, use, and safeguard your information.
         </Text>
 
@@ -91,7 +92,7 @@ export default function PrivacyPolicyScreen() {
         </Text>
 
         <Text style={styles.paragraph}>
-          By using Trave Social, you agree to this Privacy Policy.
+          By using Trips, you agree to this Privacy Policy.
         </Text>
 
         <TouchableOpacity 

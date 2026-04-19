@@ -1,3 +1,4 @@
+import { DEFAULT_AVATAR_URL } from '../lib/api';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter, useLocalSearchParams } from 'expo-router';
@@ -8,6 +9,9 @@ import { uploadImage } from '../lib/firebaseHelpers';
 import { updateUserProfile } from '../lib/firebaseHelpers/index';
 import { getUserProfile } from '@/src/_services/firebaseService';
 import { useAuthLoading } from '@/src/_components/UserContext';
+import { hapticLight, hapticMedium, hapticSuccess } from '../lib/haptics';
+import { useAppDialog } from '@/src/_components/AppDialogProvider';
+import { safeRouterBack } from '@/lib/safeRouterBack';
 
 // Runtime import with fallback
 let ImagePicker: any = null;
@@ -19,9 +23,10 @@ try {
 
 export default function EditProfile() {
     // Default avatar from Firebase Storage
-    const DEFAULT_AVATAR_URL = 'https://via.placeholder.com/200x200.png?text=Profile';
+    
   const router = useRouter();
   const params = useLocalSearchParams();
+  const { showSuccess } = useAppDialog();
   const [userId, setUserId] = useState<string | null>(null);
   const authLoading = useAuthLoading();
   
@@ -145,6 +150,7 @@ export default function EditProfile() {
       return;
     }
 
+    hapticMedium();
     console.log('💾 Saving profile with userId:', userId);
     
     console.log('💾 Saving profile changes...');
@@ -195,6 +201,7 @@ export default function EditProfile() {
       });
       
       if (result && result.success) {
+        hapticSuccess();
         console.log('✅ Profile updated');
         
         // If privacy setting changed, TODO: implement backend API to update all user's posts
@@ -217,15 +224,7 @@ export default function EditProfile() {
         // Reload profile to get fresh data
         await loadProfile();
         
-        Alert.alert('Success', 'Profile updated!', [
-          { 
-            text: 'OK', 
-            onPress: () => {
-              // Force profile screen to reload by going back
-              router.back();
-            }
-          }
-        ]);
+        showSuccess('Profile updated!', { onOk: () => safeRouterBack() });
       } else {
         throw new Error(result.error || 'Failed to update profile');
       }
@@ -243,7 +242,7 @@ export default function EditProfile() {
       Alert.alert('Not available', 'Image picker not installed. Run: npx expo install expo-image-picker');
       return;
     }
-    
+    hapticLight();
     try {
       const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (!permission.granted) {
@@ -289,8 +288,14 @@ export default function EditProfile() {
       >
         {/* Header */}
         <View style={styles.headerRow}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.closeBtn}>
-            <Ionicons name="close" size={24} color="#000" />
+          <TouchableOpacity
+            onPress={() => {
+              hapticLight();
+              safeRouterBack();
+            }}
+            style={styles.closeBtn}
+          >
+            <Ionicons name="close" size={20} color="#333" />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Edit profile</Text>
           <View style={{ width: 40 }} />
@@ -390,7 +395,7 @@ export default function EditProfile() {
             />
           </View>
 
-          {/* Privacy Toggle */}
+          {/* Privacy Toggle (temporarily disabled)
           <View style={styles.privacySection}>
             <View style={styles.privacyRow}>
               <View style={styles.privacyLeft}>
@@ -412,6 +417,7 @@ export default function EditProfile() {
               />
             </View>
           </View>
+          */}
 
           {error ? <Text style={styles.error}>{error}</Text> : null}
         </ScrollView>
@@ -421,6 +427,7 @@ export default function EditProfile() {
           <TouchableOpacity
             style={styles.logoutBtn}
             onPress={async () => {
+              hapticLight();
               Alert.alert(
                 'Log Out',
                 'Are you sure you want to log out?',
@@ -505,7 +512,11 @@ const styles = StyleSheet.create({
     width: 40, 
     height: 40, 
     alignItems: 'center', 
-    justifyContent: 'center' 
+    justifyContent: 'center',
+    borderRadius: 20,
+    borderWidth: 1.5,
+    borderColor: '#ddd',
+    padding: 8
   },
   closeIcon: { 
     fontSize: 24, 
@@ -527,7 +538,8 @@ const styles = StyleSheet.create({
     paddingBottom: 120,
   },
   avatarContainer: { 
-    alignItems: 'flex-end', 
+    width: '100%',
+    alignItems: 'center', 
     marginBottom: 32 
   },
   avatar: { 
@@ -538,24 +550,26 @@ const styles = StyleSheet.create({
   },
   formGroup: { 
     paddingHorizontal: 16, 
-    paddingVertical: 12, 
-    borderBottomWidth: 0.5, 
-    borderBottomColor: '#e0e0e0',
-    alignItems: 'flex-end',
+    paddingVertical: 8,
+    borderBottomWidth: 0,
+    alignItems: 'flex-start',
   },
   fieldLabel: { 
     fontSize: 13, 
-    color: '#000', 
-    fontWeight: '600', 
-    marginBottom: 6,
-    textAlign: 'right',
+    color: '#444', 
+    fontWeight: '500', 
+    marginBottom: 8,
+    textAlign: 'left',
     alignSelf: 'stretch',
   },
   input: { 
     fontSize: 14, 
-    color: '#999', 
-    paddingVertical: 4,
-    textAlign: 'right',
+    color: '#222', 
+    backgroundColor: '#f3f4f6',
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    textAlign: 'left',
     alignSelf: 'stretch',
   },
   error: {

@@ -1,13 +1,16 @@
+import { DEFAULT_AVATAR_URL } from '../../lib/api';
 import { Feather, Ionicons } from "@expo/vector-icons";
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Image as ExpoImage } from 'expo-image';
 import React, { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
   FlatList,
-  Image,
   Keyboard,
   Modal,
   Platform,
+  Pressable,
   StyleSheet,
   Text,
   TextInput,
@@ -85,12 +88,199 @@ export const CommentSection: React.FC<CommentSectionProps> = ({
   } | null>(null);
 
   const listRef = useRef<FlatList<Comment>>(null);
+  const inputRef = useRef<TextInput>(null);
   const newCommentRef = useRef("");
   const replyTextRef = useRef("");
+  const submitGuardRef = useRef(false);
+  const pendingSubmitTextRef = useRef('');
+  const submitRetryTimerRef = useRef<any>(null);
+  const submitRequestedRef = useRef(false);
   const userFromContext = useUser();
   const currentUser = userProp || userFromContext;
+  
+  const [inputAvatarFailed, setInputAvatarFailed] = useState(false);
+  const [currentUserIdCandidates, setCurrentUserIdCandidates] = useState<string[]>([]);
+  const [resolvedCurrentAvatar, setResolvedCurrentAvatar] = useState<string>(
+    currentAvatar && currentAvatar.trim() ? currentAvatar.trim() : DEFAULT_AVATAR_URL
+  );
+
+  const normalizeAvatar = (value: any): string => {
+    if (typeof value !== 'string') return '';
+    const trimmed = value.trim();
+    if (!trimmed) return '';
+    const lower = trimmed.toLowerCase();
+    if (lower === 'null' || lower === 'undefined' || lower === 'n/a' || lower === 'na') return '';
+    return trimmed;
+  };
+
+  const isGenericDefaultAvatar = (value: string): boolean => {
+    const v = String(value || '').toLowerCase();
+    if (!v) return true;
+    return (
+      v.includes('via.placeholder.com/200x200.png?text=profile') ||
+      v.includes('/default%2fdefault-pic.jpg') ||
+      v.includes('/default/default-pic.jpg')
+    );
+  };
 
   const listMaxHeightStyle = typeof maxHeight === "number" ? { maxHeight } : null;
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const resolveAvatar = async () => {
+      const fromProp = normalizeAvatar(currentAvatar);
+      const fromUserObj = currentUser && typeof currentUser === 'object'
+        ? normalizeAvatar(
+          currentUser.avatar ||
+          currentUser.photoURL ||
+          currentUser.profilePicture ||
+          currentUser.userAvatar ||
+          ''
+        )
+        : '';
+
+      const fromCacheRaw = await AsyncStorage.getItem('userAvatar');
+      const fromCache = normalizeAvatar(fromCacheRaw);
+
+      const localChoice = fromProp || fromUserObj || fromCache;
+      // If we already have a non-default avatar locally, use it immediately.
+      if (localChoice && !isGenericDefaultAvatar(localChoice)) {
+        if (!cancelled) setResolvedCurrentAvatar(localChoice);
+        return;
+      }
+
+      const currentUserId = typeof currentUser === 'string'
+        ? currentUser
+        : String(
+          currentUser?.uid ||
+          currentUser?.id ||
+          currentUser?.userId ||
+          currentUser?.firebaseUid ||
+          currentUser?._id ||
+          ''
+        );
+
+      const storageUserId = await AsyncStorage.getItem('userId');
+      const storageFirebaseUid = await AsyncStorage.getItem('firebaseUid');
+      const storageUid = await AsyncStorage.getItem('uid');
+      const candidates = Array.from(new Set([
+        currentUserId,
+        storageUserId || '',
+        storageFirebaseUid || '',
+        storageUid || ''
+      ].filter(Boolean)));
+
+      for (const candidateId of candidates) {
+        try {
+          const { getUserProfile } = await import('../../lib/firebaseHelpers/user');
+          const profileRes: any = await getUserProfile(candidateId);
+          if (profileRes?.success && profileRes?.data) {
+            const fetched = normalizeAvatar(
+              profileRes.data.avatar || profileRes.data.photoURL || profileRes.data.profilePicture
+            );
+            if (fetched && !isGenericDefaultAvatar(fetched)) {
+              if (!cancelled) setResolvedCurrentAvatar(fetched);
+              await AsyncStorage.setItem('userAvatar', fetched);
+              return;
+            }
+          }
+        } catch {
+          // best-effort only
+        }
+      }
+
+      if (!cancelled) {
+        setResolvedCurrentAvatar(localChoice || DEFAULT_AVATAR_URL);
+      }
+    };
+
+    resolveAvatar();
+    return () => {
+      cancelled = true;
+    };
+  }, [currentAvatar, currentUser]);
+
+  useEffect(() => {
+    setInputAvatarFailed(false);
+  }, [resolvedCurrentAvatar]);
+
+  useEffect(() => {
+    if (!Array.isArray(comments) || comments.length === 0) return;
+    if (!resolvedCurrentAvatar || isGenericDefaultAvatar(resolvedCurrentAvatar)) return;
+    if (!Array.isArray(currentUserIdCandidates) || currentUserIdCandidates.length === 0) return;
+
+    const patchCommentAvatar = (comment: Comment): Comment => {
+      const isOwn = currentUserIdCandidates.includes(String(comment.userId || ''));
+      const nextReplies = Array.isArray(comment.replies)
+        ? comment.replies.map((r) => patchCommentAvatar(r as Comment))
+        : comment.replies;
+      return {
+        ...comment,
+        userAvatar: isOwn ? resolvedCurrentAvatar : comment.userAvatar,
+        replies: nextReplies,
+      };
+    };
+
+    setComments((prev) => prev.map((c) => patchCommentAvatar(c)));
+  }, [currentUserIdCandidates, resolvedCurrentAvatar]);
+
+  useEffect(() => {
+    const sub = Keyboard.addListener('keyboardDidHide', () => {
+      const pending = String(pendingSubmitTextRef.current || '').trim();
+      if (!pending || isSubmitting) return;
+      const ok = runSubmit(pending);
+      if (ok) pendingSubmitTextRef.current = '';
+    });
+
+    return () => {
+      sub.remove();
+      if (submitRetryTimerRef.current) {
+        clearTimeout(submitRetryTimerRef.current);
+        submitRetryTimerRef.current = null;
+      }
+    };
+  }, [isSubmitting, replyTo, replyText, newComment]);
+
+  useEffect(() => {
+    if (!showInput) return;
+    const t = setTimeout(() => {
+      inputRef.current?.focus();
+    }, 60);
+    return () => clearTimeout(t);
+  }, [showInput, postId]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const loadUserIds = async () => {
+      const fromUserObj = typeof currentUser === 'string'
+        ? [currentUser]
+        : [
+          currentUser?.id,
+          currentUser?.userId,
+          currentUser?.uid,
+          currentUser?.firebaseUid,
+          currentUser?._id,
+        ];
+      const storageUserId = await AsyncStorage.getItem('userId');
+      const storageUid = await AsyncStorage.getItem('uid');
+      const storageFirebaseUid = await AsyncStorage.getItem('firebaseUid');
+
+      const ids = Array.from(new Set([
+        storageUserId || '',
+        storageUid || '',
+        storageFirebaseUid || '',
+        ...fromUserObj,
+      ].map((x) => String(x || '').trim()).filter(Boolean)));
+
+      if (!cancelled) setCurrentUserIdCandidates(ids);
+    };
+
+    loadUserIds();
+    return () => {
+      cancelled = true;
+    };
+  }, [currentUser]);
 
   // ─── Load comments ───
   useEffect(() => { loadComments(); }, [postId]);
@@ -111,7 +301,15 @@ export const CommentSection: React.FC<CommentSectionProps> = ({
       const mapComment = (c: any): Comment => ({
         id: normalizeId(c._id || c.id),
         text: c.text || "",
-        userAvatar: c.userAvatar || "",
+        userAvatar: (() => {
+          const incomingAvatar = typeof c.userAvatar === 'string' ? c.userAvatar : '';
+          const commentUserId = normalizeId(c.userId);
+          const isOwn = currentUserIdCandidates.includes(commentUserId);
+          if (isOwn && !isGenericDefaultAvatar(resolvedCurrentAvatar)) {
+            return resolvedCurrentAvatar;
+          }
+          return incomingAvatar;
+        })(),
         userName: c.userName || "User",
         userId: normalizeId(c.userId),
         createdAt: c.createdAt,
@@ -130,8 +328,71 @@ export const CommentSection: React.FC<CommentSectionProps> = ({
 
   // ─── Current user helpers ───
   const getCurrentUserId = (): string => {
+    if (currentUserIdCandidates.length > 0) return currentUserIdCandidates[0];
     if (typeof currentUser === "string") return currentUser;
-    return currentUser?.uid || currentUser?.id || currentUser?.userId || currentUser?.firebaseUid || currentUser?._id || "";
+    return currentUser?.id || currentUser?.userId || currentUser?.uid || currentUser?.firebaseUid || currentUser?._id || "";
+  };
+
+  const ensureCurrentUserId = async (): Promise<string> => {
+    const direct = getCurrentUserId();
+    if (direct) return direct;
+
+    const [userId, uid, firebaseUid] = await Promise.all([
+      AsyncStorage.getItem('userId'),
+      AsyncStorage.getItem('uid'),
+      AsyncStorage.getItem('firebaseUid'),
+    ]);
+
+    const ids = Array.from(new Set([
+      userId || '',
+      uid || '',
+      firebaseUid || '',
+    ].map((x) => String(x || '').trim()).filter(Boolean)));
+
+    if (ids.length > 0) {
+      setCurrentUserIdCandidates((prev) => {
+        const merged = Array.from(new Set([...(prev || []), ...ids]));
+        return merged;
+      });
+      return ids[0];
+    }
+
+    // Last-resort: derive id from auth token payload when AsyncStorage aliases are not set yet.
+    try {
+      const token = await AsyncStorage.getItem('token');
+      if (token) {
+        const parts = token.split('.');
+        if (parts.length >= 2) {
+          const b64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+          const decodeBase64 = (input: string) => {
+            if (typeof (global as any).atob === 'function') return (global as any).atob(input);
+            if (typeof Buffer !== 'undefined') return Buffer.from(input, 'base64').toString('utf8');
+            throw new Error('No base64 decoder available');
+          };
+          const payload = JSON.parse(decodeBase64(b64));
+          const tokenUserId = String(payload?.userId || payload?.id || payload?.sub || '').trim();
+          if (tokenUserId) {
+            setCurrentUserIdCandidates((prev) => {
+              const merged = Array.from(new Set([...(prev || []), tokenUserId]));
+              return merged;
+            });
+            return tokenUserId;
+          }
+        }
+      }
+    } catch {
+      // no-op
+    }
+
+    return '';
+  };
+
+  const isSameUser = (a: any, b: any): boolean => {
+    const aa = String(a || '').trim();
+    const bb = String(b || '').trim();
+    if (!aa || !bb) return false;
+    if (aa === bb) return true;
+    return currentUserIdCandidates.includes(aa) && currentUserIdCandidates.includes(bb);
   };
 
   const getCurrentUserName = (): string => {
@@ -140,20 +401,74 @@ export const CommentSection: React.FC<CommentSectionProps> = ({
     return "User";
   };
 
+  const resolveAvatarForSubmit = async (uid: string): Promise<string> => {
+    const fromProp = normalizeAvatar(currentAvatar);
+    const fromResolved = normalizeAvatar(resolvedCurrentAvatar);
+    const fromUserObj = currentUser && typeof currentUser === 'object'
+      ? normalizeAvatar(
+        currentUser.avatar ||
+        currentUser.photoURL ||
+        currentUser.profilePicture ||
+        currentUser.userAvatar ||
+        ''
+      )
+      : '';
+    const fromCache = normalizeAvatar(await AsyncStorage.getItem('userAvatar'));
+
+    const localNonDefault = [fromResolved, fromUserObj, fromCache, fromProp].find(
+      (a) => a && !isGenericDefaultAvatar(a)
+    );
+    if (localNonDefault) return localNonDefault;
+
+    const storageUserId = await AsyncStorage.getItem('userId');
+    const storageFirebaseUid = await AsyncStorage.getItem('firebaseUid');
+    const storageUid = await AsyncStorage.getItem('uid');
+    const candidates = Array.from(new Set([
+      uid,
+      storageUserId || '',
+      storageFirebaseUid || '',
+      storageUid || ''
+    ].filter(Boolean)));
+
+    for (const candidateId of candidates) {
+      try {
+        const { getUserProfile } = await import('../../lib/firebaseHelpers/user');
+        const profileRes: any = await getUserProfile(candidateId);
+        if (profileRes?.success && profileRes?.data) {
+          const fetched = normalizeAvatar(
+            profileRes.data.avatar || profileRes.data.photoURL || profileRes.data.profilePicture
+          );
+          if (fetched && !isGenericDefaultAvatar(fetched)) {
+            await AsyncStorage.setItem('userAvatar', fetched);
+            setResolvedCurrentAvatar(fetched);
+            return fetched;
+          }
+        }
+      } catch {
+        // best-effort only
+      }
+    }
+
+    return localNonDefault || fromResolved || fromUserObj || fromCache || fromProp || DEFAULT_AVATAR_URL;
+  };
+
   // ─── Add comment ───
   // API: addComment(postId, userId, userName, userAvatar, text)
   const handleAddComment = async (overrideText?: string) => {
-    const text = (overrideText ?? newCommentRef.current).trim();
+    const text = (overrideText ?? newComment ?? newCommentRef.current ?? '').trim();
     if (!text || isSubmitting) return;
-    const uid = getCurrentUserId();
+    const uid = await ensureCurrentUserId();
     if (!uid) return;
 
+    Keyboard.dismiss();
+
     setIsSubmitting(true);
+    const avatarForSubmit = await resolveAvatarForSubmit(uid);
     const tempId = `temp_${Date.now()}`;
     const tempComment: Comment = {
       id: tempId,
       text,
-      userAvatar: currentAvatar,
+      userAvatar: avatarForSubmit,
       userName: getCurrentUserName(),
       userId: uid,
       createdAt: new Date(),
@@ -165,11 +480,23 @@ export const CommentSection: React.FC<CommentSectionProps> = ({
     newCommentRef.current = "";
 
     try {
-      const res = await addComment(postId, uid, getCurrentUserName(), currentAvatar, text);
+      const res = await addComment(postId, uid, getCurrentUserName(), avatarForSubmit, text);
       if (res?.data?._id || res?.data?.id) {
         const realId = normalizeId(res.data._id || res.data.id);
-        setComments((prev) => prev.map((c) => (c.id === tempId ? { ...c, id: realId } : c)));
+        const returnedAvatar = normalizeAvatar(res?.data?.userAvatar || '');
+        setComments((prev) => prev.map((c) => (
+          c.id === tempId
+            ? { ...c, id: realId, userAvatar: returnedAvatar || avatarForSubmit }
+            : c
+        )));
       }
+      const nextCount = Number(res?.commentCount ?? res?.commentsCount);
+      if (Number.isFinite(nextCount)) {
+        feedEventEmitter.emitPostUpdated(postId, { commentCount: nextCount, commentsCount: nextCount });
+      } else {
+        feedEventEmitter.emitPostUpdated(postId, { commentAdded: true });
+      }
+      await loadComments();
       feedEventEmitter.emit("commentAdded", { postId });
     } catch (e) {
       console.error("[CommentSection] addComment error:", e);
@@ -183,16 +510,19 @@ export const CommentSection: React.FC<CommentSectionProps> = ({
   // API: addCommentReply(postId, parentCommentId, replyObj)
   const handleAddReply = async (overrideText?: string) => {
     if (!replyTo) return;
-    const text = (overrideText ?? replyTextRef.current).trim();
+    const text = (overrideText ?? replyText ?? replyTextRef.current ?? '').trim();
     if (!text || isSubmitting) return;
-    const uid = getCurrentUserId();
+    const uid = await ensureCurrentUserId();
     if (!uid) return;
 
+    Keyboard.dismiss();
+
     setIsSubmitting(true);
+    const avatarForSubmit = await resolveAvatarForSubmit(uid);
     const tempReply: Comment = {
       id: `temp_reply_${Date.now()}`,
       text,
-      userAvatar: currentAvatar,
+      userAvatar: avatarForSubmit,
       userName: getCurrentUserName(),
       userId: uid,
       createdAt: new Date(),
@@ -209,7 +539,7 @@ export const CommentSection: React.FC<CommentSectionProps> = ({
       await addCommentReply(postId, parentId, {
         userId: uid,
         userName: getCurrentUserName(),
-        userAvatar: currentAvatar,
+        userAvatar: avatarForSubmit,
         text,
       });
     } catch (e) {
@@ -230,7 +560,10 @@ export const CommentSection: React.FC<CommentSectionProps> = ({
 
     try {
       if (editingComment.isReply && editingComment.parentId) {
-        await editCommentReply(postId, editingComment.parentId, editingComment.id, uid, text);
+        const res: any = await editCommentReply(postId, editingComment.parentId, editingComment.id, uid, text);
+        if (res?.success === false) {
+          throw new Error(res?.error || 'Failed to edit reply');
+        }
         setComments((prev) =>
           prev.map((c) =>
             c.id === editingComment.parentId
@@ -244,13 +577,18 @@ export const CommentSection: React.FC<CommentSectionProps> = ({
           )
         );
       } else {
-        await editComment(postId, editingComment.id, uid, text);
+        const res: any = await editComment(postId, editingComment.id, uid, text);
+        if (res?.success === false) {
+          throw new Error(res?.error || 'Failed to edit comment');
+        }
         setComments((prev) =>
           prev.map((c) => (c.id === editingComment.id ? { ...c, text, editedAt: new Date() } : c))
         );
       }
+      await loadComments();
     } catch (e) {
       console.error("[CommentSection] editComment error:", e);
+      Alert.alert('Edit failed', (e as any)?.message || 'Unable to edit comment');
     } finally {
       setEditingComment(null);
     }
@@ -269,7 +607,10 @@ export const CommentSection: React.FC<CommentSectionProps> = ({
           try {
             const uid = getCurrentUserId();
             if (isReply && parentId) {
-              await deleteCommentReply(postId, parentId, commentId, uid, postOwnerId);
+              const res: any = await deleteCommentReply(postId, parentId, commentId, uid, postOwnerId);
+              if (res?.success === false) {
+                throw new Error(res?.error || 'Failed to delete reply');
+              }
               setComments((prev) =>
                 prev.map((c) =>
                   c.id === parentId
@@ -278,12 +619,23 @@ export const CommentSection: React.FC<CommentSectionProps> = ({
                 )
               );
             } else {
-              await deleteComment(postId, commentId, uid, postOwnerId);
+              const res: any = await deleteComment(postId, commentId, uid, postOwnerId);
+              if (res?.success === false) {
+                throw new Error(res?.error || 'Failed to delete comment');
+              }
               setComments((prev) => prev.filter((c) => c.id !== commentId));
+              const nextCount = Number(res?.commentCount ?? res?.commentsCount);
+              if (Number.isFinite(nextCount)) {
+                feedEventEmitter.emitPostUpdated(postId, { commentCount: nextCount, commentsCount: nextCount });
+              } else {
+                feedEventEmitter.emitPostUpdated(postId, { commentDeleted: true });
+              }
               feedEventEmitter.emit("commentDeleted", { postId });
             }
+            await loadComments();
           } catch (e) {
             console.error("[CommentSection] deleteComment error:", e);
+            Alert.alert('Delete failed', (e as any)?.message || 'Unable to delete comment');
           }
         },
       },
@@ -328,6 +680,54 @@ export const CommentSection: React.FC<CommentSectionProps> = ({
     return `${Math.floor(d / 7)}w`;
   };
 
+  const runSubmit = (overrideText?: string): boolean => {
+    const text = replyTo
+      ? (overrideText ?? replyText ?? replyTextRef.current ?? '')
+      : (overrideText ?? newComment ?? newCommentRef.current ?? '');
+    if (!text?.trim() || isSubmitting) return false;
+
+    if (submitGuardRef.current) return false;
+    submitGuardRef.current = true;
+    setTimeout(() => {
+      submitGuardRef.current = false;
+    }, 800);
+
+    // Submit immediately on tap.
+    if (replyTo) handleAddReply(text);
+    else handleAddComment(text);
+
+    return true;
+  };
+
+  const handleSubmitCommentPress = () => {
+    submitRequestedRef.current = true;
+    const snapshotText = String(
+      replyTo
+        ? (replyText || replyTextRef.current || '')
+        : (newComment || newCommentRef.current || '')
+    );
+
+    pendingSubmitTextRef.current = snapshotText;
+    const submitted = runSubmit(snapshotText);
+    if (submitted) {
+      pendingSubmitTextRef.current = '';
+      submitRequestedRef.current = false;
+      return;
+    }
+
+    // One short retry for edge cases where focus handoff drops first tap.
+    if (snapshotText.trim()) {
+      if (submitRetryTimerRef.current) clearTimeout(submitRetryTimerRef.current);
+      submitRetryTimerRef.current = setTimeout(() => {
+        const ok = runSubmit(pendingSubmitTextRef.current);
+        if (ok) {
+          pendingSubmitTextRef.current = '';
+          submitRequestedRef.current = false;
+        }
+      }, 120);
+    }
+  };
+
   // ─────────────────────────────────────────────
   // Render comment (Instagram style — NO bubble)
   // ─────────────────────────────────────────────
@@ -338,13 +738,16 @@ export const CommentSection: React.FC<CommentSectionProps> = ({
     const reactions = comment.reactions || {};
     const heartCount = Object.keys(reactions).length;
     const userLiked = uid ? !!reactions[uid] : false;
+    const forcedOwnAvatar = (currentUserIdCandidates.includes(String(comment.userId || '')) || isSameUser(comment.userId, uid)) && !isGenericDefaultAvatar(resolvedCurrentAvatar)
+      ? resolvedCurrentAvatar
+      : comment.userAvatar;
 
     return (
       <View key={comment.id} style={[styles.commentRow, isReply && styles.replyRow]}>
         {/* Avatar */}
         <CommentAvatar
           userId={comment.userId}
-          userAvatar={comment.userAvatar}
+          userAvatar={forcedOwnAvatar}
           size={isReply ? 30 : 40}
         />
 
@@ -442,7 +845,7 @@ export const CommentSection: React.FC<CommentSectionProps> = ({
 
       {/* ── Instagram-style sticky footer (emoji row + input) ── */}
       {showInput && (
-        <View style={[styles.footer, { paddingBottom: Platform.OS === 'android' ? Math.max(insets.bottom, 12) : Math.max(insets.bottom, 12) }]}>
+        <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, 12) }]}> 
           {/* Replying-to banner */}
           {replyTo && (
             <View style={styles.replyBanner}>
@@ -456,27 +859,22 @@ export const CommentSection: React.FC<CommentSectionProps> = ({
             </View>
           )}
 
-          {/* Emoji quick-reaction row (simplified) */}
+          {/* Emoji row: Integrated more cleanly */}
           <View style={styles.emojiRow}>
             {['❤️', '🙌', '🔥', '👏', '😢', '😍', '😮', '😂'].map((emoji) => (
               <TouchableOpacity
                 key={emoji}
                 style={styles.emojiBtn}
+                activeOpacity={0.6}
                 onPress={() => {
-                  if (emoji === '➕') {
-                    // Could open a full emoji picker here, for now rely on native keyboard.
-                    // Or ideally we shouldn't show this if we can't implement it easily without a library.
-                    // Let's just remove the static list and keep it clean, or keep standard 8.
+                  if (replyTo) {
+                    const next = (replyTextRef.current || "") + emoji;
+                    replyTextRef.current = next;
+                    setReplyText(next);
                   } else {
-                    if (replyTo) {
-                      const next = replyTextRef.current + emoji;
-                      replyTextRef.current = next;
-                      setReplyText(next);
-                    } else {
-                      const next = newCommentRef.current + emoji;
-                      newCommentRef.current = next;
-                      setNewComment(next);
-                    }
+                    const next = (newCommentRef.current || "") + emoji;
+                    newCommentRef.current = next;
+                    setNewComment(next);
                   }
                 }}
               >
@@ -487,11 +885,15 @@ export const CommentSection: React.FC<CommentSectionProps> = ({
 
           {/* Input row: avatar + pill input + emoji/send */}
           <View style={styles.inputRow}>
-            <Image
-              source={{ uri: currentAvatar && currentAvatar.trim() !== '' ? currentAvatar : 'https://via.placeholder.com/200x200.png?text=Profile' }}
+            <ExpoImage
+              source={{ uri: inputAvatarFailed ? DEFAULT_AVATAR_URL : (resolvedCurrentAvatar && resolvedCurrentAvatar.trim() !== '' ? resolvedCurrentAvatar : DEFAULT_AVATAR_URL) }}
               style={styles.inputAvatar}
+              contentFit="cover"
+              cachePolicy="memory-disk"
+              onError={() => setInputAvatarFailed(true)}
             />
             <TextInput
+              ref={inputRef}
               style={styles.input}
               placeholder={replyTo ? 'Write a reply...' : 'Add a comment...'}
               placeholderTextColor="#aaa"
@@ -500,21 +902,49 @@ export const CommentSection: React.FC<CommentSectionProps> = ({
                 if (replyTo) { replyTextRef.current = t; setReplyText(t); }
                 else { newCommentRef.current = t; setNewComment(t); }
               }}
+              onEndEditing={(e) => {
+                const t = String(e?.nativeEvent?.text || '');
+                if (replyTo) { replyTextRef.current = t; setReplyText(t); }
+                else { newCommentRef.current = t; setNewComment(t); }
+                if (submitRequestedRef.current) {
+                  const ok = runSubmit(t);
+                  if (ok) {
+                    pendingSubmitTextRef.current = '';
+                    submitRequestedRef.current = false;
+                  }
+                }
+              }}
+              onBlur={(e) => {
+                const t = String(e?.nativeEvent?.text || '');
+                if (replyTo) { replyTextRef.current = t; setReplyText(t); }
+                else { newCommentRef.current = t; setNewComment(t); }
+                if (submitRequestedRef.current) {
+                  const ok = runSubmit(t);
+                  if (ok) {
+                    pendingSubmitTextRef.current = '';
+                    submitRequestedRef.current = false;
+                  }
+                }
+              }}
               multiline
               maxLength={500}
               blurOnSubmit={false}
               returnKeyType="default"
+              onSubmitEditing={handleSubmitCommentPress}
+              rejectResponderTermination={false}
               editable={!isSubmitting}
             />
-            <TouchableOpacity
+            <Pressable
               style={styles.sendBtn}
-              onPress={() => {
-                const text = replyTo ? replyTextRef.current : newCommentRef.current;
-                Keyboard.dismiss();
-                if (replyTo) handleAddReply(text);
-                else handleAddComment(text);
+              onTouchStart={() => {
+                submitRequestedRef.current = true;
+                pendingSubmitTextRef.current = String(
+                  replyTo
+                    ? (replyText || replyTextRef.current || '')
+                    : (newComment || newCommentRef.current || '')
+                );
               }}
-              disabled={!(replyTo ? replyText : newComment).trim() || isSubmitting}
+              onPress={handleSubmitCommentPress}
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             >
               {isSubmitting ? (
@@ -523,13 +953,13 @@ export const CommentSection: React.FC<CommentSectionProps> = ({
                 <Text
                   style={[
                     styles.sendText,
-                    !(replyTo ? replyText : newComment).trim() && styles.sendTextDisabled,
+                    !((replyTo ? replyText : newComment) || '').trim() && styles.sendTextDisabled,
                   ]}
                 >
                   Post
                 </Text>
               )}
-            </TouchableOpacity>
+            </Pressable>
           </View>
         </View>
       )}
@@ -695,7 +1125,15 @@ const styles = StyleSheet.create({
     color: "#111",
     maxHeight: 100,
   },
-  sendBtn: { paddingHorizontal: 4 },
+  sendBtn: {
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    minWidth: 64,
+    minHeight: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 14,
+  },
   sendText: { fontSize: 14, fontWeight: "700", color: "#0095f6" },
   sendTextDisabled: { color: "#b3d4f5" },
 

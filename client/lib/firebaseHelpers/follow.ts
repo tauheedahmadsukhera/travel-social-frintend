@@ -13,11 +13,7 @@ export async function checkFollowStatus(followerId: string, followingId: string)
   }
 }
 
-// Stub for isApprovedFollower
-export async function isApprovedFollower(followerId: string, followingId: string) {
-  // Implement actual logic as needed
-  return true;
-}
+// isApprovedFollower is exported from `./user` (single barrel export).
 
 export async function followUser(followerId: string, followingId: string) {
   try {

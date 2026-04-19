@@ -23,6 +23,8 @@ import {
   TouchableOpacity,
   View
 } from 'react-native';
+import { safeRouterBack } from '@/lib/safeRouterBack';
+import { useAppDialog } from '@/src/_components/AppDialogProvider';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { API_BASE_URL } from '../../lib/api';
 import { useCurrentLocation } from '../../hooks/useCurrentLocation';
@@ -48,11 +50,13 @@ import { getTaggedPosts, getUserHighlights as getUserHighlightsAPI, getUserPosts
 import { apiService } from '@/src/_services/apiService';
 import { getKeyboardOffset, getModalHeight } from '../../utils/responsive';
 import { getPassportData } from '../../lib/firebaseHelpers/passport';
-import { feedEventEmitter } from '../../lib/feedEventEmitter';
+import { feedEventEmitter } from '@/lib/feedEventEmitter';
 import * as ImagePicker from 'expo-image-picker';
 import * as ImageManipulator from 'expo-image-manipulator';
 import { ResizeMode, Video } from 'expo-av';
 import { resolveCanonicalUserId } from '../../lib/currentUser';
+import { hapticLight, hapticMedium } from '../../lib/haptics';
+import { getCachedData, setCachedData, useNetworkStatus, useOfflineBanner } from '../../hooks/useOffline';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const isSmallDevice = SCREEN_HEIGHT < 700;
@@ -290,6 +294,7 @@ export default function Profile({ userIdProp }: any) {
   const [currentUserFirebaseAlias, setCurrentUserFirebaseAlias] = useState<string | null>(null);
   const [authLoading, setAuthLoading] = useState(false);
   const router = useRouter();
+  const { showSuccess } = useAppDialog();
   const params = useLocalSearchParams();
 
   // Get current user ID from AsyncStorage (token-based auth)
@@ -322,9 +327,7 @@ export default function Profile({ userIdProp }: any) {
     viewedUserId = currentUserId || undefined;
   }
 
-  if (__DEV__) {
-    console.log('[Profile] viewedUserId extracted:', viewedUserId, 'currentUserId:', currentUserId, 'userIdProp:', userIdProp);
-  }
+  // Avoid noisy logs on a hot screen
 
   // Determine if viewing own profile - compare IDs or check if no explicit user passed
   const selfIds = new Set(
@@ -338,9 +341,7 @@ export default function Profile({ userIdProp }: any) {
     viewedUserId = currentUserId;
   }
 
-  if (__DEV__) {
-    console.log('[Profile] isOwnProfile:', isOwnProfile, 'viewedUserId===currentUserId:', viewedUserId === currentUserId);
-  }
+  // Avoid noisy logs on a hot screen
 
   const [profile, setProfile] = useState<ProfileData | null>(null);
   const [profileAvatarFailed, setProfileAvatarFailed] = useState(false);
@@ -368,6 +369,12 @@ export default function Profile({ userIdProp }: any) {
   const [commentModalAvatar, setCommentModalAvatar] = useState<string>('');
   const [highlights, setHighlights] = useState<Highlight[]>([]);
   const [isFollowing, setIsFollowing] = useState(false);
+  const { isOnline } = useNetworkStatus();
+  const { showBanner } = useOfflineBanner();
+  const PROFILE_CACHE_KEY = useMemo(
+    () => `profile_v2_${String(viewedUserId || 'unknown')}_${String(currentUserId || 'anon')}`,
+    [viewedUserId, currentUserId]
+  );
 
   // Story Upload State
   const [showUploadModal, setShowUploadModal] = useState(false);
@@ -385,7 +392,8 @@ export default function Profile({ userIdProp }: any) {
   const MIN_PROFILE_RELOAD_MS = 2500;
   const MIN_REFRESH_EVENT_GAP_MS = 1200;
   const { hideHeader, showHeader, headerScrollY } = useHeaderVisibility();
-  const headerHeight = useHeaderHeight();
+  // Header padding is handled by Tabs sceneStyle (see (tabs)/_layout.tsx)
+  const headerHeight = 0;
 
   // Always show the TopMenu when this tab gains focus
   // (fixes: header stays hidden if Home screen hid it before user switches to Profile)
@@ -440,6 +448,7 @@ export default function Profile({ userIdProp }: any) {
       Alert.alert('Login required', 'Please login to create a story');
       return;
     }
+    hapticLight();
     router.push('/story-creator' as any);
   };
 
@@ -469,6 +478,7 @@ export default function Profile({ userIdProp }: any) {
   // Handlers
   const handleFollowToggle = async () => {
     if (!currentUserId || !viewedUserId || followLoading || isOwnProfile) return;
+    hapticMedium();
     setFollowLoading(true);
     try {
       if (isPrivate) {
@@ -532,6 +542,8 @@ export default function Profile({ userIdProp }: any) {
 
   const handleMessage = () => {
     if (!viewedUserId || !profile) return;
+
+    hapticLight();
 
     // Check if account is private and user is not approved follower
     if (isPrivate && !approvedFollower) {
@@ -619,7 +631,7 @@ export default function Profile({ userIdProp }: any) {
 
                 setUserMenuVisible(false);
                 Alert.alert('Blocked', `${profile?.name || 'User'} has been blocked.`, [
-                  { text: 'OK', onPress: () => router.back() }
+                  { text: 'OK', onPress: () => safeRouterBack() }
                 ]);
               } else {
                 throw new Error('Block request failed');
@@ -684,6 +696,31 @@ export default function Profile({ userIdProp }: any) {
       const fetchData = async () => {
         // Don't fetch data if viewedUserId is not set yet
         if (!viewedUserId) {
+          setLoading(false);
+          return;
+        }
+
+        // Cache-first bootstrap: hydrate UI instantly if we have cached profile data.
+        try {
+          const cached = await getCachedData<any>(PROFILE_CACHE_KEY);
+          if (cached) {
+            if (cached.profile) setProfile(cached.profile);
+            if (typeof cached.isPrivate === 'boolean') setIsPrivate(cached.isPrivate);
+            if (typeof cached.approvedFollower === 'boolean') setApprovedFollower(cached.approvedFollower);
+            if (typeof cached.followRequestPending === 'boolean') setFollowRequestPending(cached.followRequestPending);
+            if (typeof cached.passportLocationsCount === 'number') setPassportLocationsCount(cached.passportLocationsCount);
+            if (Array.isArray(cached.posts)) setPosts(cached.posts);
+            if (Array.isArray(cached.sections)) setSections(cached.sections);
+            if (Array.isArray(cached.highlights)) setHighlights(cached.highlights);
+            if (Array.isArray(cached.userStories)) setUserStories(cached.userStories);
+            if (Array.isArray(cached.taggedPosts)) setTaggedPosts(cached.taggedPosts);
+            if (Array.isArray(cached.savedSectionPosts)) setSavedSectionPosts(cached.savedSectionPosts);
+            setLoading(false);
+          }
+        } catch { }
+
+        // Offline: keep cached UI; don’t block with full-screen loaders.
+        if (!isOnline && hasLoadedOnceRef.current) {
           setLoading(false);
           return;
         }
@@ -805,10 +842,11 @@ export default function Profile({ userIdProp }: any) {
             const followStatusRes = await followStatusPromise;
 
             // Passport count
+            let passportCount = 0;
             if (passportRes) {
               const stamps = Array.isArray((passportRes as any)?.stamps) ? (passportRes as any).stamps : [];
-              const count = typeof (passportRes as any)?.ticketCount === 'number' ? (passportRes as any).ticketCount : stamps.length;
-              setPassportLocationsCount(count);
+              passportCount = typeof (passportRes as any)?.ticketCount === 'number' ? (passportRes as any).ticketCount : stamps.length;
+              setPassportLocationsCount(passportCount);
             } else {
               setPassportLocationsCount(0);
             }
@@ -884,7 +922,8 @@ export default function Profile({ userIdProp }: any) {
               .filter((h: any) => !!h.id);
             setHighlights(normalizedHighlights);
 
-            // Stories
+            // Stories (keep a local copy for offline cache — `transformedStories` is block-scoped)
+            let userStoriesForCache: any[] = [];
             const storiesRes: any = await storiesPromise;
             if (storiesRes?.success && Array.isArray(storiesRes?.stories)) {
               const now = Date.now();
@@ -910,8 +949,10 @@ export default function Profile({ userIdProp }: any) {
                 const tb = Date.parse(String(b?.createdAt || 0)) || 0;
                 return ta - tb;
               });
-              setUserStories(transformedStories.slice(0, 60));
+              userStoriesForCache = transformedStories.slice(0, 60);
+              setUserStories(userStoriesForCache);
             } else {
+              userStoriesForCache = [];
               setUserStories([]);
             }
 
@@ -962,6 +1003,23 @@ export default function Profile({ userIdProp }: any) {
               savedData = Array.from(savedById.values());
             }
             setSavedSectionPosts(filterOutBlocked(savedData, blockedSet));
+
+            // Persist cache snapshot for offline mode (best-effort, do not block UI)
+            try {
+              await setCachedData(PROFILE_CACHE_KEY, {
+                profile: profileData,
+                isPrivate: derivedIsPrivate,
+                approvedFollower: derivedApprovedFollower,
+                followRequestPending: !!profileData?.followRequestPending,
+                passportLocationsCount: passportCount,
+                posts: filteredPosts.slice(0, 36),
+                sections: sectionsData,
+                highlights: normalizedHighlights,
+                userStories: userStoriesForCache,
+                taggedPosts: filterOutBlocked(taggedData, blockedSet),
+                savedSectionPosts: filterOutBlocked(savedData, blockedSet),
+              }, { ttl: 24 * 60 * 60 * 1000 });
+            } catch { }
 
             if (__DEV__) {
               console.log('[Profile] final data counts:', {
@@ -1037,7 +1095,7 @@ export default function Profile({ userIdProp }: any) {
             if (updateRes.success) {
               setProfile(prev => prev ? { ...prev, avatar: uploadRes.url ?? '' } : prev);
               await AsyncStorage.setItem('userAvatar', String(uploadRes.url));
-              Alert.alert('Success', 'Profile picture updated!');
+              showSuccess('Profile picture updated!');
             } else {
               Alert.alert('Error', 'Failed to update profile avatar: ' + (updateRes.error || 'Unknown error'));
             }
@@ -1061,6 +1119,25 @@ export default function Profile({ userIdProp }: any) {
       if (event.type === 'POST_DELETED' && event.postId) {
         if (__DEV__) console.log('[Profile] Post deleted event received:', event.postId);
         setPosts(prev => prev.filter(p => (p.id || p._id) !== event.postId));
+      }
+      if (event.type === 'POST_UPDATED' && event.postId) {
+        const patch = event.data && typeof event.data === 'object' ? event.data : {};
+        const apply = (p: any) => {
+          if (!p) return p;
+          const ids = [String(p.id || ''), String(p._id || ''), String((p as any).postId || '')].filter(Boolean);
+          if (!ids.includes(String(event.postId))) return p;
+          return {
+            ...p,
+            ...(patch.caption !== undefined ? { caption: patch.caption } : null),
+            ...(patch.content !== undefined ? { content: patch.content } : null),
+            updatedAt: new Date().toISOString(),
+          };
+        };
+        setPosts(prev => (Array.isArray(prev) ? prev.map(apply) : prev));
+      }
+      if (event.type === 'HIGHLIGHT_DELETED' && (event as any).highlightId) {
+        const hid = String((event as any).highlightId);
+        setHighlights((prev) => (Array.isArray(prev) ? prev.filter((h: any) => String(h?.id || h?._id || '') !== hid) : prev));
       }
     });
 
@@ -1114,7 +1191,10 @@ export default function Profile({ userIdProp }: any) {
           <Text style={{ fontSize: 18, color: '#999', marginBottom: 20 }}>Please log in to view your profile</Text>
           <TouchableOpacity
             style={{ backgroundColor: '#007aff', paddingHorizontal: 30, paddingVertical: 12, borderRadius: 8 }}
-            onPress={() => router.push('/login' as any)}
+            onPress={() => {
+              hapticLight();
+              router.push('/login' as any);
+            }}
           >
             <Text style={{ color: '#fff', fontSize: 16, fontWeight: 'bold' }}>Go to Login</Text>
           </TouchableOpacity>
@@ -1125,18 +1205,41 @@ export default function Profile({ userIdProp }: any) {
 
   return (
     <SafeAreaView style={styles.container} edges={[]}>
+      {showBanner && (
+        <View style={styles.offlineBanner}>
+          <Text style={styles.offlineBannerText}>You’re offline — showing cached profile</Text>
+        </View>
+      )}
       {/* Header for other users' profiles with back button and 3-dots menu */}
       {!isOwnProfile && (
         <View style={styles.profileHeader}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.headerBackBtn}>
+          <TouchableOpacity
+            onPress={() => {
+              hapticLight();
+              safeRouterBack();
+            }}
+            style={styles.headerBackBtn}
+          >
             <Feather name="arrow-left" size={20} color="#000" />
           </TouchableOpacity>
           <Text style={styles.headerTitle} numberOfLines={1}>{profile?.username || profile?.name || (profile as any)?.displayName || 'Profile'}</Text>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-            <TouchableOpacity onPress={() => router.push('/passport' as any)} style={styles.headerMenuBtn}>
+            <TouchableOpacity
+              onPress={() => {
+                hapticLight();
+                router.push('/passport' as any);
+              }}
+              style={styles.headerMenuBtn}
+            >
               <Feather name="briefcase" size={20} color="#000" />
             </TouchableOpacity>
-            <TouchableOpacity onPress={() => setUserMenuVisible(true)} style={styles.headerMenuBtn}>
+            <TouchableOpacity
+              onPress={() => {
+                hapticLight();
+                setUserMenuVisible(true);
+              }}
+              style={styles.headerMenuBtn}
+            >
               <Feather name="more-vertical" size={20} color="#000" />
             </TouchableOpacity>
           </View>
@@ -1182,6 +1285,7 @@ export default function Profile({ userIdProp }: any) {
             <TouchableOpacity
               activeOpacity={0.8}
               onPress={() => {
+                hapticLight();
                 if (userStories.length > 0) {
                   setStoriesViewerVisible(true);
                 } else if (isOwnProfile) {
@@ -1272,6 +1376,7 @@ export default function Profile({ userIdProp }: any) {
               <TouchableOpacity
                 style={styles.statItem}
                 onPress={() => {
+                  hapticLight();
                   if (!viewedUserId) return;
                   router.push({
                     pathname: '/user/[userId]/locations',
@@ -1290,6 +1395,7 @@ export default function Profile({ userIdProp }: any) {
               <TouchableOpacity
                 style={styles.statItem}
                 onPress={() => {
+                  hapticLight();
                   if (!isPrivate || isOwnProfile || approvedFollower) {
                     router.push(`/friends?userId=${viewedUserId}&tab=followers` as any);
                   }
@@ -1302,6 +1408,7 @@ export default function Profile({ userIdProp }: any) {
               <TouchableOpacity
                 style={styles.statItem}
                 onPress={() => {
+                  hapticLight();
                   if (!isPrivate || isOwnProfile || approvedFollower) {
                     router.push(`/friends?userId=${viewedUserId}&tab=following` as any);
                   }
@@ -1328,9 +1435,12 @@ export default function Profile({ userIdProp }: any) {
           
           {/* Passport Button for other users */}
           {!isOwnProfile && (
-            <TouchableOpacity 
-              style={styles.passportBtnLarge} 
-              onPress={() => router.push({ pathname: '/passport', params: { user: viewedUserId } } as any)}
+            <TouchableOpacity
+              style={styles.passportBtnLarge}
+              onPress={() => {
+                hapticLight();
+                router.push({ pathname: '/passport', params: { user: viewedUserId } } as any);
+              }}
             >
               <Feather name="briefcase" size={18} color="#000" style={{ marginRight: 8 }} />
               <Text style={styles.passportBtnText}>Passport</Text>
@@ -1369,6 +1479,7 @@ export default function Profile({ userIdProp }: any) {
                     key={url}
                     activeOpacity={0.7}
                     onPress={async () => {
+                      hapticLight();
                       try {
                         const canOpen = await Linking.canOpenURL(url);
                         if (!canOpen) {
@@ -1397,11 +1508,23 @@ export default function Profile({ userIdProp }: any) {
         {/* Action Buttons: Owner (Profile | Collections) */}
         {isOwnProfile && (
           <View style={[styles.pillRow, { marginBottom: 0 }]}>
-            <TouchableOpacity style={[styles.pillBtn, { flex: 1, paddingVertical: 8 }]} onPress={() => router.push({ pathname: '/edit-profile', params: { userId: viewedUserId } } as any)}>
+            <TouchableOpacity
+              style={[styles.pillBtn, { flex: 1, paddingVertical: 8 }]}
+              onPress={() => {
+                hapticLight();
+                router.push({ pathname: '/edit-profile', params: { userId: viewedUserId } } as any);
+              }}
+            >
               <Feather name="edit-2" size={14} color="#000" style={{ marginRight: 6 }} />
               <Text style={styles.pillText}>Profile</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={[styles.pillBtn, { flex: 1, paddingVertical: 8 }]} onPress={() => router.push('/(tabs)/saved' as any)}>
+            <TouchableOpacity
+              style={[styles.pillBtn, { flex: 1, paddingVertical: 8 }]}
+              onPress={() => {
+                hapticLight();
+                router.push('/(tabs)/saved' as any);
+              }}
+            >
               <Feather name="edit-2" size={14} color="#000" style={{ marginRight: 6 }} />
               <Text style={styles.pillText}>Collections</Text>
             </TouchableOpacity>
@@ -1438,7 +1561,13 @@ export default function Profile({ userIdProp }: any) {
               </TouchableOpacity>
             )}
             {(!isPrivate || approvedFollower) && (
-              <TouchableOpacity style={[styles.pillBtn, { flex: 1, paddingVertical: 8 }]} onPress={() => setViewCollectionsModal(true)}>
+              <TouchableOpacity
+                style={[styles.pillBtn, { flex: 1, paddingVertical: 8 }]}
+                onPress={() => {
+                  hapticLight();
+                  setViewCollectionsModal(true);
+                }}
+              >
                 <Ionicons name="folder-outline" size={16} color="#000" style={{ marginRight: 6 }} />
                 <Text style={styles.pillText}>Collections</Text>
               </TouchableOpacity>
@@ -1481,6 +1610,7 @@ export default function Profile({ userIdProp }: any) {
             <TouchableOpacity
               style={[styles.segmentBtn, segmentTab === 'grid' && styles.segmentBtnActive]}
               onPress={() => {
+                hapticLight();
                 setSegmentTab('grid');
                 setSelectedSection(null); // Clear section filter when clicking grid icon
               }}
@@ -1488,11 +1618,23 @@ export default function Profile({ userIdProp }: any) {
               <Ionicons name="grid-outline" size={24} color={segmentTab === 'grid' ? '#000' : '#999'} />
             </TouchableOpacity>
             {PROFILE_MAP_ENABLED && (
-              <TouchableOpacity style={[styles.segmentBtn, segmentTab === 'map' && styles.segmentBtnActive]} onPress={() => setSegmentTab('map')}>
+              <TouchableOpacity
+                style={[styles.segmentBtn, segmentTab === 'map' && styles.segmentBtnActive]}
+                onPress={() => {
+                  hapticLight();
+                  setSegmentTab('map');
+                }}
+              >
                 <Ionicons name="location-outline" size={24} color={segmentTab === 'map' ? '#000' : '#999'} />
               </TouchableOpacity>
             )}
-            <TouchableOpacity style={[styles.segmentBtn, segmentTab === 'tagged' && styles.segmentBtnActive]} onPress={() => setSegmentTab('tagged')}>
+            <TouchableOpacity
+              style={[styles.segmentBtn, segmentTab === 'tagged' && styles.segmentBtnActive]}
+              onPress={() => {
+                hapticLight();
+                setSegmentTab('tagged');
+              }}
+            >
               <Ionicons name="pricetag-outline" size={24} color={segmentTab === 'tagged' ? '#000' : '#999'} />
             </TouchableOpacity>
           </View>
@@ -1533,6 +1675,7 @@ export default function Profile({ userIdProp }: any) {
                       imageUrl={imageUrl}
                       avatarUrl={avatarUrl}
                       onPress={() => {
+                        hapticLight();
                         const targetUserId = String(viewedUserId || '');
                         const tappedPostId = String(post?.id || post?._id || '');
 
@@ -1586,7 +1729,10 @@ export default function Profile({ userIdProp }: any) {
                   <TouchableOpacity
                     key={`section-${String((s as any)?._id || s.name)}-${idx}`}
                     activeOpacity={0.8}
-                    onPress={() => setSelectedSection(isActive ? null : s.name)}
+                    onPress={() => {
+                      hapticLight();
+                      setSelectedSection(isActive ? null : s.name);
+                    }}
                     style={{ alignItems: 'center', width: 60 }}
                   >
                     <View style={{
@@ -1635,6 +1781,7 @@ export default function Profile({ userIdProp }: any) {
                   style={styles.gridItem}
                   activeOpacity={0.8}
                   onPress={() => {
+                    hapticLight();
                     const postUserId = typeof p?.userId === 'string' ? p.userId : p?.userId?._id;
                     const targetUserId = postUserId || viewedUserId || '';
                     const tappedPostId = String(p?.id || p?._id || '');
@@ -1681,7 +1828,10 @@ export default function Profile({ userIdProp }: any) {
         <TouchableOpacity
           style={styles.menuOverlay}
           activeOpacity={1}
-          onPress={() => setViewCollectionsModal(false)}
+          onPress={() => {
+            hapticLight();
+            setViewCollectionsModal(false);
+          }}
         >
           <TouchableOpacity 
             activeOpacity={1} 
@@ -2108,7 +2258,7 @@ export default function Profile({ userIdProp }: any) {
                           setUploading(false);
                           // Signal refresh
                           feedEventEmitter.emit('feedUpdated');
-                          Alert.alert('Success', 'Story shared successfully!');
+                          showSuccess('Story shared successfully!');
                         }, 500);
                       }
                     } catch (err) {
@@ -2129,6 +2279,17 @@ export default function Profile({ userIdProp }: any) {
 }
 
 const styles = StyleSheet.create({
+  offlineBanner: {
+    marginHorizontal: 16,
+    marginTop: 8,
+    marginBottom: 2,
+    backgroundColor: '#111',
+    borderRadius: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    opacity: 0.92,
+  },
+  offlineBannerText: { color: '#fff', fontWeight: '700', textAlign: 'center' },
   headerBackBtn: { padding: 8, marginRight: 8 },
   headerTitle: { fontSize: 18, fontWeight: 'bold', color: '#222', flex: 1, textAlign: 'center' },
   headerMenuBtn: { padding: 8, marginLeft: 8, marginTop: 4 },

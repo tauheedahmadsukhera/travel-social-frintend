@@ -6,7 +6,9 @@ import { ActivityIndicator, Alert, Image, KeyboardAvoidingView, Platform, Scroll
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { uploadImage } from '../../lib/firebaseHelpers';
 import { checkUsernameAvailability, signUpWithUsername } from '../../services/usernameAuthService';
+import { AuthBrandHeader } from '@/src/_components/auth/AuthBrandHeader';
 import CustomButton from '@/src/_components/auth/CustomButton';
+import { safeRouterBack } from '@/lib/safeRouterBack';
 
 export default function UsernameSignUpScreen() {
   const router = useRouter();
@@ -89,16 +91,8 @@ export default function UsernameSignUpScreen() {
       const result = await signUpWithUsername(username, name, avatarUrl);
 
       if (result.success) {
-        Alert.alert(
-          'Success!',
-          'Your account has been created. Please use Email or Phone login to continue.',
-          [
-            {
-              text: 'OK',
-              onPress: () => router.replace('/auth/login-options')
-            }
-          ]
-        );
+        // No success popup (Instagram-like)
+        router.replace('/auth/login-options');
       } else {
         Alert.alert('Sign-Up Failed', result.error || 'Could not create account');
       }
@@ -124,7 +118,7 @@ export default function UsernameSignUpScreen() {
             {/* Header */}
             <View style={styles.header}>
               <TouchableOpacity
-                onPress={() => router.back()}
+                onPress={() => safeRouterBack()}
                 style={styles.backButton}
               >
                 <Ionicons name="arrow-back" size={24} color="#000" />
@@ -133,18 +127,10 @@ export default function UsernameSignUpScreen() {
 
             {/* Title Section */}
             <View style={styles.titleSection}>
-              <View style={{ position: 'relative', height: 60, width: 220, justifyContent: 'center', alignItems: 'center', marginBottom: 12 }}>
-                <Text style={{ fontSize: 36, fontWeight: '900', color: '#0A3D62', letterSpacing: -1 }}>
-                  Trave<Text style={{ color: '#667eea' }}>Social</Text>
-                </Text>
-                <Image
-                  source={{ uri: 'https://res.cloudinary.com/dinwxxnzm/image/upload/v1766418070/logo/logo.png' }}
-                  style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'transparent' }}
-                  resizeMode="contain"
-                />
-              </View>
-              <Text style={styles.title}>Your profile is now verified</Text>
-              <Text style={styles.subtitle}>Let&apos;s keep it quick, 2 steps and you&apos;re in.</Text>
+              <AuthBrandHeader
+                title="Your profile is now verified"
+                subtitle={`Let's keep it quick, 2 steps and you're in.`}
+              />
             </View>
 
             {/* Avatar Placeholder */}
@@ -261,18 +247,6 @@ const styles = StyleSheet.create({
     fontSize: 32,
     color: '#0A3D62',
     marginBottom: 12,
-  },
-  title: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#000',
-    marginBottom: 8,
-    textAlign: 'center',
-  },
-  subtitle: {
-    fontSize: 14,
-    color: '#666',
-    textAlign: 'center',
   },
   avatarContainer: {
     alignItems: 'center',

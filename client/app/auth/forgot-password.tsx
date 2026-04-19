@@ -3,8 +3,10 @@ import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import { Alert, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { AuthBrandHeader } from '@/src/_components/auth/AuthBrandHeader';
 import CustomButton from '@/src/_components/auth/CustomButton';
 import { API_BASE_URL } from '../../lib/api';
+import { safeRouterBack } from '@/lib/safeRouterBack';
 
 export default function ForgotPasswordScreen() {
   const router = useRouter();
@@ -77,7 +79,7 @@ export default function ForgotPasswordScreen() {
             {/* Header */}
             <View style={styles.header}>
               <TouchableOpacity 
-                onPress={() => router.back()}
+                onPress={() => safeRouterBack()}
                 style={styles.backButton}
               >
                 <Ionicons name="arrow-back" size={24} color="#000" />
@@ -86,10 +88,10 @@ export default function ForgotPasswordScreen() {
 
             {/* Title Section */}
             <View style={styles.titleSection}>
-              <Text style={styles.title}>Forgot password?</Text>
-              <Text style={styles.subtitle}>
-                Enter your email address and we&apos;ll send you a link to reset your password.
-              </Text>
+              <AuthBrandHeader
+                title="Forgot password?"
+                subtitle={`Enter your email address and we'll send you a link to reset your password.`}
+              />
             </View>
 
             {/* Email Input */}
@@ -128,7 +130,7 @@ export default function ForgotPasswordScreen() {
 
             {/* Back to Login */}
             <TouchableOpacity
-              onPress={() => router.back()}
+              onPress={() => safeRouterBack()}
               style={styles.backToLoginButton}
               disabled={loading}
             >
@@ -165,17 +167,6 @@ const styles = StyleSheet.create({
   },
   titleSection: {
     marginBottom: 15,
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: '700',
-    color: '#000',
-    marginBottom: 8,
-  },
-  subtitle: {
-    fontSize: 14,
-    color: '#666',
-    lineHeight: 20,
   },
   inputContainer: {
     marginBottom: 12,

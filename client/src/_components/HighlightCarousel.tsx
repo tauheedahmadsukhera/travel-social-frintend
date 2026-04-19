@@ -1,4 +1,4 @@
-﻿import { Ionicons } from '@expo/vector-icons';
+import { Ionicons } from '@expo/vector-icons';
 import React from 'react';
 import { FlatList, Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
@@ -18,7 +18,8 @@ interface HighlightCarouselProps {
 
 const HighlightCarousel: React.FC<HighlightCarouselProps> = ({ highlights, onPressHighlight, isOwnProfile, onAddHighlight }) => {
   const renderAddButton = () => {
-    if (!isOwnProfile) return null;
+    const hasHighlights = Array.isArray(highlights) && highlights.length > 0;
+    if (!isOwnProfile || hasHighlights || typeof onAddHighlight !== 'function') return null;
     return (
       <TouchableOpacity style={styles.highlightBubble} onPress={onAddHighlight}>
         <View style={styles.addButton}>
@@ -60,31 +61,32 @@ const styles = StyleSheet.create({
     width: 65,
   },
   coverImage: {
-    width: 56,
-    height: 56,
-    borderRadius: 10,
-    borderWidth: 2,
-    borderColor: '#0A3D62',
-    marginBottom: 4,
+    width: 65,
+    height: 65,
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: '#e0e0e0',
+    marginBottom: 6,
     backgroundColor: '#f0f0f0',
   },
   addButton: {
-    width: 56,
-    height: 56,
-    borderRadius: 10,
-    borderWidth: 2,
-    borderColor: '#0A3D62',
+    width: 65,
+    height: 65,
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: '#ddd',
     borderStyle: 'dashed',
-    marginBottom: 4,
-    backgroundColor: '#fff8f0',
+    marginBottom: 6,
+    backgroundColor: '#fafafa',
     justifyContent: 'center',
     alignItems: 'center',
   },
   title: {
-    fontSize: 11,
-    color: '#333',
+    fontSize: 12,
+    color: '#000',
     textAlign: 'center',
-    maxWidth: 60,
+    maxWidth: 70,
+    fontWeight: '400',
   },
 });
 

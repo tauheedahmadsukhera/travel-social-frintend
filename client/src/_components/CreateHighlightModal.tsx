@@ -1,21 +1,53 @@
-﻿import { Ionicons } from '@expo/vector-icons';
+import { Feather, Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
-import React, { useState } from 'react';
-import { ActivityIndicator, Alert, Image, KeyboardAvoidingView, Modal, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import {
+  ActivityIndicator,
+  Alert,
+  Image,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useAppDialog } from '@/src/_components/AppDialogProvider';
 import { createHighlight, uploadImage } from '../../lib/firebaseHelpers/index';
-import { getKeyboardOffset, getModalHeight } from '../../utils/responsive';
+import { getKeyboardOffset } from '../../utils/responsive';
 
 interface CreateHighlightModalProps {
   visible: boolean;
   onClose: () => void;
   userId: string;
   onSuccess?: () => void;
+  defaultCoverUri?: string;
+  initialName?: string;
+  storyToInclude?: string;
 }
 
-export default function CreateHighlightModal({ visible, onClose, userId, onSuccess }: CreateHighlightModalProps) {
-  const [name, setName] = useState('');
-  const [coverImage, setCoverImage] = useState<string | null>(null);
+export default function CreateHighlightModal({
+  visible,
+  onClose,
+  userId,
+  onSuccess,
+  defaultCoverUri,
+  initialName = '',
+  storyToInclude,
+}: CreateHighlightModalProps) {
+  const insets = useSafeAreaInsets();
+  const { showSuccess } = useAppDialog();
+  const [name, setName] = useState(initialName);
+  const [coverImage, setCoverImage] = useState<string | null>(defaultCoverUri || null);
+  const [visibility, setVisibility] = useState('Public');
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (defaultCoverUri) setCoverImage(defaultCoverUri);
+  }, [defaultCoverUri]);
 
   const handlePickImage = async () => {
     try {
@@ -34,6 +66,19 @@ export default function CreateHighlightModal({ visible, onClose, userId, onSucce
     }
   };
 
+  const handleVisibilitySelect = () => {
+    Alert.alert(
+      'Highlight Visibility',
+      'Choose who can see this highlight',
+      [
+        { text: 'Public', onPress: () => setVisibility('Public') },
+        { text: 'Private', onPress: () => setVisibility('Private') },
+        { text: 'Friends', onPress: () => setVisibility('Friends') },
+        { text: 'Cancel', style: 'cancel' }
+      ]
+    );
+  };
+
   const handleCreate = async () => {
     if (!name.trim()) {
       Alert.alert('Error', 'Please enter a highlight name');
@@ -48,21 +93,25 @@ export default function CreateHighlightModal({ visible, onClose, userId, onSucce
     setLoading(true);
 
     try {
-      // Upload cover image
-      const imagePath = `highlights/${userId}/${Date.now()}.jpg`;
-      const uploadResult = await uploadImage(coverImage, imagePath);
-
-      if (!uploadResult.success) {
-        throw new Error(uploadResult.error);
+      let finalCoverUrl = coverImage;
+      
+      // If coverImage is a local URI, upload it
+      if (coverImage.startsWith('file://')) {
+        const imagePath = `highlights/${userId}/${Date.now()}.jpg`;
+        const uploadResult = await uploadImage(coverImage, imagePath);
+        if (!uploadResult.success) throw new Error(uploadResult.error);
+        finalCoverUrl = uploadResult.url || '';
       }
 
-      // Create highlight
-      const result = await createHighlight(userId, name, uploadResult.url || '', []);
+      // Create highlight with visibility
+      const initialStoryIds = storyToInclude ? [storyToInclude] : [];
+      const result = await createHighlight(userId, name, finalCoverUrl, initialStoryIds, visibility);
 
       if (result.success) {
-        Alert.alert('Success', 'Highlight created successfully!');
+        showSuccess('Highlight created successfully!');
         setName('');
         setCoverImage(null);
+        setVisibility('Public');
         onSuccess?.();
         onClose();
       } else {
@@ -77,65 +126,69 @@ export default function CreateHighlightModal({ visible, onClose, userId, onSucce
 
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
-      <KeyboardAvoidingView 
-        style={{ flex: 1 }} 
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         keyboardVerticalOffset={getKeyboardOffset()}
       >
         <View style={styles.overlay}>
-          <TouchableOpacity 
-            style={{ flex: 1 }} 
-            activeOpacity={1} 
-            onPress={onClose}
-          />
-          <View style={[styles.container, { maxHeight: getModalHeight(0.7) }]}>
-            {/* Handle bar */}
+          <TouchableOpacity style={styles.dismissArea} activeOpacity={1} onPress={onClose} />
+          
+          <View style={[styles.container, { paddingBottom: Math.max(insets.bottom, 20) }]}>
             <View style={styles.handle} />
             
-            <Text style={styles.header}>Create Highlight</Text>
+            {/* Custom Header from Screenshot */}
+            <View style={styles.header}>
+              <TouchableOpacity onPress={onClose} disabled={loading}>
+                <Text style={styles.headerActionText}>Cancel</Text>
+              </TouchableOpacity>
+              <Text style={styles.headerTitle}>New highlight</Text>
+              <TouchableOpacity onPress={handleCreate} disabled={loading || !name.trim()}>
+                {loading ? (
+                  <ActivityIndicator size="small" color="#0A3D62" />
+                ) : (
+                  <Text style={[styles.headerActionText, styles.headerSaveText]}>Save</Text>
+                )}
+              </TouchableOpacity>
+            </View>
 
-            {/* Cover Image Picker */}
-            <TouchableOpacity style={styles.imagePicker} onPress={handlePickImage}>
+            {/* Central Cover Preview */}
+            <TouchableOpacity style={styles.coverContainer} onPress={handlePickImage}>
               {coverImage ? (
                 <Image source={{ uri: coverImage }} style={styles.coverImage} />
               ) : (
-                <View style={styles.placeholderContainer}>
+                <View style={styles.placeholderCover}>
                   <Ionicons name="image-outline" size={48} color="#ccc" />
-                  <Text style={styles.placeholderText}>Tap to select cover</Text>
                 </View>
               )}
             </TouchableOpacity>
 
-            {/* Name Input */}
-            <TextInput
-              style={styles.input}
-              placeholder="Highlight Name"
-              placeholderTextColor="#999"
-              value={name}
-              onChangeText={setName}
-              maxLength={30}
-            />
+            {/* Inputs & Settings */}
+            <View style={styles.content}>
+              <View style={styles.inputWrapper}>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Highlight name"
+                  placeholderTextColor="#999"
+                  value={name}
+                  onChangeText={setName}
+                  maxLength={30}
+                />
+              </View>
 
-            {/* Create Button */}
-            <TouchableOpacity 
-              style={[styles.createBtn, loading && styles.createBtnDisabled]} 
-              onPress={handleCreate}
-              disabled={loading}
-            >
-              {loading ? (
-                <ActivityIndicator color="#fff" />
-              ) : (
-                <>
-                  <Ionicons name="add-circle" size={24} color="#fff" />
-                  <Text style={styles.createText}>Create Highlight</Text>
-                </>
-              )}
-            </TouchableOpacity>
+              <TouchableOpacity style={styles.settingBtn} onPress={handleVisibilitySelect}>
+                <View style={styles.settingLeft}>
+                  <Ionicons name="eye-outline" size={22} color="#000" />
+                  <Text style={styles.settingText}>Visibility</Text>
+                </View>
+                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                  <Text style={{ color: '#007aff', fontSize: 15, marginRight: 8, fontWeight: '500' }}>{visibility}</Text>
+                  <Ionicons name="chevron-forward" size={20} color="#666" />
+                </View>
+              </TouchableOpacity>
 
-            {/* Cancel Button */}
-            <TouchableOpacity style={styles.cancelBtn} onPress={onClose}>
-              <Text style={styles.cancelText}>Cancel</Text>
-            </TouchableOpacity>
+
+            </View>
           </View>
         </View>
       </KeyboardAvoidingView>
@@ -149,86 +202,100 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.5)',
     justifyContent: 'flex-end',
   },
+  dismissArea: {
+    flex: 1,
+  },
   container: {
     backgroundColor: '#fff',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    padding: 24,
+    borderTopLeftRadius: 30,
+    borderTopRightRadius: 30,
+    minHeight: 380,
   },
   handle: {
     width: 40,
     height: 4,
-    backgroundColor: '#ddd',
+    backgroundColor: '#eee',
     borderRadius: 2,
     alignSelf: 'center',
-    marginBottom: 16,
+    marginVertical: 12,
   },
   header: {
-    fontSize: 22,
-    fontWeight: '700',
-    color: '#222',
-    textAlign: 'center',
-    marginBottom: 24,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 15,
   },
-  imagePicker: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
+  headerTitle: {
+    fontSize: 17,
+    fontWeight: '700',
+    color: '#000',
+  },
+  headerActionText: {
+    fontSize: 16,
+    color: '#333',
+    fontWeight: '500',
+  },
+  headerSaveText: {
+    color: '#8e8e8e', // Dimmed when inactive, update logic to make it blue if needed
+    fontWeight: '600',
+  },
+  coverContainer: {
+    width: 160,
+    height: 160,
+    borderRadius: 12,
     alignSelf: 'center',
-    marginBottom: 24,
+    marginTop: 20,
+    marginBottom: 40,
+    backgroundColor: '#f5f5f5',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 10,
+    elevation: 3,
     overflow: 'hidden',
-    borderWidth: 2,
-    borderColor: '#0A3D62',
   },
   coverImage: {
     width: '100%',
     height: '100%',
   },
-  placeholderContainer: {
-    width: '100%',
-    height: '100%',
-    backgroundColor: '#f5f5f5',
+  placeholderCover: {
+    flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  placeholderText: {
-    fontSize: 12,
-    color: '#999',
-    marginTop: 8,
+  content: {
+    paddingHorizontal: 20,
   },
-  input: {
-    backgroundColor: '#f5f5f5',
+  inputWrapper: {
+    borderWidth: 1,
+    borderColor: '#eee',
     borderRadius: 12,
-    padding: 16,
-    fontSize: 16,
-    color: '#222',
+    paddingHorizontal: 15,
     marginBottom: 20,
   },
-  createBtn: {
-    backgroundColor: '#0A3D62',
-    borderRadius: 12,
-    padding: 16,
+  input: {
+    height: 50,
+    fontSize: 15,
+    color: '#000',
+  },
+  settingBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    marginBottom: 12,
+    justifyContent: 'space-between',
+    paddingVertical: 18,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: '#f0f0f0',
   },
-  createBtnDisabled: {
-    opacity: 0.6,
-  },
-  createText: {
-    color: '#fff',
-    fontSize: 17,
-    fontWeight: '600',
-  },
-  cancelBtn: {
-    padding: 16,
+  settingLeft: {
+    flexDirection: 'row',
     alignItems: 'center',
+    flex: 1,
   },
-  cancelText: {
-    color: '#666',
+  settingText: {
     fontSize: 16,
+    color: '#000',
+    marginLeft: 15,
     fontWeight: '500',
   },
 });

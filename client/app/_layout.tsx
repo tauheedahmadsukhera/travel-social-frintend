@@ -1,15 +1,21 @@
 import { Ionicons } from '@expo/vector-icons';
 import * as Font from 'expo-font';
+import { StatusBar } from 'expo-status-bar';
 import { Stack } from "expo-router";
 // import { onAuthStateChanged } from "firebase/auth";
 import { useEffect, useState } from "react";
-import { ActivityIndicator, LogBox, Text as RNText, View } from "react-native";
+import { AppState, LogBox, View } from "react-native";
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as SystemUI from 'expo-system-ui';
 import 'react-native-gesture-handler';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { ErrorBoundary } from "../components/ErrorBoundary";
 // import { auth } from "../config/firebase";
 // import { initSentry } from "../lib/sentry";
 import { UserProvider } from "@/src/_components/UserContext";
+import { Audio } from 'expo-av';
+import { disconnectSocket, getSocket, initializeSocket } from '@/src/_services/socketService';
+import { AppDialogProvider } from '@/src/_components/AppDialogProvider';
 
 let setupNotificationListeners: any = () => {};
 let initializeBackend: any = () => Promise.resolve();
@@ -66,7 +72,6 @@ if (!__DEV__) {
 // initSentry();
 
 export default function RootLayout() {
-  const [loading, setLoading] = useState(true);
   const [fontsLoaded, setFontsLoaded] = useState(false);
   const [initError] = useState<string | null>(null);
 
@@ -103,69 +108,123 @@ export default function RootLayout() {
     } catch (error) {
       console.warn('Notification listener setup failed:', error);
     }
+
+    // Configure Audio Mode globally
+    async function configureAudio() {
+      try {
+        await Audio.setAudioModeAsync({
+          allowsRecordingIOS: false,
+          playsInSilentModeIOS: true,
+          shouldDuckAndroid: true,
+          staysActiveInBackground: false,
+          interruptionModeIOS: 1, // DoNotMix
+          interruptionModeAndroid: 1, // DoNotMix
+        });
+      } catch (e) {
+        console.warn('[RootLayout] Audio config failed:', e);
+      }
+    }
+    configureAudio();
   }, []);
 
   useEffect(() => {
-    // Keep startup overlay visible until fonts are ready.
-    setLoading(false);
+    let cancelled = false;
+
+    const syncSocket = async () => {
+      try {
+        const storedUserId = await AsyncStorage.getItem('userId');
+        if (cancelled) return;
+
+        if (storedUserId) {
+          const existingSocket = getSocket();
+          if (!existingSocket || !existingSocket.connected) {
+            await initializeSocket(storedUserId);
+          }
+          return;
+        }
+
+        if (getSocket()) {
+          disconnectSocket();
+        }
+      } catch (error) {
+        console.warn('[RootLayout] Socket bootstrap failed:', error);
+      }
+    };
+
+    const runOnce = () => { void syncSocket(); };
+
+    let intervalId: any = null;
+    const start = () => {
+      if (intervalId) return;
+      runOnce();
+      intervalId = setInterval(syncSocket, 30000);
+    };
+    const stop = () => {
+      if (!intervalId) return;
+      clearInterval(intervalId);
+      intervalId = null;
+    };
+
+    // Foreground-only: avoid background churn + battery drain
+    start();
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active') start();
+      else stop();
+    });
+
+    return () => {
+      cancelled = true;
+      stop();
+      sub.remove();
+      disconnectSocket();
+    };
+  }, []);
+
+  useEffect(() => {
+    // Do not block UI with a JS-level loader.
+  }, []);
+
+  useEffect(() => {
+    SystemUI.setBackgroundColorAsync('#ffffff').catch(() => {});
   }, []);
 
   return (
     <ErrorBoundary>
       <UserProvider>
-        <GestureHandlerRootView style={{ flex: 1 }}>
-          <Stack screenOptions={{ headerShown: false }}>
-            <Stack.Screen name="index" />
-            <Stack.Screen name="auth/welcome" />
-            <Stack.Screen name="auth/login-options" />
-            <Stack.Screen name="auth/phone-login" />
-            <Stack.Screen name="auth/email-login" />
-            <Stack.Screen name="auth/username-login" />
-            <Stack.Screen name="auth/signup-options" />
-            <Stack.Screen name="auth/phone-signup" />
-            <Stack.Screen name="auth/email-signup" />
-            <Stack.Screen name="auth/username-signup" />
-            <Stack.Screen name="auth/phone-otp" />
-            <Stack.Screen name="auth/forgot-password" />
-            <Stack.Screen name="auth/reset-otp" />
-            <Stack.Screen name="auth/reset-password" />
-            <Stack.Screen name="(tabs)" />
-            <Stack.Screen name="create-post" options={{ presentation: 'fullScreenModal', animation: 'slide_from_bottom' }} />
-            <Stack.Screen name="search-modal" options={{ headerShown: false, animation: 'slide_from_right' }} />
-            <Stack.Screen name="inbox" options={{ headerShown: false }} />
-            <Stack.Screen name="edit-profile" options={{ headerShown: false }} />
-            <Stack.Screen name="passport" options={{ headerShown: false }} />
-            <Stack.Screen name="dm" options={{ headerShown: false }} />
-            <Stack.Screen name="notifications" options={{ headerShown: false }} />
-            <Stack.Screen name="go-live" options={{ headerShown: false, presentation: 'fullScreenModal' }} />
-            <Stack.Screen name="watch-live" options={{ headerShown: false }} />
-          </Stack>
-
-          {(loading || !fontsLoaded || !!initError) && (
-            <View
-              pointerEvents="none"
-              style={{
-                position: 'absolute',
-                top: 0,
-                right: 0,
-                bottom: 0,
-                left: 0,
-                alignItems: 'center',
-                justifyContent: 'center',
-                backgroundColor: '#fff',
-              }}
-            >
-              <ActivityIndicator size="large" color="#667eea" />
-              {initError && (
-                <View style={{ marginTop: 20, padding: 20 }}>
-                  <RNText style={{ color: 'red', textAlign: 'center' }}>
-                    Initialization Error: {initError}
-                  </RNText>
-                </View>
-              )}
-            </View>
-          )}
-        </GestureHandlerRootView>
+        <AppDialogProvider>
+          <GestureHandlerRootView style={{ flex: 1 }}>
+            <StatusBar style="dark" backgroundColor="#ffffff" translucent={false} />
+            <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: '#fff' } }}>
+              <Stack.Screen name="index" options={{ animation: 'none' }} />
+              <Stack.Screen name="auth/welcome" />
+              <Stack.Screen name="auth/login-options" />
+              <Stack.Screen name="auth/phone-login" />
+              <Stack.Screen name="auth/email-login" />
+              <Stack.Screen name="auth/username-login" />
+              <Stack.Screen name="auth/signup-options" />
+              <Stack.Screen name="auth/phone-signup" />
+              <Stack.Screen name="auth/email-signup" />
+              <Stack.Screen name="auth/username-signup" />
+              <Stack.Screen name="auth/phone-otp" />
+              <Stack.Screen name="auth/forgot-password" />
+              <Stack.Screen name="auth/reset-otp" />
+              <Stack.Screen name="auth/reset-password" />
+              <Stack.Screen name="(tabs)" />
+              <Stack.Screen name="create-post" options={{ presentation: 'fullScreenModal', animation: 'slide_from_bottom' }} />
+              <Stack.Screen name="edit-post" options={{ headerShown: false, animation: 'slide_from_right' }} />
+              <Stack.Screen name="search-modal" options={{ headerShown: false, animation: 'slide_from_right' }} />
+              <Stack.Screen name="inbox" options={{ headerShown: false }} />
+              <Stack.Screen name="edit-profile" options={{ headerShown: false }} />
+              <Stack.Screen name="passport" options={{ headerShown: false }} />
+              <Stack.Screen name="dm" options={{ headerShown: false }} />
+              <Stack.Screen name="notifications" options={{ headerShown: false }} />
+              <Stack.Screen name="go-live" options={{ headerShown: false, presentation: 'fullScreenModal' }} />
+              <Stack.Screen name="watch-live" options={{ headerShown: false }} />
+              <Stack.Screen name="location/[placeId]" options={{ headerShown: false }} />
+              <Stack.Screen name="hashtag-detail" options={{ headerShown: false }} />
+            </Stack>
+          </GestureHandlerRootView>
+        </AppDialogProvider>
       </UserProvider>
     </ErrorBoundary>
   );

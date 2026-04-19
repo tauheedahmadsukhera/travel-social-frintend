@@ -1,3 +1,4 @@
+import { DEFAULT_AVATAR_URL } from '../lib/api';
 ﻿import { Image as ExpoImage } from 'expo-image';
 import * as Location from 'expo-location';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
@@ -76,7 +77,7 @@ const DEFAULT_REGION: Region = {
   longitudeDelta: 0.09,
 };
 
-const DEFAULT_AVATAR_URL = 'https://via.placeholder.com/200x200.png?text=Profile';
+
 
 type LocationSuggestion = {
   name: string;
@@ -580,7 +581,7 @@ export default function MapScreen() {
           </View>
           <View style={styles.liveAvatarOutside}>
             <ExpoImage
-              source={{ uri: stream.userAvatar || 'https://via.placeholder.com/32' }}
+              source={{ uri: stream.userAvatar || DEFAULT_AVATAR_URL }}
               style={styles.liveAvatarNew}
               contentFit="cover"
               cachePolicy="memory-disk"

@@ -3,7 +3,9 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import React from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { AuthBrandHeader } from '@/src/_components/auth/AuthBrandHeader';
 import CustomButton from '@/src/_components/auth/CustomButton';
+import { safeRouterBack } from '@/lib/safeRouterBack';
 
 export default function OTPSentScreen() {
   const router = useRouter();
@@ -25,27 +27,24 @@ export default function OTPSentScreen() {
         {/* Header */}
         <View style={styles.header}>
           <TouchableOpacity 
-            onPress={() => router.back()}
+            onPress={() => safeRouterBack()}
             style={styles.backButton}
           >
             <Ionicons name="arrow-back" size={24} color="#000" />
           </TouchableOpacity>
         </View>
 
-        {/* Success Icon */}
+        <View style={styles.titleSection}>
+          <AuthBrandHeader
+            title="Check your email"
+            subtitle={`We've sent a verification code to your email${contact ? ` associated with ${contact}` : ''}.`}
+          />
+        </View>
+
         <View style={styles.iconContainer}>
           <View style={styles.iconCircle}>
             <Ionicons name="mail" size={50} color="#0A3D62" />
           </View>
-        </View>
-
-        {/* Title */}
-        <View style={styles.titleSection}>
-          <Text style={styles.title}>Check your email</Text>
-          <Text style={styles.subtitle}>
-            We&apos;ve sent a verification code to your email
-            {contact ? ` associated with ${contact}` : ''}.
-          </Text>
         </View>
 
         {/* Email Info */}
@@ -76,7 +75,7 @@ export default function OTPSentScreen() {
         {/* Change Method */}
         <TouchableOpacity 
           style={styles.changeMethod}
-          onPress={() => router.back()}
+          onPress={() => safeRouterBack()}
         >
           <Text style={styles.changeMethodText}>
             Use a different {method === 'phone' ? 'phone number' : 'email'}
@@ -108,7 +107,7 @@ const styles = StyleSheet.create({
   },
   iconContainer: {
     alignItems: 'center',
-    marginVertical: 20,
+    marginBottom: 16,
   },
   iconCircle: {
     width: 70,
@@ -120,21 +119,7 @@ const styles = StyleSheet.create({
   },
   titleSection: {
     alignItems: 'center',
-    marginBottom: 15,
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: '700',
-    color: '#000',
-    marginBottom: 12,
-    textAlign: 'center',
-  },
-  subtitle: {
-    fontSize: 14,
-    color: '#666',
-    textAlign: 'center',
-    lineHeight: 22,
-    paddingHorizontal: 20,
+    marginBottom: 8,
   },
   infoBox: {
     flexDirection: 'row',

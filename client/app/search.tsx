@@ -1,11 +1,16 @@
+import React, { useRef, useState, useEffect } from 'react';
+import { ActivityIndicator, FlatList, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { debounce } from 'lodash';
-import React, { useRef, useState, useEffect } from 'react';
-import { ActivityIndicator, FlatList, Image, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Image as ExpoImage } from 'expo-image';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getAllPosts, searchUsers } from '../lib/firebaseHelpers/index';
 import { getPostsByHashtag, getTrendingHashtags } from '../lib/mentions';
+import { DEFAULT_AVATAR_URL } from '@/lib/api';
+import { apiService } from '@/src/_services/apiService';
+
 
 // Cache for search results
 const searchCache = new Map<string, { users: any[], posts: any[], timestamp: number }>();
@@ -25,6 +30,12 @@ export default function SearchScreen() {
   );
   const [allPosts, setAllPosts] = useState<any[]>([]);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const currentUserIdRef = useRef<string | null>(null);
+  const insets = useSafeAreaInsets();
+
+  useEffect(() => {
+    currentUserIdRef.current = currentUserId;
+  }, [currentUserId]);
 
   // Get current user ID on mount
   useEffect(() => {
@@ -69,7 +80,7 @@ export default function SearchScreen() {
       
       const result = await getAllPosts();
       if (result.success && mounted) {
-        const posts = (result.data || []).slice(0, 100); // Limit to 100 posts
+        const posts = (result.data || []).slice(0, 200);
         setAllPosts(posts);
         searchCache.set(cacheKey, { posts, users: [], timestamp: Date.now() });
       }
@@ -93,7 +104,8 @@ export default function SearchScreen() {
       if (cached && Date.now() - cached.timestamp < CACHE_DURATION) {
         if (tab === 'users') {
           // Filter out current user
-          const filteredUsers = cached.users.filter(u => u.id !== currentUserId && u._id !== currentUserId);
+          const uid = currentUserIdRef.current;
+          const filteredUsers = cached.users.filter(u => u.id !== uid && u._id !== uid);
           setUserResults(filteredUsers);
         }
         else if (tab === 'hashtags') setPostResults(cached.posts);
@@ -108,7 +120,8 @@ export default function SearchScreen() {
           const result = await searchUsers(text, 15);
           const users = result.success ? result.data : [];
           // Filter out current user from results
-          const filteredUsers = users.filter((u: any) => u.id !== currentUserId && u._id !== currentUserId);
+          const uid = currentUserIdRef.current;
+          const filteredUsers = users.filter((u: any) => u.id !== uid && u._id !== uid);
           console.log('[Search] Found', users.length, 'users, showing', filteredUsers.length, 'after filtering current user');
           setUserResults(filteredUsers);
           searchCache.set(cacheKey, { users: filteredUsers, posts: [], timestamp: Date.now() });
@@ -119,14 +132,78 @@ export default function SearchScreen() {
           setPostResults(posts);
           searchCache.set(cacheKey, { posts, users: [], timestamp: Date.now() });
         } else {
-          // Search in cached posts
-          const filtered = allPosts.filter((post: any) =>
-            post.caption?.toLowerCase().includes(text.toLowerCase()) ||
-            post.userName?.toLowerCase().includes(text.toLowerCase()) ||
-            post.location?.name?.toLowerCase().includes(text.toLowerCase())
-          ).slice(0, 20);
-          setPostResults(filtered);
-          searchCache.set(cacheKey, { posts: filtered, users: [], timestamp: Date.now() });
+          const q = text.toLowerCase().trim();
+          const locationHaystack = (post: any) =>
+            [
+              typeof post.location === 'string' ? post.location : post.location?.name,
+              post.locationName,
+              post.locationData?.name,
+              post.locationData?.address,
+              post.locationData?.city,
+              post.locationData?.country,
+              ...(Array.isArray(post.locationKeys) ? post.locationKeys : []),
+            ]
+              .filter(Boolean)
+              .join(' ')
+              .toLowerCase();
+
+          const localMatches = allPosts.filter((post: any) => {
+            const cap = (post.caption || '').toLowerCase();
+            const un = (post.userName || '').toLowerCase();
+            return cap.includes(q) || un.includes(q) || locationHaystack(post).includes(q);
+          });
+
+          let merged: any[] = localMatches.slice(0, 250);
+          try {
+            if (q.length >= 2) {
+              const remoteByLoc: any[] = [];
+              const locPageSize = 50;
+              const maxLocPages = 300;
+              for (let p = 0; p < maxLocPages; p++) {
+                const remote: any = await apiService.getPostsByLocation(
+                  text.trim(),
+                  p * locPageSize,
+                  locPageSize,
+                  currentUserIdRef.current || undefined
+                );
+                const chunk =
+                  remote?.success && Array.isArray(remote?.data) ? remote.data : [];
+                remoteByLoc.push(...chunk);
+                if (chunk.length < locPageSize) break;
+              }
+              const byId = new Map<string, any>();
+              for (const p of remoteByLoc) {
+                const id = String(p?.id || p?._id || '');
+                if (!id) continue;
+                byId.set(id, { ...p, id: p.id || p._id });
+              }
+              for (const p of localMatches) {
+                const id = String(p?.id || p?._id || '');
+                if (!id) continue;
+                if (!byId.has(id)) byId.set(id, { ...p, id: p.id || p._id });
+              }
+              merged = Array.from(byId.values())
+                .filter((post: any) => {
+                  const hay =
+                    locationHaystack(post) +
+                    ' ' +
+                    (post.caption || '').toLowerCase() +
+                    ' ' +
+                    (post.userName || '').toLowerCase();
+                  return hay.includes(q);
+                })
+                .sort(
+                  (a: any, b: any) =>
+                    new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()
+                )
+                .slice(0, 250);
+            }
+          } catch {
+            merged = localMatches.slice(0, 250);
+          }
+
+          setPostResults(merged);
+          searchCache.set(cacheKey, { posts: merged, users: [], timestamp: Date.now() });
         }
       } catch (error) {
         console.error('Search error:', error);
@@ -171,8 +248,8 @@ export default function SearchScreen() {
   };
 
   return (
-    <View style={{ flex: 1, backgroundColor: '#fff' }}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', padding: 16, borderBottomWidth: 1, borderBottomColor: '#eee' }}>
+    <View style={{ flex: 1, backgroundColor: '#fff', paddingTop: Math.max(insets.top, 12) }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingBottom: 16, borderBottomWidth: 1, borderBottomColor: '#eee' }}>
         <TextInput
           style={{ flex: 1, fontSize: 16, backgroundColor: '#f7f7f7', borderRadius: 8, padding: 10 }}
           placeholder={activeTab === 'users' ? 'Search users...' : activeTab === 'hashtags' ? 'Search hashtags...' : 'Search posts...'}
@@ -214,7 +291,13 @@ export default function SearchScreen() {
                 }
               }}
             >
-              <Image source={{ uri: item.photoURL || item.avatar || 'https://via.placeholder.com/200x200.png?text=Profile' }} style={styles.avatar} />
+              <ExpoImage 
+                source={{ uri: item.photoURL || item.avatar || DEFAULT_AVATAR_URL }} 
+                style={styles.avatar}
+                contentFit="cover"
+                transition={200}
+                cachePolicy="memory-disk"
+              />
               <View style={{ flex: 1 }}>
                 <Text style={styles.name}>{item.displayName || item.userName || 'User'}</Text>
                 <Text style={styles.email}>{item.email}</Text>
@@ -237,7 +320,13 @@ export default function SearchScreen() {
             keyExtractor={item => item.id}
             renderItem={({ item }) => (
               <TouchableOpacity style={styles.row} onPress={() => router.push({ pathname: '/highlight/[id]', params: { id: item.id } })}>
-                <Image source={{ uri: item.imageUrl || item.mediaUrls?.[0] || item.imageUrls?.[0] || 'https://via.placeholder.com/200x200.png?text=Post' }} style={styles.postImg} />
+                <ExpoImage 
+                  source={{ uri: item.imageUrl || item.mediaUrls?.[0] || item.imageUrls?.[0] || 'https://via.placeholder.com/200x200.png?text=Post' }} 
+                  style={styles.postImg}
+                  contentFit="cover"
+                  transition={200}
+                  cachePolicy="memory-disk"
+                />
                 <View style={{ flex: 1 }}>
                   <Text style={styles.name}>{item.userName || 'User'}</Text>
                   <Text style={styles.caption} numberOfLines={1}>{item.caption}</Text>
@@ -275,7 +364,13 @@ export default function SearchScreen() {
           keyExtractor={item => item.id}
           renderItem={({ item }) => (
             <TouchableOpacity style={styles.row} onPress={() => router.push({ pathname: '/highlight/[id]', params: { id: item.id } })}>
-              <Image source={{ uri: item.imageUrl || item.mediaUrls?.[0] || item.imageUrls?.[0] || 'https://firebasestorage.googleapis.com/v0/b/travel-app-3da72.firebasestorage.app/o/default%2Fdefault-pic.jpg?alt=media&token=7177f487-a345-4e45-9a56-732f03dbf65d' }} style={styles.postImg} />
+              <ExpoImage 
+                source={{ uri: item.imageUrl || item.mediaUrls?.[0] || item.imageUrls?.[0] || DEFAULT_AVATAR_URL }} 
+                style={styles.postImg}
+                contentFit="cover"
+                transition={200}
+                cachePolicy="memory-disk"
+              />
               <View style={{ flex: 1 }}>
                 <Text style={styles.name}>{item.userName || 'User'}</Text>
                 <Text style={styles.caption}>{item.caption}</Text>

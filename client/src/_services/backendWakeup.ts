@@ -11,12 +11,13 @@ let isWakingUp = false;
 let isBackendReady = false;
 let wakeupPromise: Promise<boolean> | null = null;
 
-let getAPIBaseURL: any = () => 'http://localhost:3000/api';
+// In release builds we should never default to localhost.
+let getAPIBaseURL: any = () => 'https://travel-social-backend.onrender.com/api';
 
 // Safely load environment config
 try {
   const envModule = require('../../config/environment');
-  getAPIBaseURL = envModule.getAPIBaseURL || (() => 'http://localhost:3000/api');
+  getAPIBaseURL = envModule.getAPIBaseURL || (() => 'https://travel-social-backend.onrender.com/api');
 } catch (e) {
   console.warn('[BackendWakeup] Failed to load environment config, using default:', e);
 }
@@ -25,32 +26,46 @@ try {
  * Check if backend is awake and responsive
  */
 export async function checkBackendHealth(): Promise<boolean> {
-  try {
-    const API_BASE = getAPIBaseURL();
-    console.log('[BackendWakeup] Checking health:', API_BASE);
-    
+  const API_BASE = getAPIBaseURL();
+  console.log('[BackendWakeup] Checking health:', API_BASE);
+
+  const endpoints = [`${API_BASE}/status`, `${API_BASE}/health`];
+
+  for (const endpoint of endpoints) {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s timeout
-    
-    const response = await fetch(`${API_BASE}/health`, {
-      method: 'GET',
-      signal: controller.signal,
-    });
-    
-    clearTimeout(timeoutId);
-    
-    if (response.ok) {
-      const data = await response.json();
-      console.log('[BackendWakeup] Backend is healthy:', data);
-      isBackendReady = true;
-      return true;
+    const timeoutId = setTimeout(() => controller.abort(), 20000); // 20s timeout
+
+    try {
+      const response = await fetch(endpoint, {
+        method: 'GET',
+        signal: controller.signal,
+      });
+
+      if (response.ok) {
+        let data: any = null;
+        try {
+          data = await response.json();
+        } catch {
+          data = { ok: true };
+        }
+
+        console.log('[BackendWakeup] Backend is healthy:', endpoint, data);
+        isBackendReady = true;
+        return true;
+      }
+    } catch (error: any) {
+      // Try next endpoint before logging global failure
+      const isAbort = error?.name === 'AbortError' || String(error?.message || '').toLowerCase().includes('aborted');
+      if (!isAbort) {
+        console.warn('[BackendWakeup] Health endpoint failed:', endpoint, error?.message || error);
+      }
+    } finally {
+      clearTimeout(timeoutId);
     }
-    
-    return false;
-  } catch (error: any) {
-    console.warn('[BackendWakeup] Health check failed:', error.message);
-    return false;
   }
+
+  console.warn('[BackendWakeup] Health check failed for all endpoints');
+  return false;
 }
 
 /**

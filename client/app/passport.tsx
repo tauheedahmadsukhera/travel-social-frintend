@@ -1,18 +1,25 @@
-import { Feather } from '@expo/vector-icons';
+import { Feather, Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
   Dimensions,
+  Keyboard,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
+import { safeRouterBack } from '@/lib/safeRouterBack';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { hapticLight } from '../lib/haptics';
 import Svg, {
   Circle,
   Defs,
@@ -28,10 +35,95 @@ import { addPassportStamp, getPassportData, Stamp } from '../lib/firebaseHelpers
 import { BACKEND_URL } from '../lib/api';
 import { reverseGeocode } from '../services/locationService';
 import * as Location from 'expo-location';
-import { LinearGradient } from 'expo-linear-gradient';
 import CountryFlag from '@/src/_components/CountryFlag';
+import { mapService } from '../services';
+import { getCachedData, setCachedData, useNetworkStatus, useOfflineBanner } from '../hooks/useOffline';
+import { OfflineBanner } from '@/src/_components/OfflineBanner';
 
 const { width } = Dimensions.get('window');
+const STAMP_SIZE = Math.min(220, width - 72);
+
+// Safe date formatter compatible with Hermes
+const formatDate = (date: Date | string, format: 'short' | 'long' = 'long'): string => {
+  try {
+    const d = typeof date === 'string' ? new Date(date) : date;
+    if (isNaN(d.getTime())) return 'Date';
+    
+    const day = d.getDate().toString().padStart(2, '0');
+    const month = (d.getMonth() + 1).toString().padStart(2, '0');
+    const year = d.getFullYear();
+    
+    if (format === 'short') {
+      const monthShort = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][d.getMonth()];
+      return `${day} ${monthShort} ${year.toString().slice(-2)}`;
+    } else {
+      const monthShort = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][d.getMonth()];
+      return `${day} ${monthShort} ${year}`;
+    }
+  } catch (e) {
+    return 'Date';
+  }
+};
+
+const normalizeCountryName = (value?: string | null): string => {
+  if (!value) return '';
+  return String(value)
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
+};
+
+const getCountryFromAddress = (address?: string | null): string | null => {
+  if (!address) return null;
+  const parts = address
+    .split(',')
+    .map(p => p.trim())
+    .filter(Boolean);
+  return parts.length ? parts[parts.length - 1] : null;
+};
+
+const PLUS_CODE_PATTERN = /^[A-Z0-9]{4,}\+[A-Z0-9]{2,}$/i;
+const COORDINATE_PATTERN = /^-?\d+(\.\d+)?\s*,\s*-?\d+(\.\d+)?$/;
+
+const isReadableLocationLabel = (value?: string | null): boolean => {
+  if (!value) return false;
+  const label = String(value).trim();
+  if (!label) return false;
+  if (PLUS_CODE_PATTERN.test(label)) return false;
+  if (COORDINATE_PATTERN.test(label)) return false;
+  const lower = label.toLowerCase();
+  if (lower === 'unknown' || lower === 'unknown place' || lower === 'n/a') return false;
+  return true;
+};
+
+const getSuggestionLocationLabel = (suggestion: any): string => {
+  if (!suggestion) return 'this location';
+
+  const main = suggestion?.mainSuggestion || {};
+  const candidates: Array<string | undefined> = [
+    main?.name,
+    main?.place,
+    main?.placeName,
+    main?.parentCity,
+    main?.parentCountry,
+  ];
+
+  if (Array.isArray(suggestion?.suggestions)) {
+    for (const s of suggestion.suggestions) {
+      candidates.push(s?.name, s?.place, s?.placeName, s?.parentCity, s?.parentCountry);
+    }
+  }
+
+  for (const candidate of candidates) {
+    if (isReadableLocationLabel(candidate)) {
+      return String(candidate).trim();
+    }
+  }
+
+  return 'this location';
+};
+
 const STAMP_W = width - 48;
 const STAMP_H = STAMP_W * 0.76;
 const CX = STAMP_W / 2;
@@ -55,7 +147,7 @@ const PassportStamp = ({ stamp, size = 140, type = 'circular' }: { stamp: Stamp,
   const created = new Date(stamp.createdAt);
   const dateText = Number.isNaN(created.getTime())
     ? 'UNVERIFIED DATE'
-    : created.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }).toUpperCase();
+    : formatDate(created, 'long').toUpperCase();
   const safeId = String(stamp._id || stamp.name).replace(/[^A-Za-z0-9_-]/g, '_');
   const title = stamp.name.toUpperCase();
   const subTitle = stamp.type === 'country' ? 'IMMIGRATION' : (stamp.type === 'city' ? 'CITY ENTRY' : 'PLACE CHECK-IN');
@@ -167,6 +259,8 @@ export default function PassportScreen() {
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const userId = (params.user as string) || currentUserId;
   const isOwner = !!(currentUserId && userId && currentUserId === userId);
+  const { isOnline } = useNetworkStatus();
+  const { showBanner } = useOfflineBanner();
 
   const [stamps, setStamps] = useState<Stamp[]>([]);
   const [loading, setLoading] = useState(true);
@@ -175,13 +269,35 @@ export default function PassportScreen() {
   const [isAdding, setIsAdding] = useState(false);
   const [selectedCountry, setSelectedCountry] = useState<string | null>(null);
 
+  // Location modal state
+  const [showLocationModal, setShowLocationModal] = useState(false);
+  const [nearbyPlaces, setNearbyPlaces] = useState<any[]>([]);
+  const [selectedLocation, setSelectedLocation] = useState<any>(null);
+  const [locationLoading, setLocationLoading] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [lastLocationCoords, setLastLocationCoords] = useState<{ lat: number; lng: number } | null>(null);
+  /** Current GPS area (for city stamp in manual modal). */
+  const [areaGeo, setAreaGeo] = useState<{ city: string; country: string; countryCode: string } | null>(null);
+  /** Manual modal: add city stamp from reverse-geocoded current location. */
+  const [includeCityStamp, setIncludeCityStamp] = useState(false);
+  /** Nearby venues radius (~200m). */
+  const NEARBY_PLACES_MAX_KM = 0.2;
+
+  // Cache key for nearby places
+  const getLocationCacheKey = (lat: number, lng: number) => {
+    const roundedLat = Math.round(lat * 10000) / 10000; // Round to 0.0001 precision
+    const roundedLng = Math.round(lng * 10000) / 10000;
+    return `nearby_places_v3_${roundedLat}_${roundedLng}`;
+  };
+
   // When a country is selected, we filter by that country's children
   const handleBack = () => {
+    hapticLight();
     if (selectedCountry) {
       setSelectedCountry(null);
       setActiveFilter('All');
     } else if (router.canGoBack()) {
-      router.back();
+      safeRouterBack();
     } else {
       router.replace('/(tabs)/profile' as any);
     }
@@ -209,12 +325,37 @@ export default function PassportScreen() {
     if (userId) loadPassportData();
   }, [userId]);
 
+  const PASSPORT_CACHE_KEY = useMemo(() => `passport_v2_${String(userId || 'unknown')}`, [userId]);
+
+  // Cache-first bootstrap: show cached passport instantly (offline-friendly).
+  useEffect(() => {
+    if (!userId) return;
+    (async () => {
+      try {
+        const cached = await getCachedData<any>(PASSPORT_CACHE_KEY);
+        const cachedStamps = Array.isArray(cached?.stamps) ? cached.stamps : null;
+        if (cachedStamps && cachedStamps.length > 0) {
+          setStamps(cachedStamps);
+          setLoading(false);
+        }
+      } catch { }
+    })();
+  }, [PASSPORT_CACHE_KEY, userId]);
+
   const loadPassportData = async () => {
     try {
       setLoading(true);
       if (!userId) return;
+      // Offline: don’t block UI if we already have content.
+      if (!isOnline && stamps.length > 0) {
+        setLoading(false);
+        return;
+      }
       const data = await getPassportData(userId);
       setStamps(data.stamps || []);
+      try {
+        await setCachedData(PASSPORT_CACHE_KEY, { stamps: data.stamps || [] }, { ttl: 24 * 60 * 60 * 1000 });
+      } catch { }
     } catch (err) {
       console.error('Error loading passport:', err);
     } finally {
@@ -227,29 +368,251 @@ export default function PassportScreen() {
 
     try {
       setIsAdding(true);
-      // Add all suggested hierarchy (Country -> City -> Place)
-      for (const item of suggestion.suggestions) {
+      // Notification / banner flow: only country stamp (not city + place).
+      const countryItems = (suggestion.suggestions || []).filter((item: any) => item?.type === 'country');
+      if (countryItems.length === 0) {
+        Alert.alert(
+          'Country already on passport',
+          'Use “Add a stamp” below to add a city stamp, a place, or both.'
+        );
+        return;
+      }
+      for (const item of countryItems) {
         await addPassportStamp(userId, item);
       }
 
-      Alert.alert('✅ Success', 'Stamps added to your passport!');
       setSuggestion(null);
       await AsyncStorage.removeItem('passport_suggestion');
       await loadPassportData();
     } catch (err) {
-      Alert.alert('Error', 'Failed to add stamps.');
+      Alert.alert('Error', 'Failed to add stamp.');
     } finally {
       setIsAdding(false);
     }
   };
 
+  const handleOpenLocationPicker = async () => {
+    hapticLight();
+    setShowLocationModal(true);
+    setSearchQuery('');
+    setSelectedLocation(null);
+    setIncludeCityStamp(false);
+    setAreaGeo(null);
+
+    try {
+      // Request location permission
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission Denied', 'We need location access to show nearby places.');
+        setShowLocationModal(false);
+        return;
+      }
+
+      // Get current location
+      setLocationLoading(true);
+      const location = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+      const { latitude, longitude } = location.coords;
+
+      setLastLocationCoords({ lat: latitude, lng: longitude });
+      try {
+        const g = await reverseGeocode(latitude, longitude);
+        if (g?.city && g?.country) {
+          setAreaGeo({ city: g.city, country: g.country, countryCode: g.countryCode || 'XX' });
+        } else {
+          setAreaGeo(null);
+        }
+      } catch {
+        setAreaGeo(null);
+      }
+
+      const cacheKey = getLocationCacheKey(latitude, longitude);
+
+      // Try to get cached data
+      const cachedDataStr = await AsyncStorage.getItem(cacheKey);
+      const cachedData = cachedDataStr ? JSON.parse(cachedDataStr) : null;
+      const cacheTimestamp = cachedData?.timestamp || 0;
+      const isCacheValid = Date.now() - cacheTimestamp < 10 * 60 * 1000; // Cache valid for 10 mins
+
+      // Show cached data immediately if available
+      if (cachedData && isCacheValid) {
+        setNearbyPlaces(cachedData.places || []);
+        setLocationLoading(false);
+      } else {
+        setNearbyPlaces([]); // Clear old data
+        // Keep loading spinner visible while fetching
+      }
+
+      // Fetch fresh data in background or if no cache
+      (async () => {
+        try {
+          const rawPlaces = await mapService.getNearbyPlaces(latitude, longitude, Math.round(NEARBY_PLACES_MAX_KM * 1100));
+
+          const validPlaces = [];
+          for (const place of rawPlaces || []) {
+            if (place.placeName && !place.placeName.match(/^[A-Z0-9]{4}\+[A-Z0-9]{2,}$/)) {
+              const dist = await mapService.calculateDistance({ latitude, longitude } as any, place);
+              if (dist <= NEARBY_PLACES_MAX_KM) validPlaces.push(place);
+            }
+          }
+
+          // Cache the results
+          await AsyncStorage.setItem(cacheKey, JSON.stringify({
+            places: validPlaces,
+            timestamp: Date.now(),
+          }));
+
+          setNearbyPlaces(validPlaces);
+          setLocationLoading(false);
+        } catch (error) {
+          console.error('Error fetching nearby places:', error);
+          if (!cachedData) {
+            Alert.alert('Error', 'Failed to fetch nearby locations.');
+            setShowLocationModal(false);
+          }
+          setLocationLoading(false);
+        }
+      })();
+    } catch (error) {
+      console.error('Error opening location picker:', error);
+      Alert.alert('Error', 'Failed to access location.');
+      setShowLocationModal(false);
+      setLocationLoading(false);
+    }
+  };
+
+  const handleAddStamp = async () => {
+    if (!userId) return;
+    const wantCity =
+      includeCityStamp &&
+      areaGeo &&
+      isReadableLocationLabel(areaGeo.city) &&
+      normalizeCountryName(areaGeo.city) !== 'unknown city';
+    const wantPlace = !!selectedLocation;
+
+    if (!wantCity && !wantPlace) return;
+
+    try {
+      setIsAdding(true);
+
+      if (wantCity && areaGeo && lastLocationCoords) {
+        await addPassportStamp(userId, {
+          type: 'city',
+          name: areaGeo.city,
+          countryCode: areaGeo.countryCode,
+          parentCountry: areaGeo.country,
+          lat: lastLocationCoords.lat,
+          lon: lastLocationCoords.lng,
+        });
+      }
+
+      if (wantPlace && selectedLocation) {
+        let countryName = 'Unknown';
+        let countryCode: string | undefined;
+        let parentCity: string | undefined;
+        try {
+          const geoLocation = await reverseGeocode(selectedLocation.latitude, selectedLocation.longitude);
+          countryName = geoLocation?.country || countryName;
+          countryCode = geoLocation?.countryCode;
+          parentCity = geoLocation?.city;
+        } catch (e) {
+          console.warn('Could not get country from geocoding:', e);
+        }
+
+        if (normalizeCountryName(countryName) === 'unknown') {
+          const countryFromAddress = getCountryFromAddress(selectedLocation?.address);
+          if (countryFromAddress) {
+            countryName = countryFromAddress;
+          }
+        }
+
+        if (!parentCity && areaGeo?.city) {
+          parentCity = areaGeo.city;
+        }
+
+        const selectedName = selectedLocation.placeName || selectedLocation.name || '';
+        const isCountrySelection = normalizeCountryName(selectedName) === normalizeCountryName(countryName);
+
+        const stampData = {
+          name: selectedName,
+          type: (isCountrySelection ? 'country' : 'place') as 'country' | 'place',
+          countryCode,
+          lat: selectedLocation.latitude,
+          lon: selectedLocation.longitude,
+          parentCountry: isCountrySelection ? undefined : countryName,
+          ...(isCountrySelection ? {} : { parentCity }),
+        };
+
+        await addPassportStamp(userId, stampData);
+      }
+
+      setShowLocationModal(false);
+      setSelectedLocation(null);
+      setIncludeCityStamp(false);
+      setAreaGeo(null);
+      setNearbyPlaces([]);
+      await loadPassportData();
+    } catch (error) {
+      console.error('Error adding stamp:', error);
+      Alert.alert('Error', 'Failed to add stamp.');
+    } finally {
+      setIsAdding(false);
+    }
+  };
+
+  // Filter nearby places by search query (memoized to avoid work on every keystroke/render)
+  const filteredPlaces = useMemo(() => {
+    const q = String(searchQuery || '').toLowerCase().trim();
+    const list = Array.isArray(nearbyPlaces) ? nearbyPlaces : [];
+    if (!q) return list;
+    return list.filter((place) => {
+      const name = String(place?.placeName || '').toLowerCase();
+      const addr = String(place?.address || '').toLowerCase();
+      return name.includes(q) || addr.includes(q);
+    });
+  }, [nearbyPlaces, searchQuery]);
+
+  const canSubmitManualStamps =
+    !!userId &&
+    ((includeCityStamp &&
+      areaGeo &&
+      isReadableLocationLabel(areaGeo.city) &&
+      normalizeCountryName(areaGeo.city) !== 'unknown city') ||
+      !!selectedLocation);
+
   const getFilteredStamps = () => {
     let list = stamps;
     if (selectedCountry) {
-      list = list.filter(s => s.parentCountry === selectedCountry);
-      if (activeFilter === 'Cities') return list.filter(s => s.type === 'city');
-      if (activeFilter === 'Places') return list.filter(s => s.type === 'place');
-      return list;
+      const selectedCountryKey = normalizeCountryName(selectedCountry);
+      const selectedCountryStamp = stamps.find(
+        s => s.type === 'country' && normalizeCountryName(s.name) === selectedCountryKey
+      );
+      const selectedCountryCode = normalizeCountryName(selectedCountryStamp?.countryCode);
+
+      list = list.filter(s => {
+        const parentCountryKey = normalizeCountryName(s.parentCountry);
+        const childCountryCode = normalizeCountryName(s.countryCode);
+
+        if (parentCountryKey && parentCountryKey === selectedCountryKey) return true;
+        if (selectedCountryCode && childCountryCode && childCountryCode === selectedCountryCode) return true;
+        return false;
+      });
+      // Filter by type first
+      if (activeFilter === 'Cities') {
+        list = list.filter(s => s.type === 'city');
+      } else if (activeFilter === 'Places') {
+        list = list.filter(s => s.type === 'place');
+      }
+      
+      // Group by name and add count for duplicates
+      const grouped: { [key: string]: any } = {};
+      list.forEach(stamp => {
+        if (!grouped[stamp.name]) {
+          grouped[stamp.name] = { ...stamp, count: 1 };
+        } else {
+          grouped[stamp.name].count += 1;
+        }
+      });
+      return Object.values(grouped);
     }
     
     if (activeFilter === 'Countries') return list.filter(s => s.type === 'country');
@@ -259,9 +622,29 @@ export default function PassportScreen() {
   };
 
   const filtered = getFilteredStamps();
+  const countryNameSet = new Set(
+    stamps
+      .filter(s => s.type === 'country')
+      .map(s => normalizeCountryName(s.name))
+      .filter(Boolean)
+  );
+
+  const getDisplayType = (stamp: Stamp): Stamp['type'] => {
+    if (stamp.type === 'place') {
+      const nameKey = normalizeCountryName(stamp.name);
+      const parentKey = normalizeCountryName(stamp.parentCountry);
+      if ((nameKey && countryNameSet.has(nameKey)) || (nameKey && parentKey && nameKey === parentKey)) {
+        return 'country';
+      }
+    }
+    return stamp.type;
+  };
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
+      {showBanner && stamps.length > 0 && (
+        <OfflineBanner text="You’re offline — showing cached passport" />
+      )}
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity style={styles.headerBtn} onPress={handleBack}>
@@ -274,16 +657,8 @@ export default function PassportScreen() {
         </View>
 
         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-          {/* Badge Icon (Screenshot gem) */}
-          <TouchableOpacity style={[styles.headerBtn, { marginRight: 8, backgroundColor: '#E3F2FD' }]}>
-            <LinearGradient
-              colors={['#42A5F5', '#1976D2']}
-              style={{ width: 24, height: 24, borderRadius: 12, alignItems: 'center', justifyContent: 'center' }}
-            >
-              <Feather name="award" size={14} color="#fff" />
-            </LinearGradient>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.headerBtn}>
+
+          <TouchableOpacity style={styles.headerBtn} onPress={handleOpenLocationPicker}>
             <Feather name="search" size={20} color="#000" />
           </TouchableOpacity>
         </View>
@@ -318,8 +693,8 @@ export default function PassportScreen() {
                   <Feather name="map" size={20} color="#000" />
                 </View>
                 <View style={{ marginLeft: 12 }}>
-                  <Text style={styles.suggestionTitle}>Welcome to {suggestion.mainSuggestion.name}!</Text>
-                  <Text style={styles.suggestionSub}>Click here to add this to your stamps.</Text>
+                  <Text style={styles.suggestionTitle}>Welcome to {getSuggestionLocationLabel(suggestion)}!</Text>
+                  <Text style={styles.suggestionSub}>Adds your country stamp only — use “Add a stamp” for city or place.</Text>
                 </View>
               </View>
               <Feather name="chevron-right" size={20} color="#CCC" />
@@ -348,55 +723,219 @@ export default function PassportScreen() {
         {loading ? (
           <ActivityIndicator style={{ marginTop: 50 }} color="#0A3D62" />
         ) : (
-          <View style={selectedCountry ? styles.stampsList : styles.stampsGrid}>
-            {filtered.map((stamp, i) => (
+          <View style={styles.stampsGrid}>
+            {filtered.map((stamp, i) => {
+              const displayType = getDisplayType(stamp);
+              const displayStamp: Stamp = { ...stamp, type: displayType };
+
+              return (
               <TouchableOpacity 
                 key={stamp._id} 
-                style={selectedCountry ? styles.stampListItem : styles.stampOuter}
+                style={styles.stampOuter}
                 onPress={() => {
-                  if (stamp.type === 'country') setSelectedCountry(stamp.name);
+                  if (displayType === 'country') setSelectedCountry(stamp.name);
                 }}
               >
-                <PassportStamp 
-                  stamp={stamp} 
-                  type={selectedCountry && stamp.type !== 'country' ? 'oval' : 'circular'} 
-                />
-                
-                {/* Metadata Pills */}
-                <View style={[styles.pillsRow, selectedCountry && { marginTop: 15 }]}>
-                  <View style={styles.pill}>
-                    <Feather name="map-pin" size={10} color="#666" />
-                    <Text style={styles.pillText}>{stamp.parentCountry || stamp.name}</Text>
+                <>
+                  <PassportStamp 
+                    stamp={displayStamp} 
+                    type="circular"
+                    size={STAMP_SIZE}
+                  />
+                  
+                  {/* Metadata Pills */}
+                  <View style={[styles.pillsRow, selectedCountry && { marginTop: 15 }]}>
+                    <View style={styles.pill}>
+                      <Feather name="map-pin" size={10} color="#666" />
+                      <Text style={styles.pillText}>{stamp.parentCountry || stamp.name}</Text>
+                    </View>
+                    <View style={styles.pill}>
+                      <Feather name="calendar" size={10} color="#000" />
+                      <Text style={styles.pillText}>
+                        {formatDate(stamp.createdAt, 'long')}
+                      </Text>
+                    </View>
+                    <View style={styles.pill}>
+                      <Text style={styles.pillText}>{stamp.postCount || 0} posts</Text>
+                    </View>
                   </View>
-                  <View style={styles.pill}>
-                    <Feather name="calendar" size={10} color="#666" />
-                    <Text style={styles.pillText}>
-                      {new Date(stamp.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
-                    </Text>
-                  </View>
-                  <View style={styles.pill}>
-                    <Text style={styles.pillText}>{stamp.postCount || 0} posts</Text>
-                  </View>
-                </View>
+                </>
               </TouchableOpacity>
-            ))}
+            )})}
 
             {filtered.length === 0 && (
               <View style={styles.emptyState}>
                 <Feather name="map" size={40} color="#ddd" />
-                <Text style={styles.emptyText}>No {activeFilter.toLowerCase()} stamps yet</Text>
+                <Text style={styles.emptyText}>No {(activeFilter || 'All').toLowerCase()} stamps yet</Text>
               </View>
             )}
           </View>
         )}
       </ScrollView>
 
-      {/* Manual Add FAB */}
+      {/* Manual Add FAB - Redesigned to Pill Center */}
       {isOwner && (
-        <TouchableOpacity style={styles.fab} onPress={() => Alert.alert('GPS Detection', 'Travel to a new location to get a stamp automatically!')}>
-          <Feather name="crosshair" size={24} color="#fff" />
-        </TouchableOpacity>
+        <View style={styles.fabContainer} pointerEvents="box-none">
+          <TouchableOpacity 
+            style={styles.fabPill} 
+            onPress={handleOpenLocationPicker}
+          >
+            <Ionicons name="locate" size={18} color="#fff" />
+            <Text style={styles.fabText}>Add a stamp</Text>
+          </TouchableOpacity>
+        </View>
       )}
+
+      {/* Location Selection Modal - Bottom Sheet */}
+      <Modal
+        visible={showLocationModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowLocationModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            style={{ justifyContent: 'flex-end', flex: 1 }}
+            keyboardVerticalOffset={0}
+          >
+          <View style={styles.modalBottomSheet}>
+            {/* Modal Header */}
+            <View style={styles.modalHeader}>
+              <View style={{ width: 72, alignItems: 'flex-start' }}>
+                <TouchableOpacity
+                  style={styles.modalCloseBtn}
+                  onPress={() => setShowLocationModal(false)}
+                >
+                  <Text style={styles.modalCloseText}>Cancel</Text>
+                </TouchableOpacity>
+              </View>
+              <Text style={styles.modalTitle} numberOfLines={1}>Select location</Text>
+              <View style={{ width: 72, alignItems: 'flex-end' }}>
+                {canSubmitManualStamps && (
+                  <TouchableOpacity
+                    style={styles.modalAddBtn}
+                    onPress={handleAddStamp}
+                    disabled={isAdding}
+                  >
+                    <Text style={styles.modalAddText}>{isAdding ? 'Adding...' : 'Add'}</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            </View>
+
+            {/* Search Bar */}
+            <View style={styles.modalSearchContainer}>
+              <Feather name="search" size={18} color="#0A3D62" style={{ marginRight: 12 }} />
+              <TextInput
+                style={styles.modalSearchInput}
+                placeholder="Search places"
+                placeholderTextColor="#999"
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+                editable={!locationLoading}
+                onSubmitEditing={() => Keyboard.dismiss()}
+                returnKeyType="search"
+              />
+            </View>
+
+            {/* Locations list + city stamp (city row always when geocoded, even if no venues) */}
+            {locationLoading && nearbyPlaces.length === 0 && !areaGeo ? (
+              <View style={styles.modalLoadingContainer}>
+                <ActivityIndicator size="large" color="#0A3D62" />
+                <Text style={styles.modalLoadingText}>Fetching nearby locations...</Text>
+              </View>
+            ) : (
+              <ScrollView
+                style={styles.modalLocationsList}
+                showsVerticalScrollIndicator={false}
+                keyboardShouldPersistTaps="handled"
+                contentContainerStyle={{ paddingBottom: 120, paddingHorizontal: 20 }}
+              >
+                {areaGeo && isReadableLocationLabel(areaGeo.city) && (
+                  <TouchableOpacity
+                    style={[
+                      styles.cityStampRow,
+                      includeCityStamp && styles.cityStampRowSelected,
+                    ]}
+                    onPress={() => setIncludeCityStamp((v) => !v)}
+                    activeOpacity={0.85}
+                  >
+                    <View style={styles.cityStampRowLeft}>
+                      <View style={[styles.selectionRadio, includeCityStamp && styles.selectionRadioSelected]}>
+                        {includeCityStamp ? <Feather name="check" size={16} color="#fff" /> : null}
+                      </View>
+                      <View style={{ flex: 1, marginLeft: 12 }}>
+                        <Text style={styles.cityStampRowTitle}>City stamp</Text>
+                        <Text style={styles.cityStampRowName}>{areaGeo.city}</Text>
+                        <Text style={styles.cityStampRowHint}>Current area — add without picking a venue</Text>
+                      </View>
+                    </View>
+                  </TouchableOpacity>
+                )}
+                <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 16, marginBottom: 12 }}>
+                  <Text style={styles.modallocationLabel}>Nearby places (~200 m)</Text>
+                  {locationLoading && (
+                    <ActivityIndicator size="small" color="#0A3D62" style={{ marginLeft: 8 }} />
+                  )}
+                </View>
+                {filteredPlaces.length === 0 ? (
+                  <View style={styles.modalEmptyInline}>
+                    <Feather name="map-pin" size={36} color="#ddd" />
+                    <Text style={styles.modalEmptyText}>
+                      {locationLoading
+                        ? 'Loading nearby venues…'
+                        : nearbyPlaces.length === 0
+                          ? 'No venues in ~200 m — you can still add a city stamp above.'
+                          : 'No results matching your search'}
+                    </Text>
+                  </View>
+                ) : (
+                  filteredPlaces.map((place, index) => (
+                    <TouchableOpacity
+                      key={place.placeId || index}
+                      style={[
+                        styles.locationItem,
+                        selectedLocation?.placeId === place.placeId && styles.locationItemSelected,
+                      ]}
+                      onPress={() =>
+                        setSelectedLocation((prev: any) =>
+                          prev?.placeId === place.placeId ? null : place
+                        )
+                      }
+                    >
+                      <View style={styles.locationItemLeft}>
+                        <View style={styles.locationIcon}>
+                          <Feather name="map-pin" size={18} color="#0A3D62" />
+                        </View>
+                        <View style={styles.locationItemText}>
+                          <Text style={styles.locationName}>{place.placeName}</Text>
+                          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                            <Text style={styles.locationAddress}>
+                              {place.address || ''}
+                            </Text>
+                          </ScrollView>
+                        </View>
+                      </View>
+                      <View
+                        style={[
+                          styles.selectionRadio,
+                          selectedLocation?.placeId === place.placeId && styles.selectionRadioSelected,
+                        ]}
+                      >
+                        {selectedLocation?.placeId === place.placeId && (
+                          <Feather name="check" size={16} color="#fff" />
+                        )}
+                      </View>
+                    </TouchableOpacity>
+                  ))
+                )}
+              </ScrollView>
+            )}
+          </View>
+          </KeyboardAvoidingView>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -486,6 +1025,70 @@ const styles = StyleSheet.create({
     marginBottom: 40,
     alignItems: 'center',
   },
+  stampCountryListItem: {
+    width: '100%',
+    marginBottom: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: '#f9f9f9',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#eee',
+  },
+  listItemContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  listItemLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  listStampCircle: {
+    width: 70,
+    height: 70,
+    borderRadius: 35,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 16,
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#eee',
+    overflow: 'hidden',
+  },
+  listItemText: {
+    flex: 1,
+  },
+  listItemName: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#000',
+    marginBottom: 2,
+  },
+  listItemType: {
+    fontSize: 12,
+    color: '#0A3D62',
+    fontWeight: '600',
+    marginBottom: 4,
+  },
+  listItemDate: {
+    fontSize: 11,
+    color: '#999',
+    fontWeight: '500',
+  },
+  countBadge: {
+    backgroundColor: '#0A3D62',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 12,
+    marginLeft: 12,
+  },
+  countBadgeText: {
+    color: '#fff',
+    fontSize: 13,
+    fontWeight: '700',
+  },
   stampCircle: {
     width: 140,
     height: 140,
@@ -513,21 +1116,31 @@ const styles = StyleSheet.create({
   counterText: { fontSize: 10, fontWeight: '800', color: '#fff' },
   pillsRow: {
     flexDirection: 'row',
-    gap: 6,
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    width: '100%',
+    gap: 8,
     marginTop: 10,
+    marginLeft: 0,
+    alignSelf: 'center',
   },
   pill: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F5F5F5',
-    paddingHorizontal: 10,
+    backgroundColor: '#fff',
+    paddingHorizontal: 12,
     paddingVertical: 6,
-    borderRadius: 15,
-    gap: 4,
+    borderRadius: 12,
+    gap: 6,
     borderWidth: 1,
     borderColor: '#eee',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 1,
+    elevation: 1,
   },
-  pillText: { fontSize: 11, color: '#444', fontWeight: '600' },
+  pillText: { fontSize: 13, color: '#333', fontWeight: '500' },
 
   suggestionInner: {
     flexDirection: 'row',
@@ -561,11 +1174,236 @@ const styles = StyleSheet.create({
   emptyState: { alignItems: 'center', width: '100%', marginTop: 40 },
   emptyText: { fontSize: 14, color: '#999', marginTop: 10 },
 
-  fab: {
-    position: 'absolute', bottom: 30, right: 20,
-    width: 56, height: 56, borderRadius: 28,
-    backgroundColor: '#000', alignItems: 'center', justifyContent: 'center',
-    elevation: 5, shadowColor: '#000', shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3, shadowRadius: 6,
+  fabContainer: {
+    position: 'absolute',
+    bottom: 30,
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  fabPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#000',
+    paddingHorizontal: 22,
+    paddingVertical: 12,
+    borderRadius: 30,
+    gap: 10,
+    elevation: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+  },
+  fabText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '700',
+  },
+
+  // Modal styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalBottomSheet: {
+    backgroundColor: '#fff',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    maxHeight: '85%',
+    paddingBottom: 30,
+  },
+  modalContainer: {
+    flex: 1,
+    backgroundColor: '#fff',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#eee',
+  },
+  modalCloseBtn: {
+    paddingVertical: 4,
+  },
+  modalCloseText: {
+    fontSize: 16,
+    color: '#0A3D62',
+    fontWeight: '600',
+  },
+  modalTitle: {
+    flex: 1,
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#000',
+    textAlign: 'center',
+  },
+  modalAddBtn: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+  },
+  modalAddText: {
+    fontSize: 16,
+    color: '#0A3D62',
+    fontWeight: '600',
+  },
+  modalSearchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginHorizontal: 20,
+    marginVertical: 16,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    backgroundColor: '#f5f7fa',
+    borderRadius: 23,
+    borderWidth: 1,
+    borderColor: '#eef0f2',
+  },
+  modalSearchInput: {
+    flex: 1,
+    fontSize: 15,
+    color: '#000',
+    padding: 0,
+  },
+  modalLoadingContainer: {
+    paddingVertical: 60,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalLoadingText: {
+    fontSize: 14,
+    color: '#999',
+    marginTop: 12,
+  },
+  modalEmptyContainer: {
+    paddingVertical: 60,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalEmptyText: {
+    fontSize: 14,
+    color: '#999',
+    marginTop: 12,
+    textAlign: 'center',
+    paddingHorizontal: 8,
+  },
+  modalEmptyInline: {
+    paddingVertical: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalLocationsList: {
+    paddingHorizontal: 20,
+    maxHeight: 400,
+  },
+  cityStampRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    marginTop: 16,
+    backgroundColor: '#f9f9f9',
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: '#eee',
+  },
+  cityStampRowSelected: {
+    backgroundColor: '#f0f4f8',
+    borderColor: '#1E63D7',
+  },
+  cityStampRowLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  cityStampRowTitle: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#1E63D7',
+    letterSpacing: 0.6,
+    textTransform: 'uppercase',
+  },
+  cityStampRowName: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#111',
+    marginTop: 2,
+  },
+  cityStampRowHint: {
+    fontSize: 12,
+    color: '#888',
+    marginTop: 4,
+  },
+  modallocationLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#000',
+    marginTop: 0,
+    marginBottom: 0,
+    flexShrink: 1,
+  },
+  locationItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    marginBottom: 12,
+    backgroundColor: '#f9f9f9',
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: '#eee',
+  },
+  locationItemSelected: {
+    backgroundColor: '#f0f4f8',
+    borderColor: '#0A3D62',
+  },
+  locationItemLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  locationIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#fff',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+    borderWidth: 1,
+    borderColor: '#eee',
+  },
+  locationItemText: {
+    flex: 1,
+  },
+  locationName: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#000',
+    marginBottom: 2,
+  },
+  locationAddress: {
+    fontSize: 12,
+    color: '#888',
+  },
+  selectionRadio: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: '#ddd',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 12,
+  },
+  selectionRadioSelected: {
+    borderColor: '#0A3D62',
+    backgroundColor: '#0A3D62',
   },
 });

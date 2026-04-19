@@ -307,6 +307,11 @@ export default function GroupsDrawer({ visible, onClose }: GroupsDrawerProps) {
     const [groups, setGroups] = useState<Group[]>([]);
     const [loading, setLoading] = useState(false);
     const [creating, setCreating] = useState(false);
+    
+    // New state for custom group creation
+    const [showCreateModal, setShowCreateModal] = useState(false);
+    const [newGroupName, setNewGroupName] = useState('');
+    const [newGroupType, setNewGroupType] = useState<Group['type']>('custom');
 
     useEffect(() => {
         Animated.spring(slideAnim, {
@@ -335,21 +340,27 @@ export default function GroupsDrawer({ visible, onClose }: GroupsDrawerProps) {
         return () => { cancelled = true; };
     }, [visible]);
 
-    const handleCreate = async (type: Group['type']) => {
+    const handleCreate = async (type: Group['type'], customName?: string) => {
         let uid = userId;
         if (!uid) { try { uid = await AsyncStorage.getItem('userId'); } catch { } }
         if (!uid) { Alert.alert('Error', 'User not found. Please try again.'); return; }
 
-        const name = type === 'friends' ? 'Friends' : type === 'family' ? 'Family' : 'Custom Group';
-        if (groups.find((g) => g.type === type)) {
-            Alert.alert('Already Exists', `You already have a "${name}" group.`); return;
+        const name = customName || (type === 'friends' ? 'Friends' : type === 'family' ? 'Family' : 'Custom Group');
+        
+        // Allow creating multiple groups with same type if they have different names
+        if (groups.find((g) => g.name.toLowerCase() === name.toLowerCase())) {
+            Alert.alert('Already Exists', `"${name}" naam ka group pehle se maujood hai.`); return;
         }
 
         setCreating(true);
         try {
             const group = await createGroupApi(uid, name, type);
-            if (group) { setGroups((prev) => [...prev, group]); }
-            else { Alert.alert('Error', `Failed to create ${name} group.`); }
+            if (group) { 
+                setGroups((prev) => [...prev, group]); 
+                setShowCreateModal(false);
+                setNewGroupName('');
+            }
+            else { Alert.alert('Error', `Failed to create "${name}" group.`); }
         } catch (err: any) { Alert.alert('Error', err?.message || 'Failed.'); }
         finally { setCreating(false); }
     };
@@ -379,30 +390,39 @@ export default function GroupsDrawer({ visible, onClose }: GroupsDrawerProps) {
                         </Text>
 
                         {/* Create Buttons in header area */}
-                        {(!hasFriends || !hasFamily) && (
-                            <View style={styles.headerCreateRow}>
-                                {!hasFriends && (
-                                    <TouchableOpacity
-                                        style={styles.headerCreateBtn}
-                                        onPress={() => handleCreate('friends')}
-                                        activeOpacity={0.82}
-                                    >
-                                        <Feather name="users" size={14} color="#4F8EF7" />
-                                        <Text style={styles.headerCreateBtnText}>+ Friends</Text>
-                                    </TouchableOpacity>
-                                )}
-                                {!hasFamily && (
-                                    <TouchableOpacity
-                                        style={[styles.headerCreateBtn, { borderColor: '#F97316' + '50' }]}
-                                        onPress={() => handleCreate('family')}
-                                        activeOpacity={0.82}
-                                    >
-                                        <Feather name="home" size={14} color="#F97316" />
-                                        <Text style={[styles.headerCreateBtnText, { color: '#C2410C' }]}>+ Family</Text>
-                                    </TouchableOpacity>
-                                )}
-                            </View>
-                        )}
+                        <View style={styles.headerCreateRow}>
+                            {!hasFriends ? (
+                                <TouchableOpacity
+                                    style={styles.headerCreateBtn}
+                                    onPress={() => handleCreate('friends')}
+                                    activeOpacity={0.82}
+                                >
+                                    <Feather name="plus" size={14} color="#4F8EF7" />
+                                    <Text style={styles.headerCreateBtnText}>Friends</Text>
+                                </TouchableOpacity>
+                            ) : null}
+                            {!hasFamily ? (
+                                <TouchableOpacity
+                                    style={[styles.headerCreateBtn, { borderColor: '#F97316' + '50' }]}
+                                    onPress={() => handleCreate('family')}
+                                    activeOpacity={0.82}
+                                >
+                                    <Feather name="plus" size={14} color="#F97316" />
+                                    <Text style={[styles.headerCreateBtnText, { color: '#C2410C' }]}>Family</Text>
+                                </TouchableOpacity>
+                            ) : null}
+                            <TouchableOpacity
+                                style={[styles.headerCreateBtn, { borderColor: '#8B5CF6' + '50' }]}
+                                onPress={() => {
+                                    setNewGroupType('custom');
+                                    setShowCreateModal(true);
+                                }}
+                                activeOpacity={0.82}
+                            >
+                                <Feather name="plus" size={14} color="#8B5CF6" />
+                                <Text style={[styles.headerCreateBtnText, { color: '#fff' }]}>Custom</Text>
+                            </TouchableOpacity>
+                        </View>
                     </View>
 
                     {/* ── Body ── */}
@@ -441,6 +461,66 @@ export default function GroupsDrawer({ visible, onClose }: GroupsDrawerProps) {
                     )}
                 </Animated.View>
             </View>
+
+            {/* Create Group Modal */}
+            <Modal visible={showCreateModal} transparent animationType="fade" onRequestClose={() => setShowCreateModal(false)}>
+                <TouchableWithoutFeedback onPress={() => setShowCreateModal(false)}>
+                    <View style={styles.modalOverlay}>
+                        <TouchableWithoutFeedback>
+                            <View style={styles.createModalContent}>
+                                <View style={styles.modalHeader}>
+                                    <Text style={styles.modalTitle}>Create New Group</Text>
+                                    <TouchableOpacity onPress={() => setShowCreateModal(false)}>
+                                        <Feather name="x" size={20} color="#9CA3AF" />
+                                    </TouchableOpacity>
+                                </View>
+                                
+                                <Text style={styles.inputLabel}>Group Name</Text>
+                                <TextInput
+                                    style={styles.groupNameInput}
+                                    placeholder="e.g. College Friends, Family, etc."
+                                    placeholderTextColor="#9CA3AF"
+                                    value={newGroupName}
+                                    onChangeText={setNewGroupName}
+                                    autoFocus
+                                />
+
+                                <View style={styles.typeSelectorRow}>
+                                    {(['friends', 'family', 'custom'] as const).map((t) => (
+                                        <TouchableOpacity 
+                                            key={t}
+                                            onPress={() => setNewGroupType(t)}
+                                            style={[
+                                                styles.typeOption, 
+                                                newGroupType === t && { backgroundColor: COLORS[t].light, borderColor: COLORS[t].bg }
+                                            ]}
+                                        >
+                                            <Text style={[
+                                                styles.typeOptionText,
+                                                newGroupType === t && { color: COLORS[t].text }
+                                            ]}>
+                                                {t.charAt(0).toUpperCase() + t.slice(1)}
+                                            </Text>
+                                        </TouchableOpacity>
+                                    ))}
+                                </View>
+
+                                <TouchableOpacity 
+                                    style={[styles.createSubmitBtn, !newGroupName.trim() && { opacity: 0.5 }]}
+                                    onPress={() => handleCreate(newGroupType, newGroupName)}
+                                    disabled={!newGroupName.trim() || creating}
+                                >
+                                    {creating ? (
+                                        <ActivityIndicator size="small" color="#fff" />
+                                    ) : (
+                                        <Text style={styles.createSubmitText}>Create Group</Text>
+                                    )}
+                                </TouchableOpacity>
+                            </View>
+                        </TouchableWithoutFeedback>
+                    </View>
+                </TouchableWithoutFeedback>
+            </Modal>
         </Modal>
     );
 }
@@ -586,7 +666,7 @@ const styles = StyleSheet.create({
     memberAvatar: { width: 34, height: 34, borderRadius: 17, backgroundColor: '#E5E7EB' },
     memberAvatarFallback: { alignItems: 'center', justifyContent: 'center', backgroundColor: '#DBEAFE' },
     memberAvatarInitials: { fontSize: 13, fontWeight: '700', color: '#2563EB' },
-    memberName: { flex: 1, fontSize: 13, fontWeight: '600', color: '#1F2937' },
+    memberName: { flex: 1, fontSize: 13, fontWeight: '400', color: '#1F2937' },
     memberRemoveBtn: {
         width: 24, height: 24, borderRadius: 12,
         backgroundColor: '#F3F4F6',
@@ -653,4 +733,43 @@ const styles = StyleSheet.create({
         backgroundColor: '#F3F4F6', borderRadius: 14, alignItems: 'center',
     },
     addCancelText: { fontSize: 15, fontWeight: '600', color: '#374151' },
+    
+    // Create Group Modal
+    modalOverlay: {
+        flex: 1, backgroundColor: 'rgba(0,0,0,0.6)',
+        justifyContent: 'center', alignItems: 'center',
+        padding: 20,
+    },
+    createModalContent: {
+        width: '100%', backgroundColor: '#fff',
+        borderRadius: 24, padding: 24,
+        shadowColor: '#000', shadowOffset: { width: 0, height: 10 },
+        shadowOpacity: 0.1, shadowRadius: 20, elevation: 10,
+    },
+    modalHeader: {
+        flexDirection: 'row', justifyContent: 'space-between',
+        alignItems: 'center', marginBottom: 20,
+    },
+    modalTitle: { fontSize: 19, fontWeight: '700', color: '#111827' },
+    inputLabel: { fontSize: 13, fontWeight: '600', color: '#6B7280', marginBottom: 8, marginLeft: 4 },
+    groupNameInput: {
+        width: '100%', backgroundColor: '#F3F4F6',
+        borderRadius: 14, paddingHorizontal: 16, paddingVertical: 14,
+        fontSize: 16, color: '#111827', marginBottom: 20,
+    },
+    typeSelectorRow: {
+        flexDirection: 'row', gap: 8, marginBottom: 24,
+    },
+    typeOption: {
+        flex: 1, paddingVertical: 10, alignItems: 'center',
+        borderRadius: 12, borderWidth: 1.5, borderColor: '#F3F4F6',
+        backgroundColor: '#F9FAFB',
+    },
+    typeOptionText: { fontSize: 13, fontWeight: '600', color: '#6B7280' },
+    createSubmitBtn: {
+        backgroundColor: '#0A2540',
+        paddingVertical: 15, borderRadius: 14,
+        alignItems: 'center',
+    },
+    createSubmitText: { color: '#fff', fontSize: 16, fontWeight: '700' },
 });

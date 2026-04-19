@@ -1,28 +1,15 @@
 import { useRouter } from 'expo-router';
-import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, Image, ScrollView, StyleSheet, Text, View } from 'react-native';
+import React, { useState } from 'react';
+import { Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { handleSocialAuthResult, signInWithApple, signInWithGoogle, signInWithSnapchat, signInWithTikTok } from '../../services/socialAuthService';
+import { AuthBrandHeader } from '@/src/_components/auth/AuthBrandHeader';
 import CustomButton from '@/src/_components/auth/CustomButton';
 import SocialButton from '@/src/_components/auth/SocialButton';
-import fetchLogoUrl from '@/src/_services/brandingService';
 
 export default function WelcomeScreen() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
-  const [logoUrl, setLogoUrl] = useState<string | null>(null);
-  const [logoLoading, setLogoLoading] = useState(true);
-
-  useEffect(() => {
-    let isMounted = true;
-    fetchLogoUrl().then((url: string | null) => {
-      if (isMounted) {
-        setLogoUrl(url);
-        setLogoLoading(false);
-      }
-    }).catch(() => setLogoLoading(false));
-    return () => { isMounted = false; };
-  }, []);
 
   const handleGoogleSignIn = async () => {
     if (loading) {
@@ -92,35 +79,7 @@ export default function WelcomeScreen() {
         bounces={false}
       >
         <View style={styles.content}>
-          {/* Logo/Header */}
-          <View style={styles.header}>
-            <View style={{ position: 'relative', height: 60, width: 220, justifyContent: 'center', alignItems: 'center', marginBottom: 12 }}>
-              {/* Base Text Logo - Always visible immediately */}
-              <Text style={{
-                fontSize: 36,
-                fontWeight: '900',
-                color: '#0A3D62',
-                letterSpacing: -1
-              }}>
-                Trave<Text style={{ color: '#667eea' }}>Social</Text>
-              </Text>
-
-              {/* Branding Image - Loads on top if available */}
-              <Image
-                source={{ uri: logoUrl || 'https://res.cloudinary.com/dinwxxnzm/image/upload/v1766418070/logo/logo.png' }}
-                style={{
-                  position: 'absolute',
-                  top: 0,
-                  left: 0,
-                  right: 0,
-                  bottom: 0,
-                  backgroundColor: 'transparent'
-                }}
-                resizeMode="contain"
-              />
-            </View>
-            <Text style={styles.subtitle}>Please login to your account</Text>
-          </View>
+          <AuthBrandHeader variant="welcome" subtitle="Please login to your account" />
 
           {/* Main Action Buttons */}
           <View style={styles.buttonContainer}>
@@ -198,22 +157,6 @@ const styles = StyleSheet.create({
     flex: 1,
     padding: 20,
     paddingBottom: 10,
-  },
-  header: {
-    alignItems: 'center',
-    marginTop: 60,
-    marginBottom: 20,
-  },
-  logo: {
-    width: 170,
-    height: 170,
-    marginBottom: 32,
-    alignSelf: 'center',
-    resizeMode: 'contain',
-  },
-  subtitle: {
-    fontSize: 14,
-    color: '#666',
   },
   buttonContainer: {
     marginBottom: 15,

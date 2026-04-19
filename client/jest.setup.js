@@ -19,6 +19,12 @@ jest.mock('expo-router', () => ({
   Stack: { Screen: 'Screen' },
 }));
 
+jest.mock('expo-constants', () => ({
+  expoConfig: { extra: {} },
+  manifest: {},
+  manifest2: {},
+}));
+
 jest.mock('expo-font', () => ({
   loadAsync: jest.fn(() => Promise.resolve()),
 }));
@@ -28,7 +34,8 @@ jest.mock('expo-image-manipulator', () => ({
   SaveFormat: { JPEG: 'jpeg', PNG: 'png' },
 }));
 
-jest.mock('expo-file-system/legacy', () => ({
+// SDKs differ on whether this module path exists; mock the main module.
+jest.mock('expo-file-system', () => ({
   cacheDirectory: '/tmp/',
   getInfoAsync: jest.fn(() => Promise.resolve({ exists: true, size: 1024 * 1024 })),
   readAsStringAsync: jest.fn(() => Promise.resolve('base64-data')),

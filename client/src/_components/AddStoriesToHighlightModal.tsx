@@ -13,14 +13,19 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { addStoryToHighlight } from '../../lib/firebaseHelpers/highlights';
+import { useAppDialog } from '@/src/_components/AppDialogProvider';
 
 interface Story {
-  id: string;
+  id?: string;
+  _id?: string;
+  storyId?: string;
   userId: string;
   userName: string;
   userAvatar: string;
-  imageUrl: string;
+  imageUrl?: string;
   videoUrl?: string;
+  mediaUrl?: string;
+  thumbnailUrl?: string;
   mediaType?: 'image' | 'video';
   createdAt: any;
   views?: string[];
@@ -44,6 +49,10 @@ export default function AddStoriesToHighlightModal({
 }: AddStoriesToHighlightModalProps) {
   const [selectedStories, setSelectedStories] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(false);
+  const { showSuccess } = useAppDialog();
+
+  const resolveStoryId = (s: Story) => String(s?.id || s?._id || s?.storyId || '');
+  const resolveStoryPreview = (s: Story) => String(s?.imageUrl || s?.thumbnailUrl || s?.mediaUrl || s?.videoUrl || '');
 
   const toggleStory = (storyId: string) => {
     const newSelected = new Set(selectedStories);
@@ -76,7 +85,7 @@ export default function AddStoriesToHighlightModal({
       }
 
       if (failureCount === 0) {
-        Alert.alert('Success', `Added ${successCount} story(ies) to highlight`);
+        showSuccess(`Added ${successCount} ${successCount === 1 ? 'story' : 'stories'} to highlight`);
         setSelectedStories(new Set());
         onClose();
         if (onStoryAdded) {
@@ -96,16 +105,17 @@ export default function AddStoriesToHighlightModal({
   };
 
   const renderStoryItem = ({ item }: { item: Story }) => {
-    const isSelected = selectedStories.has(item.id);
+    const sid = resolveStoryId(item);
+    const isSelected = selectedStories.has(sid);
 
     return (
       <TouchableOpacity
         style={[styles.storyItem, isSelected && styles.storyItemSelected]}
-        onPress={() => toggleStory(item.id)}
+        onPress={() => sid && toggleStory(sid)}
         disabled={loading}
       >
         <Image
-          source={{ uri: item.imageUrl || item.videoUrl }}
+          source={{ uri: resolveStoryPreview(item) }}
           style={styles.storyImage}
         />
         {isSelected && (
@@ -148,7 +158,10 @@ export default function AddStoriesToHighlightModal({
         <FlatList
           data={stories}
           renderItem={renderStoryItem}
-          keyExtractor={(item) => item.id}
+          keyExtractor={(item, index) => {
+            const sid = resolveStoryId(item);
+            return sid ? `story_${sid}` : `story_idx_${index}`;
+          }}
           ListEmptyComponent={renderEmptyState}
           numColumns={2}
           columnWrapperStyle={styles.columnWrapper}

@@ -1,6 +1,8 @@
+import { DEFAULT_AVATAR_URL } from '../../lib/api';
 import { Feather } from "@expo/vector-icons";
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ResizeMode, Video } from 'expo-av';
+import * as Haptics from 'expo-haptics';
 import * as ImageManipulator from 'expo-image-manipulator';
 import * as ImagePicker from 'expo-image-picker';
 import { Image as ExpoImage } from 'expo-image';
@@ -17,6 +19,9 @@ const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 // Responsive values
 const isSmallDevice = SCREEN_HEIGHT < 700;
 const isMediumDevice = SCREEN_HEIGHT >= 700 && SCREEN_HEIGHT < 850;
+
+/** Matches `home.tsx` category chips: `chipText` fontSize 11, regular weight, #666. */
+const STORY_ROW_NAME_FONT_SIZE = 11;
 
 const responsiveValues = {
   // Image preview height
@@ -52,11 +57,54 @@ function isRecord(value: any): value is Record<string, any> {
   return value !== null && typeof value === 'object';
 }
 
+function normalizeUserId(value: any): string {
+  if (typeof value === 'string') return value;
+  if (value && typeof value === 'object') {
+    return String(value._id || value.id || value.uid || value.firebaseUid || '');
+  }
+  return String(value || '');
+}
+
+function normalizeAvatar(value: any): string {
+  if (typeof value !== 'string') return '';
+  const trimmed = value.trim();
+  if (!trimmed) return '';
+  const lower = trimmed.toLowerCase();
+  if (lower === 'null' || lower === 'undefined' || lower === 'n/a' || lower === 'na') return '';
+  if (lower.includes('via.placeholder.com/200x200.png?text=profile')) return '';
+  if (lower.includes('/default%2fdefault-pic.jpg') || lower.includes('/default/default-pic.jpg')) return '';
+  if (lower.startsWith('http://')) return `https://${trimmed.slice(7)}`;
+  if (lower.startsWith('//')) return `https:${trimmed}`;
+  return trimmed;
+}
+
+function normalizeStoryMediaUrl(value: any): string {
+  if (typeof value !== 'string') return '';
+  const trimmed = value.trim();
+  if (!trimmed) return '';
+  const lower = trimmed.toLowerCase();
+  if (lower === 'null' || lower === 'undefined' || lower === 'n/a' || lower === 'na') return '';
+  if (lower.startsWith('http://')) return `https://${trimmed.slice(7)}`;
+  if (lower.startsWith('//')) return `https:${trimmed}`;
+  return trimmed;
+}
+
 function getStoryBubbleThumbnail(storyUser: StoryUser, defaultAvatarUrl: string): string {
   return storyUser?.bubblePreviewUrl || storyUser?.userAvatar || defaultAvatarUrl;
 }
 
+const STORY_RING_UNSEEN = ['#3498db', '#5dade2'] as const; // Telegram Blue Gradient
+const STORY_RING_SEEN = 'rgba(255,255,255,0.15)'; // Subtle ring for seen
+
+const profileCache: Record<string, string> = {}; // Local avatar cache
+
+const resolveAvatarSource = (uri: string, defaultAvatarSource: any) => {
+  const safe = normalizeAvatar(uri);
+  return safe ? ({ uri: safe } as const) : defaultAvatarSource;
+};
+
 function StoriesRowComponent({ onStoryPress, onStoryViewerClose, refreshTrigger, resetTrigger, mirror = false, incomingMedia }: { onStoryPress?: (stories: any[], initialIndex: number) => void; onStoryViewerClose?: () => void; refreshTrigger?: number; resetTrigger?: number; mirror?: boolean; incomingMedia?: { uri: string; type: string } | null }): React.ReactElement {
+  const DEFAULT_AVATAR_SOURCE = require('../../assets/images/splash-icon.png');
   const router = useRouter();
   const [storyUsers, setStoryUsers] = useState<StoryUser[]>([]);
   const [loading, setLoading] = useState(true);
@@ -70,24 +118,44 @@ function StoriesRowComponent({ onStoryPress, onStoryViewerClose, refreshTrigger,
   const [loadingLocations, setLoadingLocations] = useState(false);
   const [authUser, setAuthUser] = useState<any>(null);
   const [isViewingStories, setIsViewingStories] = useState(false);
+  const [brokenStoryThumbs, setBrokenStoryThumbs] = useState<Record<string, boolean>>({});
+  const [brokenCurrentAvatar, setBrokenCurrentAvatar] = useState(false);
   const scrollRef = React.useRef<ScrollView>(null);
   const autoScrolledRef = React.useRef(false);
+  const lastStoriesLoadAtRef = React.useRef(0);
+  const hydratedFromCacheRef = React.useRef(false);
+
+  const STORIES_CACHE_KEY = 'storiesRowCache_v1';
+  const STORIES_CACHE_TTL_MS = 60_000; // 1 min
 
   // Use ref to prevent picker from opening during transitions
   const pickerBlockedRef = React.useRef(false);
 
   // Default avatar placeholder
-  const DEFAULT_AVATAR_URL = 'https://via.placeholder.com/200x200.png?text=Profile';
+  
   const STORY_RING_UNSEEN = ['#F58529', '#DD2A7B', '#8134AF'] as const;
   const STORY_RING_SEEN = '#D1D5DB';
+
+  const resolveAvatarSource = (uri: string) => {
+    const safe = normalizeAvatar(uri);
+    return safe ? ({ uri: safe } as const) : DEFAULT_AVATAR_SOURCE;
+  };
 
   // Get current user from AsyncStorage (token-based auth)
   useEffect(() => {
     const getUserData = async () => {
       try {
         const userId = await AsyncStorage.getItem('userId');
+        const firebaseUid = await AsyncStorage.getItem('firebaseUid');
+        const cachedAvatar = await AsyncStorage.getItem('userAvatar');
+
+        const resolvedCachedAvatar = normalizeAvatar(cachedAvatar);
+        if (resolvedCachedAvatar) {
+          setCurrentUserAvatar(resolvedCachedAvatar);
+        }
+
         if (userId) {
-          setAuthUser({ uid: userId });
+          setAuthUser({ uid: userId, firebaseUid: firebaseUid || undefined });
         }
       } catch (error) {
         console.error('[StoriesRow] Failed to get userId from storage:', error);
@@ -107,7 +175,22 @@ function StoriesRowComponent({ onStoryPress, onStoryViewerClose, refreshTrigger,
   );
 
   useEffect(() => {
-    loadStories();
+    // Warm start: show cached stories immediately (if any), then refresh in background.
+    (async () => {
+      try {
+        const raw = await AsyncStorage.getItem(STORIES_CACHE_KEY);
+        if (!raw) return;
+        const parsed = JSON.parse(raw);
+        const data = parsed?.data;
+        if (!Array.isArray(data) || data.length === 0) return;
+        // Always show cached row instantly (even if stale), then refresh in background.
+        hydratedFromCacheRef.current = true;
+        setStoryUsers(data);
+        setLoading(false);
+      } catch { }
+    })();
+
+    loadStories({ preferCache: true });
     loadCurrentUserAvatar();
   }, [refreshTrigger]);
 
@@ -115,6 +198,10 @@ function StoriesRowComponent({ onStoryPress, onStoryViewerClose, refreshTrigger,
     if (!authUser?.uid) return;
     loadCurrentUserAvatar();
   }, [authUser?.uid]);
+
+  useEffect(() => {
+    setBrokenCurrentAvatar(false);
+  }, [currentUserAvatar]);
 
   useEffect(() => {
     if (!mirror) return;
@@ -129,6 +216,18 @@ function StoriesRowComponent({ onStoryPress, onStoryViewerClose, refreshTrigger,
   useEffect(() => {
     autoScrolledRef.current = false;
   }, [mirror, storyUsers.length, authUser?.uid]);
+
+  useEffect(() => {
+    setBrokenStoryThumbs({});
+  }, [storyUsers.length]);
+
+  const getSafeStoryBubbleThumbnail = (storyUser: StoryUser): string => {
+    const key = String(storyUser?.userId || '');
+    const baseAvatar = normalizeAvatar(storyUser?.userAvatar) || DEFAULT_AVATAR_URL;
+    if (brokenStoryThumbs[key]) return baseAvatar;
+    const preferred = normalizeStoryMediaUrl(getStoryBubbleThumbnail(storyUser, DEFAULT_AVATAR_URL));
+    return preferred || baseAvatar;
+  };
 
   // Auto-open upload modal when story-creator sends back selected media
   useEffect(() => {
@@ -202,23 +301,42 @@ function StoriesRowComponent({ onStoryPress, onStoryViewerClose, refreshTrigger,
   }, [locationQuery]);
 
   const loadCurrentUserAvatar = async () => {
-    // Try to get avatar from stored profile
-    if (authUser && authUser.uid) {
+    const fromCache = normalizeAvatar(await AsyncStorage.getItem('userAvatar'));
+    if (fromCache) {
+      setCurrentUserAvatar(fromCache);
+    }
+
+    // Try both canonical userId and firebaseUid for maximum compatibility
+    const candidateIds = [
+      authUser?.uid,
+      authUser?.firebaseUid,
+      await AsyncStorage.getItem('firebaseUid')
+    ].filter(Boolean) as string[];
+
+    for (const candidateId of candidateIds) {
       try {
-        const userProfile = await getUserProfile(authUser.uid);
-        const avatar = userProfile?.data?.avatar || userProfile?.data?.photoURL;
+        const userProfile = await getUserProfile(candidateId);
+        const avatar = normalizeAvatar(userProfile?.data?.avatar || userProfile?.data?.photoURL);
         if (avatar) {
           setCurrentUserAvatar(String(avatar));
+          await AsyncStorage.setItem('userAvatar', String(avatar));
           return;
         }
       } catch (err) {
-        console.error('[StoriesRow] Error fetching user profile:', err);
+        console.error('[StoriesRow] Error fetching user profile for', candidateId, err);
       }
     }
   };
 
-  const loadStories = async () => {
+  const loadStories = async (opts?: { preferCache?: boolean }) => {
     try {
+      const now = Date.now();
+      // Throttle: avoid repeated heavy loads when navigating around quickly.
+      if (!opts?.preferCache && now - lastStoriesLoadAtRef.current < 15_000) {
+        return;
+      }
+      lastStoriesLoadAtRef.current = now;
+
       console.log('[StoriesRow] ðŸ“¥ Loading stories...');
       const result = await getAllStoriesForFeed();
       console.log('[StoriesRow] API Response received:', JSON.stringify(result).substring(0, 200));
@@ -247,7 +365,8 @@ function StoriesRowComponent({ onStoryPress, onStoryViewerClose, refreshTrigger,
             continue;
           }
 
-          const userId = story.userId;
+          const userId = normalizeUserId(story.userId);
+          if (!userId) continue;
           if (!storyMap.has(userId)) {
             storyMap.set(userId, []);
           }
@@ -256,26 +375,48 @@ function StoriesRowComponent({ onStoryPress, onStoryViewerClose, refreshTrigger,
 
         console.log('[StoriesRow] Grouped stories into', storyMap.size, 'users');
 
-        // Collect user IDs to fetch profiles for
-        const userIdsToFetch = Array.from(storyMap.keys());
-        console.log('[StoriesRow] Need to fetch profiles for', userIdsToFetch.length, 'users');
-
-        // Batch fetch all user profiles at once
+        // Avatar resolution strategy (fast):
+        // 1) use story.userAvatar if present
+        // 2) use in-memory cache
+        // 3) fetch profile ONLY for missing avatars (and limit how many we fetch)
         const avatarMap = new Map<string, string>();
-        const profilePromises = userIdsToFetch.map(async (userId) => {
-          try {
-            const profileRes = await getUserProfile(userId);
-            if (isRecord(profileRes) && profileRes.success && 'data' in profileRes && profileRes.data) {
-              return { userId, avatar: profileRes.data.avatar };
-            }
-          } catch (e) {
-            console.log('[StoriesRow] Error fetching profile for', userId, e);
-          }
-          return { userId, avatar: DEFAULT_AVATAR_URL };
-        });
+        const userIdsToFetch = Array.from(storyMap.keys());
+        const idsMissingAvatar: string[] = [];
 
-        const profiles = await Promise.all(profilePromises);
-        profiles.forEach(({ userId, avatar }) => avatarMap.set(userId, avatar));
+        for (const uid of userIdsToFetch) {
+          const stories = storyMap.get(uid) || [];
+          const fromStory = normalizeAvatar(stories?.[0]?.userAvatar || stories?.[0]?.avatar);
+          if (fromStory) {
+            avatarMap.set(uid, fromStory);
+            profileCache[uid] = fromStory;
+            continue;
+          }
+          const cached = profileCache[uid];
+          if (cached) {
+            avatarMap.set(uid, cached);
+            continue;
+          }
+          idsMissingAvatar.push(uid);
+        }
+
+        // Limit profile fetches to keep the row snappy
+        const MAX_PROFILE_FETCHES = 12;
+        const idsToFetch = idsMissingAvatar.slice(0, MAX_PROFILE_FETCHES);
+        await Promise.all(idsToFetch.map(async (uid) => {
+          try {
+            const profileRes = await getUserProfile(uid);
+            if (isRecord(profileRes) && profileRes.success && 'data' in profileRes && profileRes.data) {
+              const avatar = normalizeAvatar(profileRes.data.avatar || profileRes.data.photoURL) || DEFAULT_AVATAR_URL;
+              avatarMap.set(uid, avatar);
+              profileCache[uid] = avatar;
+            }
+          } catch { }
+        }));
+
+        // Fill any still-missing avatars with default
+        userIdsToFetch.forEach((uid) => {
+          if (!avatarMap.get(uid)) avatarMap.set(uid, DEFAULT_AVATAR_URL);
+        });
 
         // Build users array with cached avatars
         for (const [userId, stories] of storyMap.entries()) {
@@ -285,10 +426,10 @@ function StoriesRowComponent({ onStoryPress, onStoryViewerClose, refreshTrigger,
           const transformedStories = stories.map((story: any) => ({
             ...story,
             id: story._id || story.id,
-            imageUrl: story.image || story.imageUrl || story.mediaUrl,
-            videoUrl: story.video || story.videoUrl,
-            thumbnailUrl: story.thumbnail || story.thumbnailUrl,
-            mediaType: story.video ? 'video' : 'image'
+            imageUrl: normalizeStoryMediaUrl(story.image || story.imageUrl || story.mediaUrl),
+            videoUrl: normalizeStoryMediaUrl(story.video || story.videoUrl),
+            thumbnailUrl: normalizeStoryMediaUrl(story.thumbnail || story.thumbnailUrl),
+            mediaType: (story.video || story.videoUrl || story.mediaType === 'video') ? 'video' : 'image'
           }));
           const hasUnseen = transformedStories.some((s: any) => !seenSet.has(String(s.id)));
 
@@ -318,6 +459,10 @@ function StoriesRowComponent({ onStoryPress, onStoryViewerClose, refreshTrigger,
 
         console.log('[StoriesRow] âœ… Setting storyUsers:', users.length, 'users');
         setStoryUsers(users);
+        // Persist cache for next warm start
+        try {
+          await AsyncStorage.setItem(STORIES_CACHE_KEY, JSON.stringify({ ts: Date.now(), data: users }));
+        } catch { }
       } else {
         console.log('[StoriesRow] âŒ Result not success or no data');
       }
@@ -327,7 +472,7 @@ function StoriesRowComponent({ onStoryPress, onStoryViewerClose, refreshTrigger,
     setLoading(false);
   };
 
-  async function handleAddStory() {
+  const handleAddStory = useCallback(async () => {
     // CRITICAL: Block picker if we're transitioning to view stories
     if (pickerBlockedRef.current || isViewingStories || showUploadModal) {
       console.log('[StoriesRow] ðŸš« Picker BLOCKED:', { pickerBlocked: pickerBlockedRef.current, isViewingStories, showUploadModal });
@@ -338,20 +483,21 @@ function StoriesRowComponent({ onStoryPress, onStoryViewerClose, refreshTrigger,
       return;
     }
 
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
     // Navigate to Instagram-style story creator screen
     router.push('/story-creator' as any);
-  }
+  }, [authUser, isViewingStories, showUploadModal, router]);
 
-  if (loading) {
-    return (
-      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center', height: 90 }]}>
-        <ActivityIndicator size="small" color="#0A3D62" />
-      </View>
-    );
-  }
+  // Instagram-like: never show a "stories skeleton loader" row.
+  // If stories are still loading, we still render the real row (Add Story + any cached stories).
 
   // Check if current user has a story
-  const myUser = authUser && authUser.uid ? storyUsers.find(u => u.userId === authUser.uid) : undefined;
+  const myUser = authUser && authUser.uid
+    ? storyUsers.find(u => {
+      const id = String(u.userId || '');
+      return id === String(authUser.uid || '') || id === String(authUser.firebaseUid || '');
+    })
+    : undefined;
   const hasMyStory = !!(myUser && myUser.stories && myUser.stories.length > 0);
   return (
     <View style={styles.container}>
@@ -369,7 +515,8 @@ function StoriesRowComponent({ onStoryPress, onStoryViewerClose, refreshTrigger,
             } catch { }
           });
         }}
-        contentContainerStyle={[{ paddingHorizontal: 14 }, mirror && { flexDirection: 'row-reverse', flexGrow: 1 }]}
+        contentContainerStyle={[{ paddingHorizontal: 10 }, mirror && { flexDirection: 'row-reverse' }]}
+        style={{ flexGrow: 0 }} // Ensures it only takes the space it needs
       >
         {/* â”€â”€ Current user: single tile (Instagram-style) â”€â”€ */}
         <View style={[styles.storyWrapper, mirror && { marginRight: 0, marginLeft: 4 }]}>
@@ -380,6 +527,7 @@ function StoriesRowComponent({ onStoryPress, onStoryViewerClose, refreshTrigger,
               disabled={showUploadModal}
               onPress={async () => {
                 if (hasMyStory && myUser) {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
                   // View own story
                   await markUserStoriesSeen(String(myUser.userId), myUser.stories);
                   if (onStoryPress) onStoryPress(myUser.stories, 0);
@@ -388,39 +536,56 @@ function StoriesRowComponent({ onStoryPress, onStoryViewerClose, refreshTrigger,
                 }
               }}
             >
-              {hasMyStory && myUser ? (
-                // Show story thumbnail with gradient ring
-                <LinearGradient
-                  colors={myUser.hasUnseen ? STORY_RING_UNSEEN : ([STORY_RING_SEEN, STORY_RING_SEEN] as const)}
-                  style={styles.gradientBorder}
-                >
-                  <View style={styles.storyAvatarWrapper}>
-                    <ExpoImage
-                      source={{ uri: getStoryBubbleThumbnail(myUser, DEFAULT_AVATAR_URL) }}
-                      style={styles.storyAvatar}
-                      contentFit="cover"
-                      cachePolicy="memory-disk"
-                    />
-                  </View>
-                  {myUser.bubbleMediaType === 'video' ? (
-                    <View style={styles.overlayTypePill}>
-                      <Feather name={'video'} size={12} color="#fff" />
+                {hasMyStory && myUser ? (
+                  // Show story thumbnail with gradient ring
+                  <LinearGradient
+                    colors={myUser.hasUnseen ? STORY_RING_UNSEEN : ([STORY_RING_SEEN, STORY_RING_SEEN] as const)}
+                    style={styles.gradientBorder}
+                  >
+                    <View style={styles.storyAvatarWrapper}>
+                      <ExpoImage
+                        source={resolveAvatarSource(getSafeStoryBubbleThumbnail(myUser))}
+                        style={styles.storyAvatar}
+                        contentFit="cover"
+                        cachePolicy="memory-disk"
+                        transition={140}
+                        onError={() => {
+                          const key = String(myUser?.userId || '');
+                          console.warn('[StoriesRow] Failed story thumbnail (self):', {
+                            userId: key,
+                            attemptedUrl: getSafeStoryBubbleThumbnail(myUser)
+                          });
+                          setBrokenStoryThumbs(prev => ({ ...prev, [key]: true }));
+                        }}
+                      />
                     </View>
-                  ) : null}
-                </LinearGradient>
-              ) : (
-                // No story yet â€” show plain avatar
-                <View style={[styles.gradientBorder, styles.ctaNoRingBorder]}>
-                  <View style={[styles.storyAvatarWrapper, styles.ctaAvatarWrapper]}>
-                    <ExpoImage
-                      source={{ uri: currentUserAvatar || DEFAULT_AVATAR_URL }}
-                      style={styles.storyAvatar}
-                      contentFit="cover"
-                      cachePolicy="memory-disk"
-                    />
+                    {myUser.bubbleMediaType === 'video' ? (
+                      <View style={styles.overlayTypePill}>
+                        <Feather name={'video'} size={11} color="#fff" />
+                      </View>
+                    ) : null}
+                  </LinearGradient>
+                ) : (
+                  // No story yet — show plain avatar
+                  <View style={[styles.gradientBorder, styles.ctaNoRingBorder]}>
+                    <View style={[styles.storyAvatarWrapper, styles.ctaAvatarWrapper]}>
+                      <ExpoImage
+                        source={resolveAvatarSource(!brokenCurrentAvatar ? normalizeAvatar(currentUserAvatar) : '')}
+                        style={styles.storyAvatar}
+                        contentFit="cover"
+                        cachePolicy="memory-disk"
+                        transition={140}
+                        onError={() => {
+                          console.warn('[StoriesRow] Failed current user avatar:', {
+                            currentUserAvatar,
+                            fallback: DEFAULT_AVATAR_URL
+                          });
+                          setBrokenCurrentAvatar(true);
+                        }}
+                      />
+                    </View>
                   </View>
-                </View>
-              )}
+                )}
             </TouchableOpacity>
 
             {/* + button always visible to add/add more */}
@@ -434,40 +599,53 @@ function StoriesRowComponent({ onStoryPress, onStoryViewerClose, refreshTrigger,
               <Feather name="plus" size={10} color="#fff" />
             </TouchableOpacity>
           </View>
-          <Text style={[styles.userName, !hasMyStory && styles.userNameCta]} numberOfLines={1}>
+          <Text style={[styles.userName, !hasMyStory && styles.userNameCta]} numberOfLines={hasMyStory ? 1 : 2}>
             {hasMyStory ? 'Your story' : 'Add story'}
           </Text>
         </View>
 
         {/* Other users' stories */}
-        {authUser && authUser.uid ? storyUsers.filter(u => u.userId !== authUser.uid).map((user, idx) => (
+        {authUser && authUser.uid ? storyUsers.filter(u => {
+          const id = String(u.userId || '');
+          return id !== String(authUser.uid || '') && id !== String(authUser.firebaseUid || '');
+        }).map((user, idx) => (
           <View style={[styles.storyWrapper, mirror && { marginRight: 0, marginLeft: 4 }]} key={user.userId}>
             <TouchableOpacity
               style={styles.storyButton}
               activeOpacity={0.8}
               onPress={async () => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
                 await markUserStoriesSeen(String(user.userId), user.stories);
                 onStoryPress && onStoryPress(user.stories, 0);
               }}
             >
-              <LinearGradient
-                colors={user.hasUnseen ? STORY_RING_UNSEEN : ([STORY_RING_SEEN, STORY_RING_SEEN] as const)}
-                style={styles.gradientBorder}
-              >
-                <View style={styles.storyAvatarWrapper}>
-                  <ExpoImage
-                    source={{ uri: getStoryBubbleThumbnail(user, DEFAULT_AVATAR_URL) }}
-                    style={styles.storyAvatar}
-                    contentFit="cover"
-                    cachePolicy="memory-disk"
-                  />
-                </View>
-                {user.bubbleMediaType === 'video' ? (
-                  <View style={[styles.overlayTypePill, mirror && { left: undefined, right: 6 }]}>
-                    <Feather name={'video'} size={12} color="#fff" />
+                <LinearGradient
+                  colors={user.hasUnseen ? STORY_RING_UNSEEN : ([STORY_RING_SEEN, STORY_RING_SEEN] as const)}
+                  style={styles.gradientBorder}
+                >
+                  <View style={styles.storyAvatarWrapper}>
+                    <ExpoImage
+                      source={resolveAvatarSource(getSafeStoryBubbleThumbnail(user))}
+                      style={styles.storyAvatar}
+                      contentFit="cover"
+                      cachePolicy="memory-disk"
+                      transition={140}
+                      onError={() => {
+                        const key = String(user?.userId || '');
+                        console.warn('[StoriesRow] Failed story thumbnail:', {
+                          userId: key,
+                          attemptedUrl: getSafeStoryBubbleThumbnail(user)
+                        });
+                        setBrokenStoryThumbs(prev => ({ ...prev, [key]: true }));
+                      }}
+                    />
                   </View>
-                ) : null}
-              </LinearGradient>
+                  {user.bubbleMediaType === 'video' ? (
+                    <View style={[styles.overlayTypePill, mirror && { left: undefined, right: 6 }]}>
+                      <Feather name={'video'} size={11} color="#fff" />
+                    </View>
+                  ) : null}
+                </LinearGradient>
             </TouchableOpacity>
             <Text style={styles.userName} numberOfLines={1}>{user.userName}</Text>
           </View>
@@ -537,6 +715,7 @@ function StoriesRowComponent({ onStoryPress, onStoryViewerClose, refreshTrigger,
                       // Open viewer after modal close animation (give time for modal to close first)
                       setTimeout(() => {
                         console.log('[StoriesRow] Calling onStoryPress callback...');
+                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
                         onStoryPress(myUser.stories, 0);
 
                         // Don't unblock yet - wait for StoriesViewer to actually close
@@ -557,10 +736,11 @@ function StoriesRowComponent({ onStoryPress, onStoryViewerClose, refreshTrigger,
                   }}
                 >
                   <ExpoImage
-                    source={{ uri: currentUserAvatar || DEFAULT_AVATAR_URL }}
+                    source={resolveAvatarSource(!brokenCurrentAvatar ? normalizeAvatar(currentUserAvatar) : '')}
                     style={{ width: 40, height: 40, borderRadius: 20 }}
                     contentFit="cover"
                     cachePolicy="memory-disk"
+                    onError={() => setBrokenCurrentAvatar(true)}
                   />
                 </TouchableOpacity>
               </View>
@@ -760,7 +940,11 @@ function StoriesRowComponent({ onStoryPress, onStoryViewerClose, refreshTrigger,
                         typeof authUser?.uid === 'string' ? authUser.uid : '',
                         uploadUri,
                         mediaType,
+                        undefined, // userNameRaw
                         selectedMedia.locationData,
+                        undefined, // thumbnailUrlRaw
+                        'Everyone', // visibility 
+                        [], // allowedFollowers
                         (percent: number) => {
                           setUploadProgress((prev) => {
                             const clamped = Math.max(0, Math.min(100, Math.round(percent)));
@@ -828,34 +1012,28 @@ const styles = StyleSheet.create({
     bottom: 0,
   },
   container: {
-    paddingTop: 8,
-    paddingBottom: 6,
-    paddingHorizontal: 0,
-    backgroundColor: '#fff',
+    paddingVertical: 0,
+    backgroundColor: 'transparent',
+    alignSelf: 'flex-start', // Essential for dynamic shrinking on the left
   },
   currentUserImage: {
     width: '100%',
     height: '100%',
-    borderRadius: 9,
+    borderRadius: 12,
   },
   addButton: {
     position: 'absolute',
     bottom: -2,
     right: -2,
-    backgroundColor: '#0095F6',
-    borderRadius: 12,
-    width: 22,
-    height: 22,
+    backgroundColor: '#007aff',
+    borderRadius: 8.5,
+    width: 17,
+    height: 17,
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 2,
+    borderWidth: 1.5,
     borderColor: '#fff',
     zIndex: 10,
-    elevation: 3,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.15,
-    shadowRadius: 2,
   },
   currentUserTile: {
     position: 'relative',
@@ -873,34 +1051,43 @@ const styles = StyleSheet.create({
   },
   storyWrapper: {
     alignItems: 'center',
-    marginRight: 12,
+    marginRight: 2,
+    paddingVertical: 0, 
   },
   storyButton: {
-    marginBottom: 0,
+    width: 42,
+    height: 42,
+    borderRadius: 14,
+    backgroundColor: 'transparent',
+    overflow: 'hidden',
+    borderWidth: 0,
+    borderColor: 'transparent',
   },
   gradientBorder: {
-    width: 70,
-    height: 70,
+    width: 42,
+    height: 42,
     borderRadius: 14,
-    padding: 2.5,
+    padding: 0,
     justifyContent: 'center',
     alignItems: 'center',
     position: 'relative',
+    backgroundColor: 'transparent',
+    overflow: 'hidden',
   },
   storyAvatarWrapper: {
     width: '100%',
     height: '100%',
-    borderRadius: 11,
+    borderRadius: 14,
     overflow: 'hidden',
-    backgroundColor: '#fff',
+    backgroundColor: 'transparent',
     position: 'relative',
-    borderWidth: 1.5,
-    borderColor: '#fff',
+    borderWidth: 0,
+    borderColor: 'transparent',
   },
   storyAvatar: {
     width: '100%',
     height: '100%',
-    borderRadius: 11,
+    borderRadius: 14,
   },
   overlayTypePill: {
     position: 'absolute',
@@ -926,11 +1113,6 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     backgroundColor: '#e9eef5',
     zIndex: 3,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.15,
-    shadowRadius: 2,
-    elevation: 2,
   },
   overlayAvatarImg: {
     width: '100%',
@@ -938,16 +1120,16 @@ const styles = StyleSheet.create({
     borderRadius: 14,
   },
   userName: {
-    fontSize: 12,
-    fontWeight: '500',
-    width: 70,
+    fontSize: STORY_ROW_NAME_FONT_SIZE,
+    fontWeight: '400',
+    width: 58,
     textAlign: 'center',
-    color: '#333',
-    marginTop: 4,
+    color: '#666',
+    marginTop: 5,
   },
   userNameCta: {
-    color: '#111',
-    fontWeight: '600',
+    color: '#007aff',
+    fontWeight: '400',
   },
   uploadModalCard: {
     flex: 1,

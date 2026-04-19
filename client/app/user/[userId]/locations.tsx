@@ -8,6 +8,7 @@ import { getPassportData, Stamp } from '../../../lib/firebaseHelpers/passport';
 import { getUserProfile as getUserProfileAPI } from '../../../src/_services/firebaseService';
 import CountryFlag from '../../../src/_components/CountryFlag';
 import { LinearGradient } from 'expo-linear-gradient';
+import { safeRouterBack } from '@/lib/safeRouterBack';
 
 type PassportLocation = Stamp;
 
@@ -90,7 +91,7 @@ export default function UserLocationsScreen() {
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+        <TouchableOpacity onPress={() => safeRouterBack()} style={styles.backBtn}>
           <Feather name="arrow-left" size={24} color="#000" />
         </TouchableOpacity>
         <Text style={styles.title}>Locations</Text>

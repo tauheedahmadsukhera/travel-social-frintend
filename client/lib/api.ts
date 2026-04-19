@@ -13,3 +13,4 @@ function getAPIBaseURL(): string {
 
 export const API_BASE_URL = getAPIBaseURL();
 export const BACKEND_URL = API_BASE_URL.replace(/\/api\/?$/, '');
+export const DEFAULT_AVATAR_URL = `${BACKEND_URL}/assests/avatardefault.webp`;

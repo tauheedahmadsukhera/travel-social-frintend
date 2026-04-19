@@ -12,7 +12,9 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { safeRouterBack } from '@/lib/safeRouterBack';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { AuthBrandHeader } from '@/src/_components/auth/AuthBrandHeader';
 import CustomButton from '@/src/_components/auth/CustomButton';
 import { API_BASE_URL } from '../../lib/api';
 
@@ -82,15 +84,15 @@ export default function ResetPasswordScreen() {
           keyboardShouldPersistTaps="handled"
         >
           <View style={styles.content}>
-            <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+            <TouchableOpacity onPress={() => safeRouterBack()} style={styles.backButton}>
               <Ionicons name="arrow-back" size={24} color="#000" />
             </TouchableOpacity>
 
             <View style={styles.titleSection}>
-              <Text style={styles.title}>Reset Password</Text>
-              <Text style={styles.subtitle}>
-                Enter the 6-digit code sent to {email} and choose your new password.
-              </Text>
+              <AuthBrandHeader
+                title="Reset Password"
+                subtitle={`Enter the 6-digit code sent to ${typeof email === 'string' ? email : 'your email'} and choose your new password.`}
+              />
             </View>
 
             <View style={styles.inputContainer}>
@@ -156,8 +158,6 @@ const styles = StyleSheet.create({
   content: { padding: 25 },
   backButton: { marginBottom: 20 },
   titleSection: { marginBottom: 30 },
-  title: { fontSize: 28, fontWeight: 'bold', color: '#000', marginBottom: 10 },
-  subtitle: { fontSize: 14, color: '#666', lineHeight: 20 },
   inputContainer: { marginBottom: 20 },
   label: { fontSize: 14, fontWeight: '600', color: '#333', marginBottom: 8 },
   inputWrapper: {

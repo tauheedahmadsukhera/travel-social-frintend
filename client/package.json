@@ -21,6 +21,7 @@
     "setup-auth": "node scripts/setupAuth.js",
     "add-firebase-apps": "node scripts/addFirebaseApps.js",
     "get-sha1": "node scripts/getAndroidSHA1.js",
+    "sync:android-icons": "node scripts/syncAndroidAppIcon.js",
     "fix-dev-build": "node scripts/fixDevBuild.js",
     "verify:patches": "node scripts/verifyPatches.js",
     "validate:prod": "node scripts/validateProductionEnv.js",

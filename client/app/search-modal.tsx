@@ -1,19 +1,29 @@
+import { DEFAULT_AVATAR_URL } from '../lib/api';
 import { Feather } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import React, { useEffect, useState } from "react";
+import * as Haptics from 'expo-haptics';
+import React, { useEffect, useMemo, useState } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { ActivityIndicator, FlatList, Image, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { Image as ExpoImage } from 'expo-image';
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { getOrCreateConversation, getRegions, searchUsers } from "../lib/firebaseHelpers/index";
 import { followUser, sendFollowRequest, unfollowUser } from "../lib/firebaseHelpers/follow";
+import { CITY_CARD_IMAGES, COUNTRY_CARD_IMAGES, DEFAULT_CARD_IMAGE, REGION_CARD_IMAGES } from "./searchCardAssets.generated";
+import { getCachedData, setCachedData, useNetworkStatus, useOfflineBanner } from '../hooks/useOffline';
+import { OfflineBanner } from '@/src/_components/OfflineBanner';
+import { safeRouterBack } from '@/lib/safeRouterBack';
 
 // Type definitions
 type Region = {
   id: string;
   name: string;
   image: string;
+  /** Which row in Search: countries / regions / cities */
+  section: 'country' | 'region' | 'city';
   order?: number;
+  // Optional machine key for region aggregations (e.g. restcountries region: "europe", "americas")
+  regionKey?: string;
 };
 
 type Suggestion = {
@@ -31,37 +41,76 @@ type User = {
   isPrivate?: boolean;
 };
 
-const DEFAULT_AVATAR_URL = 'https://via.placeholder.com/200x200.png?text=Profile';
 
-// Map and Require local assets
-const REGION_IMAGES: { [key: string]: any } = {
-  'America': require('../assets/region/America.jpg'),
-  'Europe': require('../assets/region/Europe.jpg'),
-  'France': require('../assets/region/France.jpg'),
-  'Japan': require('../assets/region/Japan.jpg'),
-  'London': require('../assets/region/London.jpg'),
-  'New York': require('../assets/region/New York.jpg'),
-  'Paris': require('../assets/region/Paris.jpg'),
-  'UnitedKingdom': require('../assets/region/UnitedKingdom.jpg'),
-  'Unitedstates': require('../assets/region/Unitedstates.jpg'),
-  // Fallback for names not in our map (using America as a generic base)
-  'World': require('../assets/region/America.jpg'),
+// Search card images are generated into `app/searchCardAssets.generated.ts` by `npm run gen:cards`.
+
+/** Old `image` keys from earlier builds / cached data */
+const LEGACY_IMAGE_ALIASES: Record<string, string> = {
+  Unitedstates: 'United States',
+  UnitedKingdom: 'United Kingdom',
+  America: 'North America',
+  Japan: 'East Asia',
+  'New York': 'New York City',
 };
 
-// Default regions (fallback if Firebase fetch fails)
+function getCardImageSource(item: Region) {
+  const key = LEGACY_IMAGE_ALIASES[item.image] ?? item.image;
+  if (item.section === 'country') {
+    return COUNTRY_CARD_IMAGES[key] ?? DEFAULT_CARD_IMAGE;
+  }
+  if (item.section === 'region') {
+    return REGION_CARD_IMAGES[key] ?? DEFAULT_CARD_IMAGE;
+  }
+  return CITY_CARD_IMAGES[key] ?? DEFAULT_CARD_IMAGE;
+}
+
+// Default regions (fallback if getRegions fails). Add more rows: set section + image key + optional regionKey for big regions.
 const defaultRegions: Region[] = [
   // COUNTRIES
-  { id: 'us', name: 'United States', image: 'Unitedstates' },
-  { id: 'france', name: 'France', image: 'France' },
-  { id: 'uk', name: 'United Kingdom', image: 'UnitedKingdom' },
+  { id: 'united-states', name: 'United States', image: 'United States', section: 'country' },
+  { id: 'united-kingdom', name: 'United Kingdom', image: 'United Kingdom', section: 'country' },
+  { id: 'united-arab-emirates', name: 'United Arab Emirates', image: 'United Arab Emirates', section: 'country' },
+  { id: 'saudi-arabia', name: 'Saudi Arabia', image: 'Saudi Arabia', section: 'country' },
+  { id: 'canada', name: 'Canada', image: 'Canada', section: 'country' },
+  { id: 'mexico', name: 'Mexico', image: 'Mexico', section: 'country' },
+  { id: 'china', name: 'China', image: 'China', section: 'country' },
+  { id: 'thailand', name: 'Thailand', image: 'Thailand', section: 'country' },
+  { id: 'turkey', name: 'Turkey', image: 'Turkey', section: 'country' },
+  { id: 'france', name: 'France', image: 'France', section: 'country' },
+  { id: 'italy', name: 'Italy', image: 'Italy', section: 'country' },
+  { id: 'spain', name: 'Spain', image: 'Spain', section: 'country' },
+  { id: 'portugal', name: 'Portugal', image: 'Portugal', section: 'country' },
+  { id: 'greece', name: 'Greece', image: 'Greece', section: 'country' },
+  { id: 'switzerland', name: 'Switzerland', image: 'Switzerland', section: 'country' },
+
   // REGIONS
-  { id: 'america', name: 'America', image: 'America' },
-  { id: 'europe', name: 'Europe', image: 'Europe' },
-  { id: 'japan', name: 'Japan', image: 'Japan' },
+  { id: 'europe', name: 'Europe', image: 'Europe', section: 'region', regionKey: 'europe' },
+  { id: 'north-america', name: 'North America', image: 'North America', section: 'region', regionKey: 'americas' },
+  { id: 'south-america', name: 'South America', image: 'South America', section: 'region', regionKey: 'americas' },
+  { id: 'caribbean', name: 'Caribbean', image: 'Caribbean', section: 'region', regionKey: 'americas' },
+  { id: 'asia', name: 'Asia', image: 'Asia', section: 'region', regionKey: 'asia' },
+  { id: 'east-asia', name: 'East Asia', image: 'East Asia', section: 'region', regionKey: 'asia' },
+  { id: 'southeast-asia', name: 'Southeast Asia', image: 'Southeast Asia', section: 'region', regionKey: 'asia' },
+  { id: 'africa', name: 'Africa', image: 'Africa', section: 'region', regionKey: 'africa' },
+  { id: 'oceania', name: 'Oceania', image: 'Oceania', section: 'region', regionKey: 'oceania' },
+
   // CITIES
-  { id: 'london', name: 'London', image: 'London' },
-  { id: 'paris', name: 'Paris', image: 'Paris' },
-  { id: 'newyork', name: 'New York', image: 'New York' },
+  { id: 'london', name: 'London', image: 'London', section: 'city' },
+  { id: 'paris', name: 'Paris', image: 'Paris', section: 'city' },
+  { id: 'new-york-city', name: 'New York City', image: 'New York City', section: 'city' },
+  { id: 'los-angeles', name: 'Los Angeles', image: 'Los Angeles', section: 'city' },
+  { id: 'las-vegas', name: 'Las Vegas', image: 'Las Vegas', section: 'city' },
+  { id: 'amsterdam', name: 'Amsterdam', image: 'Amsterdam', section: 'city' },
+  { id: 'barcelona', name: 'Barcelona', image: 'Barcelona', section: 'city' },
+  { id: 'rome', name: 'Rome', image: 'Rome', section: 'city' },
+  { id: 'istanbul', name: 'Istanbul', image: 'Istanbul', section: 'city' },
+  { id: 'dubai', name: 'Dubai', image: 'Dubai', section: 'city' },
+  { id: 'hong-kong', name: 'Hong Kong', image: 'Hong Kong', section: 'city' },
+  { id: 'bangkok', name: 'Bangkok', image: 'Bangkok', section: 'city' },
+  { id: 'seoul', name: 'Seoul', image: 'Seoul', section: 'city' },
+  { id: 'singapore', name: 'Singapore', image: 'Singapore', section: 'city' },
+  { id: 'sydney', name: 'Sydney', image: 'Sydney', section: 'city' },
+  { id: 'tokyo', name: 'Tokyo', image: 'Tokyo', section: 'city' },
 ];
 
 export default function SearchModal() {
@@ -82,6 +131,60 @@ export default function SearchModal() {
   const [requestedMap, setRequestedMap] = useState<{ [key: string]: boolean }>({});
   const [followLoadingMap, setFollowLoadingMap] = useState<{ [key: string]: boolean }>({});
   const insets = useSafeAreaInsets();
+  const { isOnline } = useNetworkStatus();
+  const { showBanner } = useOfflineBanner();
+
+  const REGIONS_CACHE_KEY = useMemo(() => `search_regions_v1`, []);
+  const PEOPLE_REC_CACHE_KEY = useMemo(() => `search_people_rec_v1_${String(currentUserId || 'anon')}`, [currentUserId]);
+
+  // Cache-first bootstrap for regions
+  useEffect(() => {
+    (async () => {
+      try {
+        const cached = await getCachedData<Region[]>(REGIONS_CACHE_KEY);
+        if (Array.isArray(cached) && cached.length > 0) {
+          setRegions(cached);
+          setLoadingRegions(false);
+        }
+      } catch { }
+    })();
+  }, [REGIONS_CACHE_KEY]);
+
+  const inferRegionKey = React.useCallback((item: Region): string => {
+    const rawId = String(item?.id || '').trim().toLowerCase();
+    const rawName = String(item?.name || '').trim().toLowerCase();
+    const rawKey = String(item?.regionKey || '').trim().toLowerCase();
+    if (rawKey) return rawKey;
+
+    // Minimal, generic mapping (not a countries list)
+    if (rawId === 'americas' || rawName === 'americas') return 'americas';
+    if (rawId === 'america' || rawName === 'america') return 'americas';
+    if (rawId === 'europe' || rawName === 'europe') return 'europe';
+    if (rawId === 'asia' || rawName === 'asia') return 'asia';
+    if (rawId === 'africa' || rawName === 'africa') return 'africa';
+    if (rawId === 'oceania' || rawName === 'oceania') return 'oceania';
+
+    return '';
+  }, []);
+
+  const openRegionCard = React.useCallback((item: Region, kind: 'country' | 'region' | 'city') => {
+    const placeId = String(item?.id || item?.name || '');
+    const locationName = String(item?.name || '');
+    if (!placeId || !locationName) return;
+
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    router.push({
+      pathname: '/location/[placeId]',
+      params: {
+        placeId,
+        locationName,
+        locationAddress: locationName,
+        scope: kind === 'region' ? 'region' : 'place',
+        regionId: kind === 'region' ? placeId : undefined,
+        regionKey: kind === 'region' ? inferRegionKey(item) : undefined,
+      },
+    } as any);
+  }, [inferRegionKey, router]);
 
   // Get current user ID and load following list on mount
   useEffect(() => {
@@ -115,9 +218,23 @@ export default function SearchModal() {
     async function fetchRegions() {
       setLoadingRegions(true);
       try {
+        // Offline: rely on cache/defaults (avoid blocking spinner loops)
+        if (!isOnline) {
+          setLoadingRegions(false);
+          return;
+        }
         const result = await getRegions();
         if (result.success && result.data && result.data.length > 0) {
-          setRegions(result.data);
+          const raw = result.data as Region[];
+          const normalized: Region[] = raw.map((r: any, i: number) => {
+            if (r?.section === 'country' || r?.section === 'region' || r?.section === 'city') return r as Region;
+            // Legacy flat list: first 3 countries, next 3 regions, rest cities
+            if (i < 3) return { ...r, section: 'country' as const };
+            if (i < 6) return { ...r, section: 'region' as const };
+            return { ...r, section: 'city' as const };
+          });
+          setRegions(normalized);
+          try { await setCachedData(REGIONS_CACHE_KEY, normalized, { ttl: 7 * 24 * 60 * 60 * 1000 }); } catch { }
         } else {
           // Use default regions if Firebase fetch fails
           setRegions(defaultRegions);
@@ -129,7 +246,7 @@ export default function SearchModal() {
       setLoadingRegions(false);
     }
     fetchRegions();
-  }, []);
+  }, [REGIONS_CACHE_KEY, isOnline]);
 
   // Reset data when tab changes
   useEffect(() => {
@@ -170,23 +287,39 @@ export default function SearchModal() {
   useEffect(() => {
     if (tab === 'people' && recommendations.length === 0) {
       setLoadingUsers(true);
-      searchUsers('', 10).then(result => {
-        if (result.success && Array.isArray(result.data)) {
-          const safeUsers = result.data.map((u: any) => ({
-            uid: String(u?.uid || ''),
-            displayName: u?.displayName || 'Unknown',
-            photoURL: u?.photoURL || u?.avatar || DEFAULT_AVATAR_URL,
-            bio: u?.bio || '',
-            isPrivate: typeof u?.isPrivate === 'boolean' ? u.isPrivate : false,
-          })).filter((u: any) => typeof u.uid === 'string' && u.uid.trim().length > 0);
-          setRecommendations(safeUsers);
-        } else {
-          setRecommendations([]);
-        }
-        setLoadingUsers(false);
-      });
+      // Cache-first bootstrap for people recs
+      (async () => {
+        try {
+          const cached = await getCachedData<User[]>(PEOPLE_REC_CACHE_KEY);
+          if (Array.isArray(cached) && cached.length > 0) {
+            setRecommendations(cached);
+            setLoadingUsers(false);
+            if (!isOnline) return;
+          } else if (!isOnline) {
+            setLoadingUsers(false);
+            return;
+          }
+        } catch { }
+
+        searchUsers('', 10).then(async (result) => {
+          if (result.success && Array.isArray(result.data)) {
+            const safeUsers = result.data.map((u: any) => ({
+              uid: String(u?.uid || ''),
+              displayName: u?.displayName || 'Unknown',
+              photoURL: u?.photoURL || u?.avatar || DEFAULT_AVATAR_URL,
+              bio: u?.bio || '',
+              isPrivate: typeof u?.isPrivate === 'boolean' ? u.isPrivate : false,
+            })).filter((u: any) => typeof u.uid === 'string' && u.uid.trim().length > 0);
+            setRecommendations(safeUsers);
+            try { await setCachedData(PEOPLE_REC_CACHE_KEY, safeUsers, { ttl: 24 * 60 * 60 * 1000 }); } catch { }
+          } else {
+            setRecommendations([]);
+          }
+          setLoadingUsers(false);
+        });
+      })();
     }
-  }, [tab, recommendations.length]);
+  }, [PEOPLE_REC_CACHE_KEY, isOnline, tab, recommendations.length]);
 
   // People search
   useEffect(() => {
@@ -236,26 +369,46 @@ export default function SearchModal() {
 
   return (
     <SafeAreaView style={styles.container} edges={['left', 'right']}>
-      <View style={{ flex: 1, paddingTop: Math.max(insets.top - 12, 0) }}>
+      <View style={{ flex: 1, paddingTop: Math.max(insets.top + 2, 0) }}>
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
+          {showBanner && (
+            <OfflineBanner text="You’re offline — showing saved search" />
+          )}
           {/* Header Tabs */}
           <View style={styles.headerTabsRow}>
-            <TouchableOpacity onPress={() => router.back()} style={styles.closeBtn}>
+            <TouchableOpacity
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+                safeRouterBack();
+              }}
+              style={styles.closeBtn}
+            >
               <Feather name="x" size={20} color="#333" />
             </TouchableOpacity>
             <View style={styles.tabsCenterWrap}>
               <View style={styles.tabsInline}>
-                <TouchableOpacity onPress={() => setTab('place')} style={styles.tabBtnInline}>
+                <TouchableOpacity
+                  onPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+                    setTab('place');
+                  }}
+                  style={styles.tabBtnInline}
+                >
                   <Text style={[styles.tabText, tab === 'place' && styles.tabTextActive]}>Place</Text>
-                  {tab === 'place' && <View style={styles.tabUnderlineInline} />}
                 </TouchableOpacity>
                 <Text style={styles.dotSep}>Â·</Text>
-                <TouchableOpacity onPress={() => setTab('people')} style={styles.tabBtnInline}>
+                <TouchableOpacity
+                  onPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+                    setTab('people');
+                  }}
+                  style={styles.tabBtnInline}
+                >
                   <Text style={[styles.tabText, tab === 'people' && styles.tabTextActive]}>People</Text>
-                  {tab === 'people' && <View style={styles.tabUnderlineInline} />}
                 </TouchableOpacity>
               </View>
             </View>
+            <View style={styles.headerSideSpacer} />
           </View>
           {/* Search and Region Select */}
           <View style={styles.searchRegionBorderBox}>
@@ -294,14 +447,19 @@ export default function SearchModal() {
                     <Text style={styles.sectionTitle}>COUNTRIES</Text>
                     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingRight: 16 }}>
                       <View style={styles.regionGridRow}>
-                        {regions.slice(0, 3).map(item => (
-                          <TouchableOpacity key={item.id} style={[styles.regionCard, selectedRegion === item.id && styles.regionCardActive]} onPress={() => { setSelectedRegion(item.id); setQ(item.name); }}>
+                        {regions.filter((r) => r.section === 'country').map((item) => (
+                          <TouchableOpacity
+                            key={item.id}
+                            style={[styles.regionCard, selectedRegion === item.id && styles.regionCardActive]}
+                            onPress={() => openRegionCard(item, 'country')}
+                          >
                             <View style={styles.regionImageWrap}>
                               <ExpoImage
-                                source={REGION_IMAGES[item.image] || REGION_IMAGES['World']}
+                                source={getCardImageSource(item)}
                                 style={styles.regionImage}
                                 contentFit="cover"
                                 cachePolicy="memory-disk"
+                                transition={180}
                               />
                             </View>
                             <Text style={styles.regionName}>{item.name}</Text>
@@ -314,14 +472,19 @@ export default function SearchModal() {
                     <Text style={[styles.sectionTitle, { marginTop: 8 }]}>REGIONS</Text>
                     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingRight: 16 }}>
                       <View style={styles.regionGridRow}>
-                        {regions.slice(3, 6).map(item => (
-                          <TouchableOpacity key={item.id} style={[styles.regionCard, selectedRegion === item.id && styles.regionCardActive]} onPress={() => { setSelectedRegion(item.id); setQ(item.name); }}>
+                        {regions.filter((r) => r.section === 'region').map((item) => (
+                          <TouchableOpacity
+                            key={item.id}
+                            style={[styles.regionCard, selectedRegion === item.id && styles.regionCardActive]}
+                            onPress={() => openRegionCard(item, 'region')}
+                          >
                             <View style={styles.regionImageWrap}>
                               <ExpoImage
-                                source={REGION_IMAGES[item.image] || REGION_IMAGES['World']}
+                                source={getCardImageSource(item)}
                                 style={styles.regionImage}
                                 contentFit="cover"
                                 cachePolicy="memory-disk"
+                                transition={180}
                               />
                             </View>
                             <Text style={styles.regionName}>{item.name}</Text>
@@ -334,14 +497,19 @@ export default function SearchModal() {
                     <Text style={[styles.sectionTitle, { marginTop: 8 }]}>CITIES</Text>
                     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingRight: 16 }}>
                       <View style={styles.regionGridRow}>
-                        {regions.slice(6, 9).map((item, idx) => (
-                          <TouchableOpacity key={item.id + idx} style={[styles.regionCard, selectedRegion === item.id && styles.regionCardActive]} onPress={() => { setSelectedRegion(item.id); setQ(item.name); }}>
+                        {regions.filter((r) => r.section === 'city').map((item, idx) => (
+                          <TouchableOpacity
+                            key={item.id + String(idx)}
+                            style={[styles.regionCard, selectedRegion === item.id && styles.regionCardActive]}
+                            onPress={() => openRegionCard(item, 'city')}
+                          >
                             <View style={styles.regionImageWrap}>
                               <ExpoImage
-                                source={REGION_IMAGES[item.image] || REGION_IMAGES['World']}
+                                source={getCardImageSource(item)}
                                 style={styles.regionImage}
                                 contentFit="cover"
                                 cachePolicy="memory-disk"
+                                transition={180}
                               />
                             </View>
                             <Text style={styles.regionName}>{item.name}</Text>
@@ -364,6 +532,7 @@ export default function SearchModal() {
                     <TouchableOpacity
                       style={styles.suggestionCardList}
                       onPress={() => {
+                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
                         router.push({ pathname: '/location/[placeId]', params: { placeId: item.placeId, locationName: item.title, locationAddress: item.subtitle } });
                       }}
                     >
@@ -401,6 +570,7 @@ export default function SearchModal() {
                       <TouchableOpacity
                         style={{ flexDirection: 'row', flex: 1, alignItems: 'center' }}
                         onPress={() => {
+                          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
                           // If own profile, navigate to Profile tab instead of user-profile
                           if (isOwnProfile) {
                             router.push('/(tabs)/profile');
@@ -410,7 +580,13 @@ export default function SearchModal() {
                         }}
                         accessibilityLabel={`Open profile for ${item.displayName || 'Traveler'}`}
                       >
-                        <Image source={{ uri: item.photoURL || DEFAULT_AVATAR_URL }} style={styles.avatarImage} />
+                        <ExpoImage 
+                          source={{ uri: item.photoURL || DEFAULT_AVATAR_URL }} 
+                          style={styles.avatarImage}
+                          contentFit="cover"
+                          transition={200}
+                          cachePolicy="memory-disk"
+                        />
                         <View style={{ marginLeft: 16, flex: 1 }}>
                           <Text style={{ fontSize: 16, fontWeight: '400', color: '#222' }}>
                             {item.displayName || 'Traveler'}{isOwnProfile ? ' (You)' : ''}
@@ -447,25 +623,38 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingTop: 0,
-    paddingBottom: 4,
+    paddingTop: 8,
+    paddingBottom: 8,
   },
   tabsCenterWrap: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
+    transform: [{ translateX: 2 }],
   },
   tabsInline: {
     flexDirection: 'row',
     alignItems: 'center',
   },
   dotSep: { fontSize: 18, color: '#fff', marginHorizontal: 2, marginTop: 2 }, // hidden dot
-  tabBtnInline: { paddingVertical: 0, paddingHorizontal: 0, marginHorizontal: 8, alignItems: 'center', justifyContent: 'center', height: 34 },
-  tabText: { fontSize: 16, color: '#999', fontWeight: '500', textAlign: 'center' },
-  tabTextActive: { color: '#111', fontWeight: '700', textAlign: 'center' },
-  tabUnderlineInline: { position: 'absolute', bottom: -2, left: '10%', right: '10%', height: 2, backgroundColor: '#111', borderRadius: 1 },
-  closeBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center', borderRadius: 20, borderWidth: 1, borderColor: '#eee' },
-  sectionTitle: { fontSize: 13, fontWeight: '600', color: '#888', marginBottom: 8, letterSpacing: 0.5, marginTop: 4 },
+  tabBtnInline: { paddingVertical: 2, paddingHorizontal: 0, marginHorizontal: 2, alignItems: 'center', justifyContent: 'center' },
+  tabText: {
+    fontSize: 16,
+    color: '#999',
+    fontWeight: '500',
+    textAlign: 'center',
+    paddingBottom: 2,
+    borderBottomWidth: 2,
+    borderBottomColor: 'transparent',
+  },
+  tabTextActive: {
+    color: '#111',
+    fontWeight: '700',
+    borderBottomColor: '#111',
+  },
+  closeBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center', borderRadius: 20, borderWidth: 1, borderColor: '#eee', zIndex: 2 },
+  headerSideSpacer: { width: 40, height: 40 },
+  sectionTitle: { fontSize: 13, fontWeight: '500', color: '#888', marginBottom: 8, letterSpacing: 0.5, marginTop: 4 },
   regionGridWrap: {
     flexDirection: 'column',
     gap: 2,
@@ -681,7 +870,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: 12,
-    paddingHorizontal: 16,
+    paddingHorizontal: 0,
   },
   userActionBtn: {
     width: 40,

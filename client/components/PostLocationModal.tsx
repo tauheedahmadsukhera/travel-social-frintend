@@ -5,6 +5,8 @@ import { Image, Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View } fr
 import SaveButton from '@/src/_components/SaveButton';
 import { useUser } from '@/src/_components/UserContext';
 import { likePost, unlikePost } from '../lib/firebaseHelpers';
+import { DEFAULT_AVATAR_URL } from '@/lib/api';
+
 // Move context to top-level
 const PostLocationModalContext = React.createContext<{ onImagePress?: (post: PostType) => void }>({});
 export interface PostLocationModalProps {
@@ -41,7 +43,7 @@ const PostItem: React.FC<{ item: PostType }> = ({ item }) => {
     imageUrl = item.imageUrls[0];
   }
   if (!imageUrl) {
-    imageUrl = 'https://firebasestorage.googleapis.com/v0/b/travel-app-3da72.firebasestorage.app/o/default%2Fdefault-pic.jpg?alt=media&token=7177f487-a345-4e45-9a56-732f03dbf65d';
+    imageUrl = DEFAULT_AVATAR_URL;
   }
   const user = useUser();
   const userId = user?.uid ?? '';

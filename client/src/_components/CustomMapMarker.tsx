@@ -1,5 +1,7 @@
 import React from 'react';
 import { Image, Text, View } from 'react-native';
+import { DEFAULT_AVATAR_URL } from '@/lib/api';
+
 
 interface CustomMapMarkerProps {
   imageUrl?: string;
@@ -8,7 +10,7 @@ interface CustomMapMarkerProps {
   isLive?: boolean;
 }
 
-const DEFAULT_AVATAR = 'https://via.placeholder.com/200x200.png?text=Profile';
+const DEFAULT_AVATAR = DEFAULT_AVATAR_URL;
 
 export const CustomMapMarker: React.FC<CustomMapMarkerProps> = ({ imageUrl, imageUrls, userAvatar, isLive }) => {
   // Get post image

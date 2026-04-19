@@ -14,7 +14,6 @@ android/app/build
 android/build
 android/.idea
 android/.gradle-tmp
-android/gradle
 
 # === iOS BUILD CACHE ===
 ios/build
@@ -102,8 +101,9 @@ __mocks__
 *.swo
 .vscode
 .idea
-expo-env.d.ts# Ignore Windows diagnostic folder
+expo-env.d.ts
+# Ignore Windows diagnostic folder
 ElevatedDiagnostics/
 
-# Exclude android folder to use Continuous Native Generation (Prebuild)
-/android
+# Keep `android/` in the archive: this repo uses a checked-in native project (not CNG-only).
+# Excluding `/android` breaks autolinked library projects on EAS ("No variants exist").

@@ -2,6 +2,7 @@ import * as Location from 'expo-location';
 import * as Notifications from 'expo-notifications';
 import * as TaskManager from 'expo-task-manager';
 import apiService from '@/src/_services/apiService';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const LOCATION_TASK_NAME = 'background-location-task';
 const MAJOR_CITIES_THRESHOLD = 100000; // Population threshold for major cities
@@ -38,6 +39,56 @@ interface PassportTicket {
 // Store last known location to avoid duplicate notifications
 let lastKnownCity: string | null = null;
 let lastKnownCountry: string | null = null;
+
+// Dedupe "passport suggestion" notifications (same place/city/country)
+// across frequent location updates and task re-runs.
+let lastPassportNotifKey: string | null = null;
+let lastPassportNotifAt = 0;
+
+const PASSPORT_NOTIF_COOLDOWN_MS = 6 * 60 * 60 * 1000; // 6 hours
+const PASSPORT_NOTIF_STORAGE_KEY = 'passport_last_suggestion_notif_v1';
+
+function buildPassportNotifKey(userId: string, suggestion: any, city: string, country: string): string {
+  const t = String(suggestion?.type || 'unknown');
+  const name = String(suggestion?.name || '').trim().toLowerCase();
+  const parentCity = String(suggestion?.parentCity || city || '').trim().toLowerCase();
+  const parentCountry = String(suggestion?.parentCountry || country || '').trim().toLowerCase();
+  return `${userId}::${t}::${name}::${parentCity}::${parentCountry}`;
+}
+
+const PLUS_CODE_PATTERN = /^[A-Z0-9]{4,}\+[A-Z0-9]{2,}$/i;
+const COORDINATE_PATTERN = /^-?\d+(\.\d+)?\s*,\s*-?\d+(\.\d+)?$/;
+
+function isReadableLocationLabel(value?: string | null): boolean {
+  if (!value) return false;
+  const label = String(value).trim();
+  if (!label) return false;
+  if (PLUS_CODE_PATTERN.test(label)) return false;
+  if (COORDINATE_PATTERN.test(label)) return false;
+  const lower = label.toLowerCase();
+  if (lower === 'unknown' || lower === 'unknown place' || lower === 'n/a') return false;
+  return true;
+}
+
+function getBestLocationLabel(mainSuggestion?: any, city?: string, country?: string): string {
+  const candidates = [
+    mainSuggestion?.name,
+    mainSuggestion?.place,
+    mainSuggestion?.placeName,
+    mainSuggestion?.parentCity,
+    mainSuggestion?.parentCountry,
+    city,
+    country,
+  ];
+
+  for (const candidate of candidates) {
+    if (isReadableLocationLabel(candidate)) {
+      return String(candidate).trim();
+    }
+  }
+
+  return 'this location';
+}
 
 /**
  * Request location permissions
@@ -104,8 +155,10 @@ export async function reverseGeocode(latitude: number, longitude: number): Promi
       const city = location.city || location.subregion || location.region || 'Unknown City';
       const country = location.country || 'Unknown Country';
       const countryCode = location.isoCountryCode || 'XX';
-      const place = location.name || undefined; // 'name' is often the POI
-      const street = location.street || undefined;
+      const placeFromName = isReadableLocationLabel(location.name) ? String(location.name).trim() : undefined;
+      const placeFromStreet = isReadableLocationLabel(location.street) ? String(location.street).trim() : undefined;
+      const place = placeFromName || placeFromStreet || undefined;
+      const street = placeFromStreet;
 
       return { city, country, countryCode, place, street };
     }
@@ -207,48 +260,73 @@ export async function processLocationUpdate(userId: string, latitude: number, lo
       }
     });
 
-    // Tiered detection logic:
-    // 1. Check if user already has stamps for these
+    // Passport notification rule:
+    // - Notify ONLY when the user enters a country they don't have yet.
+    // - Do NOT notify for city/place discovery.
     const { getPassportData } = await import('../lib/firebaseHelpers/passport');
     const passportData = await getPassportData(userId);
     const existingStamps = passportData?.stamps || [];
 
     const hasCountry = existingStamps.some((s: any) => s.type === 'country' && s.name === country);
-    const hasCity = existingStamps.some((s: any) => s.type === 'city' && s.name === city && s.parentCountry === country);
-    const hasPlace = place ? existingStamps.some((s: any) => s.type === 'place' && s.name === place && s.parentCity === city) : true;
-
-    // Prepare suggestions for the UI banner
-    const suggestions = [];
     if (!hasCountry) {
-      suggestions.push({ type: 'country', name: country, countryCode, lat: latitude, lon: longitude });
-    }
-    if (!hasCity) {
-      suggestions.push({ type: 'city', name: city, countryCode, parentCountry: country, lat: latitude, lon: longitude });
-    }
-    if (place && !hasPlace) {
-      suggestions.push({ type: 'place', name: place, countryCode, parentCountry: country, parentCity: city, lat: latitude, lon: longitude });
-    }
-
-    if (suggestions.length > 0) {
+      const suggestions = [{ type: 'country', name: country, countryCode, lat: latitude, lon: longitude }];
       // Save suggestions locally for the Passport screen banner
       const AsyncStorage = (await import('@react-native-async-storage/async-storage')).default;
+      const main = suggestions[0];
       await AsyncStorage.setItem('passport_suggestion', JSON.stringify({
         userId,
         suggestions,
-        mainSuggestion: suggestions[suggestions.length - 1], // The most specific one
+        mainSuggestion: main,
         timestamp: Date.now()
       }));
 
       // Send push notification
-      const main = suggestions[suggestions.length - 1];
+      const welcomeLabel = getBestLocationLabel(main, city, country);
+
+      // Dedupe: do not spam the same notification multiple times
+      const now = Date.now();
+      const key = buildPassportNotifKey(userId, main, city, country);
+
+      // First: fast in-memory dedupe (same JS runtime)
+      if (lastPassportNotifKey === key && now - lastPassportNotifAt < PASSPORT_NOTIF_COOLDOWN_MS) {
+        if (__DEV__) console.log('[locationService] Skipping duplicate passport notification (memory cooldown).');
+        return;
+      }
+
+      // Second: persistent dedupe (across restarts/task relaunch)
+      try {
+        const storedRaw = await AsyncStorage.getItem(PASSPORT_NOTIF_STORAGE_KEY);
+        if (storedRaw) {
+          const stored = JSON.parse(storedRaw);
+          const storedKey = String(stored?.key || '');
+          const storedAt = Number(stored?.at || 0);
+          if (storedKey === key && Number.isFinite(storedAt) && now - storedAt < PASSPORT_NOTIF_COOLDOWN_MS) {
+            if (__DEV__) console.log('[locationService] Skipping duplicate passport notification (storage cooldown).');
+            lastPassportNotifKey = key;
+            lastPassportNotifAt = now;
+            return;
+          }
+        }
+      } catch {
+        // best-effort only
+      }
+
       await Notifications.scheduleNotificationAsync({
         content: {
-          title: `🎫 New ${main.type === 'place' ? 'Place' : main.type === 'city' ? 'City' : 'Country'} Detected!`,
-          body: `Welcome to ${main.name}! Click to add this to your stamps.`,
+          title: `🎫 New Country Detected!`,
+          body: `Welcome to ${welcomeLabel}! Tap to add your country stamp.`,
           data: { type: 'passport_suggestion', screen: 'passport' }
         },
         trigger: null,
       });
+
+      lastPassportNotifKey = key;
+      lastPassportNotifAt = now;
+      try {
+        await AsyncStorage.setItem(PASSPORT_NOTIF_STORAGE_KEY, JSON.stringify({ key, at: now }));
+      } catch {
+        // best-effort only
+      }
     }
 
   } catch (error) {
@@ -345,7 +423,7 @@ export async function getCurrentLocation(): Promise<LocationData | null> {
 
       if (newStatus !== 'granted') {
         console.log('❌ Location permission denied by user');
-        throw new Error('Location permission denied. Please go to Settings > Apps > Trave-Social > Permissions and enable Location.');
+        throw new Error('Location permission denied. Please go to Settings > Apps > Trips > Permissions and enable Location.');
       }
     }
 
@@ -390,7 +468,7 @@ export async function getCurrentLocation(): Promise<LocationData | null> {
 
     // Provide user-friendly error messages
     if (error.message?.includes('permission') || error.code === 'E_LOCATION_UNAUTHORIZED') {
-      throw new Error('Location permission denied. Please go to Settings > Apps > Trave-Social > Permissions and enable Location.');
+      throw new Error('Location permission denied. Please go to Settings > Apps > Trips > Permissions and enable Location.');
     } else if (error.message?.includes('disabled') || error.code === 'E_LOCATION_SERVICES_DISABLED') {
       throw new Error('Location services are disabled. Please enable GPS in your device settings.');
     } else if (error.message?.includes('timeout') || error.code === 'E_LOCATION_TIMEOUT') {
@@ -427,10 +505,11 @@ export async function hasPassportStamp(userId: string, name: string, type: 'coun
  */
 export async function sendPassportNotification(userId: string, mainSuggestion: any): Promise<void> {
   try {
+    const welcomeLabel = getBestLocationLabel(mainSuggestion);
     await Notifications.scheduleNotificationAsync({
       content: {
         title: `🎫 New ${mainSuggestion.type === 'place' ? 'Place' : mainSuggestion.type === 'city' ? 'City' : 'Country'} Detected!`,
-        body: `Welcome to ${mainSuggestion.name}! Click to add this to your stamps.`,
+        body: `Welcome to ${welcomeLabel}! Click to add this to your stamps.`,
         data: { type: 'passport_suggestion', screen: 'passport' }
       },
       trigger: null,

@@ -2,36 +2,22 @@ import { useState, useEffect } from 'react';
 import NetInfo, { NetInfoState } from '@react-native-community/netinfo';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-interface CacheEntry<T> {
+export interface CacheEntry<T> {
   data: T;
   timestamp: number;
   ttl: number;
 }
 
-async function fetchWithCache<T>(
-  key: string,
-  fetchFn: () => Promise<T>,
-  options: { ttl?: number } = {}
-): Promise<T> {
-  try {
-    const freshData = await fetchFn();
-    const cacheEntry: CacheEntry<T> = {
-      data: freshData,
-      timestamp: Date.now(),
-      ttl: options.ttl ?? 24 * 60 * 60 * 1000,
-    };
-    await AsyncStorage.setItem(`cache_${key}`, JSON.stringify(cacheEntry));
-    return freshData;
-  } catch (error) {
-    const cachedData = await getCachedData<T>(key);
-    if (cachedData) {
-      return cachedData;
-    }
-    throw error;
-  }
+export async function setCachedData<T>(key: string, data: T, options: { ttl?: number } = {}): Promise<void> {
+  const cacheEntry: CacheEntry<T> = {
+    data,
+    timestamp: Date.now(),
+    ttl: options.ttl ?? 24 * 60 * 60 * 1000,
+  };
+  await AsyncStorage.setItem(`cache_${key}`, JSON.stringify(cacheEntry));
 }
 
-async function getCachedData<T>(key: string): Promise<T | null> {
+export async function getCachedData<T>(key: string): Promise<T | null> {
   try {
     const cached = await AsyncStorage.getItem(`cache_${key}`);
     if (!cached) {
@@ -50,6 +36,26 @@ async function getCachedData<T>(key: string): Promise<T | null> {
     return null;
   }
 }
+
+export async function fetchWithCache<T>(
+  key: string,
+  fetchFn: () => Promise<T>,
+  options: { ttl?: number } = {}
+): Promise<T> {
+  try {
+    const freshData = await fetchFn();
+    await setCachedData(key, freshData, options);
+    return freshData;
+  } catch (error) {
+    const cachedData = await getCachedData<T>(key);
+    if (cachedData) {
+      return cachedData;
+    }
+    throw error;
+  }
+}
+
+// (getCachedData is exported above)
 
 /**
  * Hook to detect network connectivity

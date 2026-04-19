@@ -12,6 +12,7 @@ import { ActivityIndicator, Alert, Dimensions, FlatList, Image, KeyboardAvoiding
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useUser } from '@/src/_components/UserContext';
 import VerifiedBadge from '@/src/_components/VerifiedBadge';
+import { useAppDialog } from '@/src/_components/AppDialogProvider';
 // import {} from '../lib/firebaseHelpers';
 import { GOOGLE_MAPS_CONFIG } from '../config/environment';
 import { createPost, createStory, DEFAULT_CATEGORIES, ensureDefaultCategories, getCategories, getPassportTickets, searchUsers } from '../lib/firebaseHelpers/index';
@@ -22,6 +23,9 @@ import { startTrace } from '../lib/perf';
 import { mapService } from '../services';
 import { apiService } from '@/src/_services/apiService';
 import { getKeyboardOffset, getModalHeight } from '../utils/responsive';
+import { hapticLight, hapticMedium, hapticSuccess } from '../lib/haptics';
+import { feedEventEmitter } from '@/lib/feedEventEmitter';
+import { safeRouterBack } from '@/lib/safeRouterBack';
 
 // Runtime import of ImagePicker with graceful fallback
 let ImagePicker: any = null;
@@ -70,6 +74,7 @@ const isVideoUri = (uri: string) => {
 export default function CreatePostScreen() {
   const router = useRouter();
   const user = useUser();
+  const { showSuccess } = useAppDialog();
   const [step, setStep] = useState<'picker' | 'details'>('picker');
   const [uploading, setUploading] = useState(false);
   const [loading, setLoading] = useState<boolean>(false);
@@ -267,6 +272,7 @@ export default function CreatePostScreen() {
       <TouchableOpacity
         style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 10, paddingHorizontal: 8, backgroundColor: isSelected ? '#f2f2f2' : 'transparent', borderRadius: 12, marginBottom: 4 }}
         onPress={() => {
+          hapticLight();
           if (isSelected) {
             setSelectedCategories(selectedCategories.filter(c => c.name !== item.name));
           } else {
@@ -312,6 +318,17 @@ export default function CreatePostScreen() {
 
   // Verified location options: current device location + passport tickets
   const [verifiedOptions, setVerifiedOptions] = useState<LocationType[]>([]);
+
+  const getLocationKey = useCallback((loc: any): string => {
+    const placeId = typeof loc?.placeId === 'string' ? loc.placeId.trim() : '';
+    if (placeId) return `pid:${placeId}`;
+    const name = String(loc?.name || '').trim().toLowerCase();
+    const address = String(loc?.address || '').trim().toLowerCase();
+    const lat = typeof loc?.lat === 'number' && Number.isFinite(loc.lat) ? loc.lat : null;
+    const lon = typeof loc?.lon === 'number' && Number.isFinite(loc.lon) ? loc.lon : null;
+    if (lat != null && lon != null) return `ll:${lat.toFixed(5)},${lon.toFixed(5)}|${name}`;
+    return `na:${name}|${address}`;
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -586,6 +603,7 @@ export default function CreatePostScreen() {
   };
 
   const openCamera = async () => {
+    hapticLight();
     try {
       if (!ImagePicker) {
         Alert.alert('Error', 'Camera not available');
@@ -633,6 +651,7 @@ export default function CreatePostScreen() {
       Alert.alert('Select at least one image or video to post.');
       return;
     }
+    hapticMedium();
     setLoading(true);
     try {
       const mediaType = selectedImages.length > 0 && isVideoUri(selectedImages[0]) ? 'video' : 'image';
@@ -850,7 +869,9 @@ export default function CreatePostScreen() {
       }
 
       if (result && result.success) {
+        hapticSuccess();
         console.log('âœ… Post created successfully! ID:', result.postId);
+        const createdPostId = String(result.postId || '');
         // Reset state before navigating back
         setSelectedImages([]);
         setCaption('');
@@ -861,9 +882,11 @@ export default function CreatePostScreen() {
         setTaggedUsers([]);
         setSelectedCategories([]);
         setStep('picker');
-        Alert.alert('Success', 'Post created successfully!', [
-          { text: 'OK', onPress: () => router.back() }
-        ]);
+        if (createdPostId) {
+          feedEventEmitter.emitPostCreated(createdPostId);
+        }
+        // Instagram-like: no success dialog, jump to feed immediately.
+        router.replace('/(tabs)/home');
       } else {
         console.error('âŒ Post creation failed:', result.error);
         Alert.alert('Error', result.error || 'Failed to create post');
@@ -914,7 +937,10 @@ export default function CreatePostScreen() {
             {/* Header */}
             <View style={{ flexDirection: 'row', alignItems: 'center', height: 50, paddingHorizontal: 16 }}>
               <TouchableOpacity
-                onPress={() => router.back()}
+                onPress={() => {
+                  hapticLight();
+                  safeRouterBack();
+                }}
                 style={{ width: 40, height: 40, borderRadius: 20, borderWidth: 1, borderColor: '#ddd', alignItems: 'center', justifyContent: 'center', marginTop: -4 }}
               >
                 <Ionicons name="close" size={20} color="#333" />
@@ -967,6 +993,7 @@ export default function CreatePostScreen() {
                     return (
                       <TouchableOpacity
                         onPress={() => {
+                          hapticLight();
                           if (isSelected) {
                             setSelectedImages(selectedImages.filter((img) => img !== item.uri));
                           } else {
@@ -1031,6 +1058,7 @@ export default function CreatePostScreen() {
                       <TouchableOpacity
                         key={type}
                         onPress={() => {
+                          hapticLight();
                           setPostType(type as any);
                           // Reset selection when switching types to avoid type mismatch
                           setSelectedImages([]);
@@ -1066,11 +1094,17 @@ export default function CreatePostScreen() {
               paddingTop: 12,
               paddingBottom: Platform.OS === 'ios' ? insets.bottom : 16
             }}>
-              <TouchableOpacity onPress={() => setSelectedImages([])}>
+              <TouchableOpacity
+                onPress={() => {
+                  hapticLight();
+                  setSelectedImages([]);
+                }}
+              >
                 <Text style={{ color: '#000', fontWeight: '500', fontSize: 18 }}>Clear all</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 onPress={() => {
+                  hapticLight();
                   if (postType === 'STORY' && selectedImages.length > 0) {
                     // Navigate directly to story-upload for STORY
                     router.push({
@@ -1104,7 +1138,10 @@ export default function CreatePostScreen() {
             {/* Details Header - Outside KeyboardAvoidingView to stay fixed */}
             <View style={{ flexDirection: 'row', alignItems: 'center', height: 56, paddingHorizontal: 16 }}>
               <TouchableOpacity
-                onPress={() => paramPostType ? router.back() : setStep('picker')}
+                onPress={() => {
+                  hapticLight();
+                  paramPostType ? safeRouterBack() : setStep('picker');
+                }}
                 style={{ width: 40, height: 40, borderRadius: 20, borderWidth: 1, borderColor: '#ddd', alignItems: 'center', justifyContent: 'center' }}
               >
                 <Ionicons name="close" size={20} color="#333" />
@@ -1199,8 +1236,11 @@ export default function CreatePostScreen() {
                         {hashtags.map(tag => (
                           <View key={tag} style={{ backgroundColor: '#0A3D62', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, flexDirection: 'row', alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.1, shadowRadius: 2, elevation: 2 }}>
                             <Text style={{ color: '#fff', fontWeight: '600', fontSize: 13 }}>#{tag}</Text>
-                            <TouchableOpacity 
-                              onPress={() => setHashtags(hashtags.filter(t => t !== tag))} 
+                            <TouchableOpacity
+                              onPress={() => {
+                                hapticLight();
+                                setHashtags(hashtags.filter(t => t !== tag));
+                              }}
                               style={{ marginLeft: 6, backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: 10, padding: 2 }}
                             >
                               <Feather name="x" size={12} color="#fff" />
@@ -1213,7 +1253,13 @@ export default function CreatePostScreen() {
                 </View>
 
                 {/* Option: Add a category */}
-                <TouchableOpacity style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 12 }} onPress={() => setShowCategoryModal(true)}>
+                <TouchableOpacity
+                  style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 12 }}
+                  onPress={() => {
+                    hapticLight();
+                    setShowCategoryModal(true);
+                  }}
+                >
                   <Feather name="bookmark" size={20} color="#000" style={{ marginRight: 16 }} />
                   <View style={{ flex: 1 }}>
                     <Text style={{ color: '#111', fontSize: 16, fontWeight: '500' }}>Add a category for the home feed</Text>
@@ -1223,7 +1269,10 @@ export default function CreatePostScreen() {
                           <View key={cat.name} style={{ backgroundColor: '#f2f2f2', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8, flexDirection: 'row', alignItems: 'center' }}>
                             <Text style={{ color: '#111', fontWeight: '500', fontSize: 13 }}>{cat.name}</Text>
                             <TouchableOpacity
-                              onPress={() => setSelectedCategories(selectedCategories.filter(c => c.name !== cat.name))}
+                              onPress={() => {
+                                hapticLight();
+                                setSelectedCategories(selectedCategories.filter(c => c.name !== cat.name));
+                              }}
                               style={{ marginLeft: 6 }}
                             >
                               <Feather name="x" size={14} color="#666" />
@@ -1237,7 +1286,13 @@ export default function CreatePostScreen() {
                 </TouchableOpacity>
 
                 {/* Option: Add a location */}
-                <TouchableOpacity style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 12 }} onPress={() => setShowLocationModal(true)}>
+                <TouchableOpacity
+                  style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 12 }}
+                  onPress={() => {
+                    hapticLight();
+                    setShowLocationModal(true);
+                  }}
+                >
                   <Feather name="map-pin" size={20} color="#000" style={{ marginRight: 16 }} />
                   <View style={{ flex: 1 }}>
                     <Text style={{ color: '#111', fontSize: 16, fontWeight: '500' }}>Add a location</Text>
@@ -1249,7 +1304,13 @@ export default function CreatePostScreen() {
                 </TouchableOpacity>
 
                 {/* Option: Add a verified location */}
-                <TouchableOpacity style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 12 }} onPress={() => setShowVerifiedModal(true)}>
+                <TouchableOpacity
+                  style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 12 }}
+                  onPress={() => {
+                    hapticLight();
+                    setShowVerifiedModal(true);
+                  }}
+                >
                   <Feather name="lock" size={20} color="#000" style={{ marginRight: 16 }} />
                   <View style={{ flex: 1 }}>
                     <Text style={{ color: '#111', fontSize: 16, fontWeight: '500' }}>Add a verified location</Text>
@@ -1261,7 +1322,13 @@ export default function CreatePostScreen() {
                 </TouchableOpacity>
 
                 {/* Option: Tag people */}
-                <TouchableOpacity style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 12 }} onPress={() => setShowTagModal(true)}>
+                <TouchableOpacity
+                  style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 12 }}
+                  onPress={() => {
+                    hapticLight();
+                    setShowTagModal(true);
+                  }}
+                >
                   <Feather name="user-plus" size={20} color="#000" style={{ marginRight: 16 }} />
                   <View style={{ flex: 1 }}>
                     <Text style={{ color: '#111', fontSize: 16, fontWeight: '500' }}>Tag people</Text>
@@ -1271,8 +1338,11 @@ export default function CreatePostScreen() {
                           <View key={u.uid} style={{ backgroundColor: '#0A3D62', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 20, flexDirection: 'row', alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.1, shadowRadius: 2, elevation: 2 }}>
                             <Image source={{ uri: u.photoURL || DEFAULT_AVATAR_URL }} style={{ width: 20, height: 20, borderRadius: 10, marginRight: 8, borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)' }} />
                             <Text style={{ color: '#fff', fontWeight: '600', fontSize: 13 }}>{u.displayName || u.userName || u.uid}</Text>
-                            <TouchableOpacity 
-                              onPress={() => setTaggedUsers(taggedUsers.filter(tu => tu.uid !== u.uid))} 
+                            <TouchableOpacity
+                              onPress={() => {
+                                hapticLight();
+                                setTaggedUsers(taggedUsers.filter(tu => tu.uid !== u.uid));
+                              }}
                               style={{ marginLeft: 6, backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: 10, padding: 2 }}
                             >
                               <Feather name="x" size={12} color="#fff" />
@@ -1286,7 +1356,13 @@ export default function CreatePostScreen() {
                 </TouchableOpacity>
 
                 {/* Option: Post visibility */}
-                <TouchableOpacity style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 12 }} onPress={() => setShowVisibilityModal(true)}>
+                <TouchableOpacity
+                  style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 12 }}
+                  onPress={() => {
+                    hapticLight();
+                    setShowVisibilityModal(true);
+                  }}
+                >
                   <Feather name="eye" size={20} color="#000" style={{ marginRight: 16 }} />
                   <View style={{ flex: 1 }}>
                     <Text style={{ color: '#111', fontSize: 16, fontWeight: '500' }}>Post visibility</Text>
@@ -1308,7 +1384,13 @@ export default function CreatePostScreen() {
               paddingTop: 12,
               paddingBottom: Platform.OS === 'ios' ? insets.bottom : 16
             }}>
-              <TouchableOpacity onPress={() => { setSelectedImages([]); setStep('picker'); }}>
+              <TouchableOpacity
+                onPress={() => {
+                  hapticLight();
+                  setSelectedImages([]);
+                  setStep('picker');
+                }}
+              >
                 <Text style={{ color: '#000', fontWeight: '500', fontSize: 18 }}>Clear all</Text>
               </TouchableOpacity>
               <TouchableOpacity
@@ -1371,10 +1453,21 @@ export default function CreatePostScreen() {
 
               {/* Footer Buttons */}
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingTop: 16, paddingHorizontal: 4 }}>
-                <TouchableOpacity onPress={() => setShowCategoryModal(false)}>
+                <TouchableOpacity
+                  onPress={() => {
+                    hapticLight();
+                    setShowCategoryModal(false);
+                  }}
+                >
                   <Text style={{ color: '#111', fontWeight: '700', fontSize: 15 }}>Cancel</Text>
                 </TouchableOpacity>
-                <TouchableOpacity onPress={() => setShowCategoryModal(false)} style={{ backgroundColor: '#0A3D62', borderRadius: 6, paddingHorizontal: 24, paddingVertical: 10 }}>
+                <TouchableOpacity
+                  onPress={() => {
+                    hapticLight();
+                    setShowCategoryModal(false);
+                  }}
+                  style={{ backgroundColor: '#0A3D62', borderRadius: 6, paddingHorizontal: 24, paddingVertical: 10 }}
+                >
                   <Text style={{ color: '#fff', fontWeight: '600', fontSize: 15 }}>Save</Text>
                 </TouchableOpacity>
               </View>
@@ -1436,15 +1529,16 @@ export default function CreatePostScreen() {
                   ) : (
                     <FlatList
                       data={locationResults}
-                      keyExtractor={(item, idx) => String(item.placeId || item.name || idx)}
+                      keyExtractor={(item, idx) => getLocationKey(item) || String(idx)}
                       keyboardShouldPersistTaps="handled"
                       showsVerticalScrollIndicator={false}
                       renderItem={({ item }) => {
-                        const isSelected = location?.placeId === item.placeId || location?.name === item.name;
+                        const isSelected = !!location && getLocationKey(location) === getLocationKey(item);
                         return (
                           <TouchableOpacity
                             style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 12, paddingHorizontal: 8, backgroundColor: isSelected ? '#f2f2f2' : 'transparent', borderRadius: 12, marginBottom: 4 }}
                             onPress={() => {
+                              hapticLight();
                               if (isSelected) {
                                 setLocation(null);
                               } else {
@@ -1466,10 +1560,21 @@ export default function CreatePostScreen() {
                     />
                   )}
                   <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingTop: 16, paddingHorizontal: 4 }}>
-                    <TouchableOpacity onPress={() => setShowLocationModal(false)}>
+                    <TouchableOpacity
+                      onPress={() => {
+                        hapticLight();
+                        setShowLocationModal(false);
+                      }}
+                    >
                       <Text style={{ color: '#111', fontWeight: '700', fontSize: 15 }}>Cancel</Text>
                     </TouchableOpacity>
-                    <TouchableOpacity onPress={() => setShowLocationModal(false)} style={{ backgroundColor: '#0A3D62', borderRadius: 6, paddingHorizontal: 24, paddingVertical: 10 }}>
+                    <TouchableOpacity
+                      onPress={() => {
+                        hapticLight();
+                        setShowLocationModal(false);
+                      }}
+                      style={{ backgroundColor: '#0A3D62', borderRadius: 6, paddingHorizontal: 24, paddingVertical: 10 }}
+                    >
                       <Text style={{ color: '#fff', fontWeight: '600', fontSize: 15 }}>Save</Text>
                     </TouchableOpacity>
                   </View>
@@ -1523,13 +1628,14 @@ export default function CreatePostScreen() {
                       <FlatList
                         data={verifiedResults}
                         scrollEnabled={false}
-                        keyExtractor={(item, idx) => String(item.placeId || (item.name + item.lat + item.lon) || idx)}
+                        keyExtractor={(item, idx) => getLocationKey(item) || String(idx)}
                         renderItem={({ item }) => {
-                          const isSelected = verifiedLocation?.name === item.name;
+                          const isSelected = !!verifiedLocation && getLocationKey(verifiedLocation) === getLocationKey(item);
                           return (
                             <TouchableOpacity
                               style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 12, paddingHorizontal: 8, backgroundColor: isSelected ? '#f2f2f2' : 'transparent', borderRadius: 12, marginBottom: 4 }}
                               onPress={() => {
+                                hapticLight();
                                 if (isSelected) setVerifiedLocation(null);
                                 else setVerifiedLocation(item);
                               }}
@@ -1552,9 +1658,9 @@ export default function CreatePostScreen() {
                     <FlatList
                       data={verifiedOptions}
                       scrollEnabled={false}
-                      keyExtractor={(item, idx) => String((item.name + item.lat + item.lon) || idx)}
+                      keyExtractor={(item, idx) => getLocationKey(item) || String(idx)}
                       renderItem={({ item }) => {
-                        const isSelected = verifiedLocation?.name === item.name;
+                        const isSelected = !!verifiedLocation && getLocationKey(verifiedLocation) === getLocationKey(item);
                         return (
                           <TouchableOpacity
                             style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 12, paddingHorizontal: 8, backgroundColor: isSelected ? '#f2f2f2' : 'transparent', borderRadius: 12, marginBottom: 4 }}
@@ -1579,14 +1685,31 @@ export default function CreatePostScreen() {
 
                   {/* Footer Buttons */}
                   <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingTop: 16, paddingHorizontal: 4 }}>
-                    <TouchableOpacity onPress={() => setShowVerifiedModal(false)}>
+                    <TouchableOpacity
+                      onPress={() => {
+                        hapticLight();
+                        setShowVerifiedModal(false);
+                      }}
+                    >
                       <Text style={{ color: '#111', fontWeight: '700', fontSize: 15 }}>Cancel</Text>
                     </TouchableOpacity>
                     <View style={{ flexDirection: 'row', gap: 12 }}>
-                      <TouchableOpacity onPress={() => setShowVerifiedModal(false)} style={{ backgroundColor: '#000', borderRadius: 6, paddingHorizontal: 20, paddingVertical: 10 }}>
+                      <TouchableOpacity
+                        onPress={() => {
+                          hapticLight();
+                          setShowVerifiedModal(false);
+                        }}
+                        style={{ backgroundColor: '#000', borderRadius: 6, paddingHorizontal: 20, paddingVertical: 10 }}
+                      >
                         <Text style={{ color: '#fff', fontWeight: '600', fontSize: 15 }}>Add</Text>
                       </TouchableOpacity>
-                      <TouchableOpacity onPress={() => setShowVerifiedModal(false)} style={{ backgroundColor: '#0A3D62', borderRadius: 6, paddingHorizontal: 20, paddingVertical: 10 }}>
+                      <TouchableOpacity
+                        onPress={() => {
+                          hapticLight();
+                          setShowVerifiedModal(false);
+                        }}
+                        style={{ backgroundColor: '#0A3D62', borderRadius: 6, paddingHorizontal: 20, paddingVertical: 10 }}
+                      >
                         <Text style={{ color: '#fff', fontWeight: '600', fontSize: 15 }}>Save</Text>
                       </TouchableOpacity>
                     </View>
@@ -1650,6 +1773,7 @@ export default function CreatePostScreen() {
                           <TouchableOpacity
                             style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 12, paddingHorizontal: 8, backgroundColor: isSelected ? '#f2f2f2' : 'transparent', borderRadius: 12, marginBottom: 4 }}
                             onPress={() => {
+                              hapticLight();
                               if (!isSelected) {
                                 setTaggedUsers([...taggedUsers, item]);
                               } else {
@@ -1684,10 +1808,21 @@ export default function CreatePostScreen() {
                   )}
                   {/* Footer Buttons */}
                   <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingTop: 16, paddingHorizontal: 4 }}>
-                    <TouchableOpacity onPress={() => setShowTagModal(false)}>
+                    <TouchableOpacity
+                      onPress={() => {
+                        hapticLight();
+                        setShowTagModal(false);
+                      }}
+                    >
                       <Text style={{ color: '#111', fontWeight: '700', fontSize: 15 }}>Cancel</Text>
                     </TouchableOpacity>
-                    <TouchableOpacity onPress={() => setShowTagModal(false)} style={{ backgroundColor: '#0A3D62', borderRadius: 6, paddingHorizontal: 24, paddingVertical: 10 }}>
+                    <TouchableOpacity
+                      onPress={() => {
+                        hapticLight();
+                        setShowTagModal(false);
+                      }}
+                      style={{ backgroundColor: '#0A3D62', borderRadius: 6, paddingHorizontal: 24, paddingVertical: 10 }}
+                    >
                       <Text style={{ color: '#fff', fontWeight: '600', fontSize: 15 }}>Save</Text>
                     </TouchableOpacity>
                   </View>
@@ -1732,6 +1867,7 @@ export default function CreatePostScreen() {
                     key={option.groupId || 'everyone'}
                     style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 12, paddingHorizontal: 8, backgroundColor: isSelected ? '#f2f2f2' : 'transparent', borderRadius: 12, marginBottom: 4 }}
                     onPress={() => {
+                      hapticLight();
                       if (option.groupId) {
                         setVisibility(option.label);
                         setSelectedGroupId(option.groupId);
@@ -1766,10 +1902,21 @@ export default function CreatePostScreen() {
 
               {/* Footer Buttons */}
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingTop: 16, paddingHorizontal: 4 }}>
-                <TouchableOpacity onPress={() => setShowVisibilityModal(false)}>
+                <TouchableOpacity
+                  onPress={() => {
+                    hapticLight();
+                    setShowVisibilityModal(false);
+                  }}
+                >
                   <Text style={{ color: '#111', fontWeight: '700', fontSize: 15 }}>Cancel</Text>
                 </TouchableOpacity>
-                <TouchableOpacity onPress={() => setShowVisibilityModal(false)} style={{ backgroundColor: '#0A3D62', borderRadius: 6, paddingHorizontal: 24, paddingVertical: 10 }}>
+                <TouchableOpacity
+                  onPress={() => {
+                    hapticLight();
+                    setShowVisibilityModal(false);
+                  }}
+                  style={{ backgroundColor: '#0A3D62', borderRadius: 6, paddingHorizontal: 24, paddingVertical: 10 }}
+                >
                   <Text style={{ color: '#fff', fontWeight: '600', fontSize: 15 }}>Save</Text>
                 </TouchableOpacity>
               </View>

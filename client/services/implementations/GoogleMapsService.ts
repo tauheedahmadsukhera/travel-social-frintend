@@ -13,22 +13,47 @@ const API_TIMEOUT = 30000;
 // Try to load from environment
 try {
   const { GOOGLE_MAPS_CONFIG } = require('../../config/environment');
-  if (GOOGLE_MAPS_CONFIG?.apiKey) {
+  if (GOOGLE_MAPS_CONFIG?.apiKey && !GOOGLE_MAPS_CONFIG.apiKey.includes('SET_GOOGLE_MAPS')) {
     API_KEY = GOOGLE_MAPS_CONFIG.apiKey;
+  } else {
+    // Check direct process.env as fallback
+    API_KEY = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY || '';
   }
 } catch (err) {
   // Config module may be unavailable in isolated test contexts
+  API_KEY = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY || '';
 }
 
 export class GoogleMapsService implements IMapService {
   private apiKey: string;
   private autocompleteCache: Map<string, any[]> = new Map();
+  private nearbyCache: Map<string, { data: LocationData[], timestamp: number }> = new Map();
+  private reverseGeocodeCache: Map<string, { data: LocationData | null, timestamp: number }> = new Map();
+  private detailsCache: Map<string, { data: LocationData | null, timestamp: number }> = new Map();
+  private searchCache: Map<string, { data: LocationData[], timestamp: number }> = new Map();
+
+  private readonly CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
+  private isCacheValid(timestamp: number): boolean {
+    return Date.now() - timestamp < this.CACHE_TTL;
+  }
 
   constructor() {
     this.apiKey = API_KEY;
   }
 
+  private hasApiKey(): boolean {
+    return typeof this.apiKey === 'string' && this.apiKey.trim().length > 0;
+  }
+
   async geocodeAddress(address: string): Promise<LocationData | null> {
+    if (!this.hasApiKey()) return null;
+    const cacheKey = address.toLowerCase();
+    const cached = this.searchCache.get(cacheKey); // Reuse searchCache map
+    if (cached && this.isCacheValid(cached.timestamp) && cached.data.length > 0) {
+      return cached.data[0];
+    }
+    
     try {
       const response = await fetch(
         `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(
@@ -43,8 +68,9 @@ export class GoogleMapsService implements IMapService {
       const data = await response.json();
 
       if (data.status === 'OK' && data.results.length > 0) {
-        const result = data.results[0];
-        return this.parseGoogleMapsResult(result);
+        const result = this.parseGoogleMapsResult(data.results[0]);
+        this.searchCache.set(cacheKey, { data: [result], timestamp: Date.now() });
+        return result;
       }
 
       return null;
@@ -54,6 +80,17 @@ export class GoogleMapsService implements IMapService {
   }
 
   async reverseGeocode(latitude: number, longitude: number): Promise<LocationData | null> {
+    if (!this.hasApiKey()) return null;
+    // Round to ~11 meters precision to increase cache hits for micro-movements
+    const latKey = latitude.toFixed(4);
+    const lonKey = longitude.toFixed(4);
+    const cacheKey = `${latKey},${lonKey}`;
+    
+    const cached = this.reverseGeocodeCache.get(cacheKey);
+    if (cached && this.isCacheValid(cached.timestamp)) {
+      return cached.data;
+    }
+
     try {
       const response = await fetch(
         `https://maps.googleapis.com/maps/api/geocode/json?latlng=${latitude},${longitude}&key=${this.apiKey}`
@@ -66,10 +103,12 @@ export class GoogleMapsService implements IMapService {
       const data = await response.json();
 
       if (data.status === 'OK' && data.results.length > 0) {
-        const result = data.results[0];
-        return this.parseGoogleMapsResult(result);
+        const result = this.parseGoogleMapsResult(data.results[0]);
+        this.reverseGeocodeCache.set(cacheKey, { data: result, timestamp: Date.now() });
+        return result;
       }
 
+      this.reverseGeocodeCache.set(cacheKey, { data: null, timestamp: Date.now() });
       return null;
     } catch (error) {
       return null;
@@ -77,6 +116,14 @@ export class GoogleMapsService implements IMapService {
   }
 
   async searchPlaces(query: string, region?: Region): Promise<LocationData[]> {
+    if (!this.hasApiKey()) return [];
+    
+    const cacheKey = `${query.toLowerCase()}_${region ? `${region.latitude.toFixed(4)},${region.longitude.toFixed(4)}` : 'none'}`;
+    const cached = this.searchCache.get(cacheKey);
+    if (cached && this.isCacheValid(cached.timestamp)) {
+      return cached.data;
+    }
+
     try {
       let url = `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${encodeURIComponent(
         query
@@ -95,7 +142,9 @@ export class GoogleMapsService implements IMapService {
       const data = await response.json();
 
       if (data.status === 'OK' && data.results.length > 0) {
-        return data.results.map((result: any) => this.parsePlaceResult(result));
+        const results = data.results.map((result: any) => this.parsePlaceResult(result));
+        this.searchCache.set(cacheKey, { data: results, timestamp: Date.now() });
+        return results;
       }
 
       return [];
@@ -105,6 +154,13 @@ export class GoogleMapsService implements IMapService {
   }
 
   async getPlaceDetails(placeId: string): Promise<LocationData | null> {
+    if (!this.hasApiKey()) return null;
+    
+    const cached = this.detailsCache.get(placeId);
+    if (cached && this.isCacheValid(cached.timestamp)) {
+      return cached.data;
+    }
+
     try {
       const response = await fetch(
         `https://maps.googleapis.com/maps/api/place/details/json?place_id=${placeId}&key=${this.apiKey}`
@@ -117,7 +173,9 @@ export class GoogleMapsService implements IMapService {
       const data = await response.json();
 
       if (data.status === 'OK' && data.result) {
-        return this.parsePlaceResult(data.result);
+        const result = this.parsePlaceResult(data.result);
+        this.detailsCache.set(placeId, { data: result, timestamp: Date.now() });
+        return result;
       }
 
       return null;
@@ -129,6 +187,7 @@ export class GoogleMapsService implements IMapService {
   async getAutocompleteSuggestions(
     input: string
   ): Promise<{ placeId: string; description: string; mainText?: string; secondaryText?: string }[]> {
+    if (!this.hasApiKey()) return [];
     try {
       console.log(`[GoogleMapsService] Calling getAutocompleteSuggestions for: "${input}"`);
       // Check cache first
@@ -180,6 +239,18 @@ export class GoogleMapsService implements IMapService {
   }
 
   async getNearbyPlaces(latitude: number, longitude: number, radiusMeters: number, keyword?: string): Promise<LocationData[]> {
+    if (!this.hasApiKey()) return [];
+    
+    // Round to 3 decimal places (~110 meters) to group nearby queries aggressively
+    const latKey = latitude.toFixed(3);
+    const lonKey = longitude.toFixed(3);
+    const cacheKey = `${latKey},${lonKey}_${radiusMeters}_${keyword?.trim().toLowerCase() || 'none'}`;
+    
+    const cached = this.nearbyCache.get(cacheKey);
+    if (cached && this.isCacheValid(cached.timestamp)) {
+      return cached.data;
+    }
+
     try {
       const radius = Math.max(1, Math.min(50000, Math.floor(radiusMeters || 0)));
       let url = `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${latitude},${longitude}&radius=${radius}&key=${this.apiKey}`;
@@ -187,23 +258,39 @@ export class GoogleMapsService implements IMapService {
         url += `&keyword=${encodeURIComponent(keyword.trim())}`;
       }
 
-      const response = await fetch(url, { method: 'GET' });
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 12000); 
+
+      const response = await fetch(url, { 
+        method: 'GET',
+        signal: controller.signal as any, 
+      });
+      clearTimeout(timeoutId);
+
       if (!response.ok) {
         throw new Error(`Nearby search failed: ${response.status}`);
       }
 
       const data = await response.json();
-      if (data.status === 'REQUEST_DENIED') {
-        throw new Error(data.error_message || 'API request denied');
-      }
-
       if (data.status === 'OK' && Array.isArray(data.results)) {
-        return data.results.map((r: any) => this.parsePlaceResult(r));
+        const results = data.results.map((r: any) => this.parsePlaceResult(r));
+        this.nearbyCache.set(cacheKey, { data: results, timestamp: Date.now() });
+        return results;
       }
 
-      return [];
-    } catch (error) {
-      console.error('[GoogleMapsService] Nearby Places Error:', error);
+      if (data.status === 'ZERO_RESULTS') {
+        this.nearbyCache.set(cacheKey, { data: [], timestamp: Date.now() });
+        return [];
+      }
+
+      throw new Error(data.error_message || `Nearby search failed with status: ${data.status}`);
+
+    } catch (error: any) {
+      if (error?.name === 'AbortError') {
+        console.warn('[GoogleMapsService] Nearby Places request timed out (AbortError).');
+      } else {
+        console.error('[GoogleMapsService] Nearby Places Error:', error);
+      }
       return [];
     }
   }

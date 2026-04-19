@@ -8,18 +8,66 @@ import {
 } from '@/src/_services/socketService';
 
 import { getApps, initializeApp } from 'firebase/app';
-import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, User, updateProfile } from 'firebase/auth';
+import {
+  Auth,
+  getAuth,
+  initializeAuth,
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  signOut,
+  User,
+  updateProfile,
+} from 'firebase/auth';
+import { Platform } from 'react-native';
 import { FIREBASE_CONFIG } from '../../config/environment';
+import { extractStoryListFromResponseBody, getCachedHighlightStories, hydrateStoryDocumentsIfNeeded } from '../storyViewer';
 
 // Initialize Firebase app and auth (avoid duplicate app crash)
 let firebaseApp: any = null;
-let auth: any = null;
+let auth: Auth | null = null;
+
+const firebaseConfigLooksValid =
+  String(FIREBASE_CONFIG?.apiKey || '').trim().length > 0 &&
+  String(FIREBASE_CONFIG?.projectId || '').trim().length > 0;
 
 try {
-  firebaseApp = getApps().length === 0 ? initializeApp(FIREBASE_CONFIG) : getApps()[0];
-  auth = getAuth(firebaseApp);
+  if (__DEV__) {
+    console.log('📡 [firebaseHelpers/core] Initializing Firebase with config:', FIREBASE_CONFIG.projectId);
+    console.log('📡 [firebaseHelpers/core] API Key Present:', !!FIREBASE_CONFIG.apiKey);
+  }
+
+  if (!firebaseConfigLooksValid) {
+    console.warn(
+      '[firebaseHelpers/core] Skipping Firebase init — missing apiKey/projectId (set EXPO_PUBLIC_FIREBASE_* for EAS/local release bundles).'
+    );
+  } else {
+    firebaseApp = getApps().length === 0 ? initializeApp(FIREBASE_CONFIG) : getApps()[0];
+    // React Native requires initializeAuth with AsyncStorage persistence to avoid memory-only sessions.
+    // If Auth was already initialized elsewhere, initializeAuth will throw "auth/already-initialized".
+    try {
+      // RN persistence helper exists at runtime in Expo/RN bundles; Firebase 12 typings omit it in some setups.
+      const firebaseAuthMod = require('firebase/auth') as { getReactNativePersistence?: (s: typeof AsyncStorage) => unknown };
+      const rnPersistence: unknown =
+        Platform.OS !== 'web' && typeof firebaseAuthMod.getReactNativePersistence === 'function'
+          ? firebaseAuthMod.getReactNativePersistence(AsyncStorage)
+          : undefined;
+      auth = initializeAuth(firebaseApp, {
+        persistence: rnPersistence as any,
+      });
+    } catch (e: any) {
+      auth = getAuth(firebaseApp);
+      if (__DEV__) {
+        console.warn('Using existing Firebase Auth instance:', e?.message || e);
+      }
+    }
+    if (__DEV__) {
+      console.log('✅ [firebaseHelpers/core] Firebase initialized successfully');
+    }
+  }
 } catch (error: any) {
-  console.error('[firebaseHelpers/core] Firebase initialization failed:', error?.message || error);
+  console.error('❌ [firebaseHelpers/core] Firebase initialization failed:', error?.message || error);
+  firebaseApp = null;
+  auth = null;
 }
 
 function getRequiredAuth() {
@@ -30,7 +78,10 @@ function getRequiredAuth() {
 }
 
 // Firebase auth + MongoDB storage
-export async function signInWithEmailPassword(email: string, password: string): Promise<{ success: boolean; user?: any; error?: string }> {
+export async function signInWithEmailPassword(
+  email: string,
+  password: string
+): Promise<{ success: boolean; user?: any; error?: any }> {
   try {
     console.log('[signInWithEmailPassword] Firebase login:', email);
     const firebaseAuth = getRequiredAuth();
@@ -49,9 +100,18 @@ export async function signInWithEmailPassword(email: string, password: string): 
 
     if (response.success) {
       // Step 3: Store token
-      await AsyncStorage.setItem('token', response.token);
-      await AsyncStorage.setItem('userId', String(response.user?.id ?? firebaseUser.uid));
-      await AsyncStorage.setItem('userEmail', firebaseUser.email || '');
+      const canonicalUserId = String(response.user?.id ?? response.user?._id ?? firebaseUser.uid);
+      const firebaseUid = String(response.user?.firebaseUid ?? firebaseUser.uid);
+      // iOS Fix: Store all avatar variants from backend response
+      const avatarToStore = response.user?.avatar || response.user?.photoURL || response.user?.profilePicture || firebaseUser.photoURL || '';
+      await AsyncStorage.multiSet([
+        ['token', response.token],
+        ['userId', canonicalUserId],
+        ['uid', firebaseUid],
+        ['firebaseUid', firebaseUid],
+        ['userEmail', firebaseUser.email || ''],
+        ['userAvatar', avatarToStore],  // iOS Fix: Cache avatar in storage for profile fallback
+      ]);
 
       console.log('[signInWithEmailPassword] ✅ Firebase + MongoDB sync successful');
       return { success: true, user: firebaseUser };
@@ -75,11 +135,21 @@ export async function signInWithEmailPassword(email: string, password: string): 
         await signOut(auth);
       }
     } catch (e) { }
-    return { success: false, error: error.message };
+    return {
+      success: false,
+      error: {
+        code: error?.code,
+        message: error?.message || String(error),
+      },
+    };
   }
 }
 
-export async function registerWithEmailPassword(email: string, password: string, displayName?: string): Promise<{ success: boolean; user?: any; error?: string }> {
+export async function registerWithEmailPassword(
+  email: string,
+  password: string,
+  displayName?: string
+): Promise<{ success: boolean; user?: any; error?: any }> {
   try {
     console.log('[registerWithEmailPassword] Firebase register:', email);
     const firebaseAuth = getRequiredAuth();
@@ -112,9 +182,18 @@ export async function registerWithEmailPassword(email: string, password: string,
 
     if (response.success) {
       // Step 3: Store token
-      await AsyncStorage.setItem('token', response.token);
-      await AsyncStorage.setItem('userId', String(response.user?.id ?? firebaseUser.uid));
-      await AsyncStorage.setItem('userEmail', firebaseUser.email || '');
+      const canonicalUserId = String(response.user?.id ?? response.user?._id ?? firebaseUser.uid);
+      const firebaseUid = String(response.user?.firebaseUid ?? firebaseUser.uid);
+      // iOS Fix: Store all avatar variants from backend response
+      const avatarToStore = response.user?.avatar || response.user?.photoURL || response.user?.profilePicture || firebaseUser.photoURL || '';
+      await AsyncStorage.multiSet([
+        ['token', response.token],
+        ['userId', canonicalUserId],
+        ['uid', firebaseUid],
+        ['firebaseUid', firebaseUid],
+        ['userEmail', firebaseUser.email || ''],
+        ['userAvatar', avatarToStore],  // iOS Fix: Cache avatar in storage for profile fallback
+      ]);
 
       console.log('[registerWithEmailPassword] ✅ Firebase + MongoDB sync successful');
       return { success: true, user: firebaseUser };
@@ -222,7 +301,7 @@ export async function signInUser(email: string, password: string) {
     }
   } catch (error: any) {
     console.error('[signInUser] Error:', error);
-    return { success: false, error: error.message };
+    return { success: false, error };
   }
 }
 
@@ -331,6 +410,33 @@ export async function getUserHighlights(userId: string, requesterUserId?: string
     return { success: res?.success !== false, highlights: res?.data || [] };
   } catch (error: any) {
     return { success: false, highlights: [] };
+  }
+}
+
+export async function getHighlightStories(highlightId: string) {
+  try {
+    const res = await apiService.get(`/highlights/${highlightId}/stories`);
+    let stories = extractStoryListFromResponseBody(res);
+    if (stories.length === 0) {
+      stories = extractStoryListFromResponseBody((res as any)?.payload ?? (res as any)?.body);
+    }
+    stories = await hydrateStoryDocumentsIfNeeded(stories);
+    const cached = await getCachedHighlightStories(highlightId);
+    if (Array.isArray(cached) && cached.length > 0) {
+      const byId = new Map<string, any>();
+      for (const s of cached) {
+        const id = String((s as any)?.id || (s as any)?._id || '').trim();
+        if (id) byId.set(id, s);
+      }
+      for (const s of stories) {
+        const id = String((s as any)?.id || (s as any)?._id || (s as any)?.storyId || '').trim();
+        if (id) byId.set(id, { ...(byId.get(id) || {}), ...(s as any) });
+      }
+      stories = Array.from(byId.values());
+    }
+    return { success: (res as any)?.success !== false, stories };
+  } catch (error: any) {
+    return { success: false, stories: [] };
   }
 }
 
@@ -450,6 +556,15 @@ export async function uploadMedia(uri: string, mediaType: 'image' | 'video' = 'i
   try {
     console.log(`[uploadMedia] 📤 Starting ${mediaType} upload from URI:`, uri);
 
+    // Fast path: local video upload via multipart to avoid huge base64 conversion cost
+    if (mediaType === 'video' && uri.startsWith('file://')) {
+      const multipartResult = await uploadWithMultipart(uri, mediaType, path);
+      if (multipartResult?.success && multipartResult?.url) {
+        return multipartResult;
+      }
+      console.warn('[uploadMedia] ⚠️ Multipart video upload failed, falling back to base64:', multipartResult?.error);
+    }
+
     let base64Data: string = '';
 
     // Handle file:// URIs (Android/device) - Read as base64
@@ -512,6 +627,68 @@ export async function uploadMedia(uri: string, mediaType: 'image' | 'video' = 'i
     console.error('[uploadMedia] ❌ Error:', err.message);
     console.error('[uploadMedia] ❌ Full error:', err);
     return { success: false, error: err.message };
+  }
+}
+
+async function uploadWithMultipart(
+  uri: string,
+  mediaType: 'image' | 'video',
+  path?: string
+): Promise<{ success: boolean; url?: string; error?: string }> {
+  try {
+    const token = await AsyncStorage.getItem('token');
+    const endpointUrl = `${API_BASE_URL}/media/upload`;
+
+    const safeType = mediaType === 'video' ? 'video' : 'image';
+    const contentType = safeType === 'video' ? 'video/mp4' : 'image/jpeg';
+    const fileName = safeType === 'video'
+      ? `video-${Date.now()}.mp4`
+      : `image-${Date.now()}.jpg`;
+
+    const formData = new FormData();
+    formData.append('mediaType', safeType);
+    if (path) formData.append('path', path);
+    formData.append('fileName', fileName);
+    formData.append('file', { uri, name: fileName, type: contentType } as any);
+
+    const response: any = await new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open('POST', endpointUrl);
+      xhr.setRequestHeader('Accept', 'application/json');
+      if (token) {
+        xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+      }
+
+      xhr.onload = () => {
+        try {
+          const raw = xhr.responseText || '';
+          const json = raw ? JSON.parse(raw) : null;
+          if (xhr.status < 200 || xhr.status >= 300) {
+            resolve({ success: false, error: json?.error || `Upload failed (${xhr.status})` });
+            return;
+          }
+          resolve(json || { success: false, error: 'Invalid upload response' });
+        } catch {
+          resolve({ success: false, error: `Upload failed (${xhr.status})` });
+        }
+      };
+
+      xhr.onerror = () => reject(new Error('Network upload failed'));
+      xhr.send(formData as any);
+    });
+
+    if (!response?.success) {
+      return { success: false, error: response?.error || 'Multipart upload failed' };
+    }
+
+    const url = response?.data?.url || response?.url || response?.secureUrl;
+    if (!url) {
+      return { success: false, error: 'No URL returned from multipart upload' };
+    }
+
+    return { success: true, url };
+  } catch (err: any) {
+    return { success: false, error: err?.message || 'Multipart upload failed' };
   }
 }
 
@@ -842,16 +1019,16 @@ export async function getFeedPosts(limitCount: number = 20) {
 }
 
 export async function likePost(postId: string, userId: string) {
-  await apiService.post(`/posts/${postId}/like`, { userId });
-  return { success: true };
+  const { likePost: likePostWithFallback } = await import('./post');
+  return likePostWithFallback(postId, userId);
 }
 
 export async function unlikePost(postId: string, userId: string) {
-  await apiService.delete(`/posts/${postId}/like`, { userId });
-  return { success: true };
+  const { unlikePost: unlikePostWithFallback } = await import('./post');
+  return unlikePostWithFallback(postId, userId);
 }
 
-export async function deletePost(postId: string, currentUserId?: string) {
+export async function deletePost(postId: string, currentUserId: string) {
   try {
     const res = await apiService.delete(`/posts/${postId}`, { currentUserId });
 
@@ -925,11 +1102,17 @@ export async function createStory(
   userId: string,
   mediaUri: string,
   mediaType: 'image' | 'video' = 'image',
+  userNameRaw?: string,
   locationData?: { name?: string; address?: string; placeId?: string },
-  onProgress?: (percent: number) => void
+  thumbnailUrlRaw?: string,
+  visibility: string = 'Everyone',
+  allowedFollowers: string[] = [],
+  onProgress?: (percent: number) => void,
+  isPostShare?: boolean,
+  postMetadata?: any
 ) {
   let mediaUrl: string | undefined;
-  let thumbnailUrl: string | undefined;
+  let thumbnailUrl: string | undefined = thumbnailUrlRaw;
 
   if (typeof mediaUri === 'string' && (mediaUri.startsWith('http://') || mediaUri.startsWith('https://'))) {
     mediaUrl = mediaUri;
@@ -943,7 +1126,7 @@ export async function createStory(
       throw new Error(uploadRes?.error || 'Upload failed');
     }
     mediaUrl = uploadRes.url;
-    thumbnailUrl = uploadRes.thumbnailUrl;
+    thumbnailUrl = uploadRes.thumbnailUrl || thumbnailUrl;
   } else {
     const upload = await uploadImage(mediaUri);
     if (!upload?.url) throw new Error(upload?.error || 'Upload failed');
@@ -951,25 +1134,27 @@ export async function createStory(
   }
 
   // Get user's actual name
-  let userName = 'Anonymous';
-  try {
-    console.log('[createStory] Fetching profile for userId:', userId);
-    const userProfileRes: any = await apiService.get(`/users/${userId}`);
-    console.log('[createStory] User profile result:', userProfileRes);
-    if (userProfileRes?.success && userProfileRes?.data) {
-      if (userProfileRes.data.displayName) {
-        userName = userProfileRes.data.displayName;
-        console.log('[createStory] Using displayName:', userName);
-      } else if (userProfileRes.data.name) {
-        userName = userProfileRes.data.name;
-        console.log('[createStory] Using name:', userName);
-      } else if (userProfileRes.data.userName) {
-        userName = userProfileRes.data.userName;
-        console.log('[createStory] Using userName:', userName);
+  let userName = userNameRaw || 'Anonymous';
+  if (!userNameRaw) {
+    try {
+      console.log('[createStory] Fetching profile for userId:', userId);
+      const userProfileRes: any = await apiService.get(`/users/${userId}`);
+      console.log('[createStory] User profile result:', userProfileRes);
+      if (userProfileRes?.success && userProfileRes?.data) {
+        if (userProfileRes.data.displayName) {
+          userName = userProfileRes.data.displayName;
+          console.log('[createStory] Using displayName:', userName);
+        } else if (userProfileRes.data.name) {
+          userName = userProfileRes.data.name;
+          console.log('[createStory] Using name:', userName);
+        } else if (userProfileRes.data.userName) {
+          userName = userProfileRes.data.userName;
+          console.log('[createStory] Using userName:', userName);
+        }
       }
+    } catch (err) {
+      console.log('[createStory] Could not fetch user profile for name:', err);
     }
-  } catch (err) {
-    console.log('[createStory] Could not fetch user profile for name:', err);
   }
 
   console.log('[createStory] Final userName to send:', userName);
@@ -978,7 +1163,19 @@ export async function createStory(
     onProgress(97);
   }
 
-  const res = await apiService.post('/stories', { userId, userName, mediaUrl: mediaUrl, mediaType, locationData, thumbnailUrl });
+  const res = await apiService.post('/stories', { 
+    userId, 
+    userName, 
+    mediaUrl: mediaUrl, 
+    mediaType, 
+    locationData, 
+    thumbnailUrl,
+    visibility,
+    allowedFollowers,
+    isPrivate: visibility !== 'Everyone',
+    isPostShare,
+    postMetadata
+  });
 
   // Unwrap API response
   const storyData = res?.data || res;
@@ -989,6 +1186,7 @@ export async function createStory(
     story: storyData
   };
 }
+
 
 export async function getActiveStories() {
   const res = await apiService.get('/stories/active');
@@ -1050,6 +1248,7 @@ export default {
   getCurrentUid,
   isApprovedFollower,
   getUserHighlights,
+  getHighlightStories,
   getUserStories,
   getUserSectionsSorted,
   getPassportTickets,
@@ -1099,19 +1298,55 @@ export default {
 export async function getRegions() {
   try {
     // Return static regions with local names that will be mapped to assets
+    // Keep in sync with client/app/search-modal.tsx defaultRegions + country/region/city asset maps.
+    // section: 'country' | 'region' | 'city' — controls which row the card appears in.
+    // regionKey: REST Countries region slug for big regions: americas | europe | africa | asia | oceania
     const regions = [
       // COUNTRIES
-      { id: 'us', name: 'United States', image: 'Unitedstates' },
-      { id: 'france', name: 'France', image: 'France' },
-      { id: 'uk', name: 'United Kingdom', image: 'UnitedKingdom' },
+      { id: 'united-states', name: 'United States', image: 'United States', section: 'country' },
+      { id: 'united-kingdom', name: 'United Kingdom', image: 'United Kingdom', section: 'country' },
+      { id: 'united-arab-emirates', name: 'United Arab Emirates', image: 'United Arab Emirates', section: 'country' },
+      { id: 'saudi-arabia', name: 'Saudi Arabia', image: 'Saudi Arabia', section: 'country' },
+      { id: 'canada', name: 'Canada', image: 'Canada', section: 'country' },
+      { id: 'mexico', name: 'Mexico', image: 'Mexico', section: 'country' },
+      { id: 'china', name: 'China', image: 'China', section: 'country' },
+      { id: 'thailand', name: 'Thailand', image: 'Thailand', section: 'country' },
+      { id: 'turkey', name: 'Turkey', image: 'Turkey', section: 'country' },
+      { id: 'france', name: 'France', image: 'France', section: 'country' },
+      { id: 'italy', name: 'Italy', image: 'Italy', section: 'country' },
+      { id: 'spain', name: 'Spain', image: 'Spain', section: 'country' },
+      { id: 'portugal', name: 'Portugal', image: 'Portugal', section: 'country' },
+      { id: 'greece', name: 'Greece', image: 'Greece', section: 'country' },
+      { id: 'switzerland', name: 'Switzerland', image: 'Switzerland', section: 'country' },
+
       // REGIONS
-      { id: 'america', name: 'America', image: 'America' },
-      { id: 'europe', name: 'Europe', image: 'Europe' },
-      { id: 'japan', name: 'Japan', image: 'Japan' },
+      { id: 'europe', name: 'Europe', image: 'Europe', section: 'region', regionKey: 'europe' },
+      { id: 'north-america', name: 'North America', image: 'North America', section: 'region', regionKey: 'americas' },
+      { id: 'south-america', name: 'South America', image: 'South America', section: 'region', regionKey: 'americas' },
+      { id: 'caribbean', name: 'Caribbean', image: 'Caribbean', section: 'region', regionKey: 'americas' },
+      { id: 'asia', name: 'Asia', image: 'Asia', section: 'region', regionKey: 'asia' },
+      { id: 'east-asia', name: 'East Asia', image: 'East Asia', section: 'region', regionKey: 'asia' },
+      { id: 'southeast-asia', name: 'Southeast Asia', image: 'Southeast Asia', section: 'region', regionKey: 'asia' },
+      { id: 'africa', name: 'Africa', image: 'Africa', section: 'region', regionKey: 'africa' },
+      { id: 'oceania', name: 'Oceania', image: 'Oceania', section: 'region', regionKey: 'oceania' },
+
       // CITIES
-      { id: 'london', name: 'London', image: 'London' },
-      { id: 'paris', name: 'Paris', image: 'Paris' },
-      { id: 'newyork', name: 'New York', image: 'New York' },
+      { id: 'london', name: 'London', image: 'London', section: 'city' },
+      { id: 'paris', name: 'Paris', image: 'Paris', section: 'city' },
+      { id: 'new-york-city', name: 'New York City', image: 'New York City', section: 'city' },
+      { id: 'los-angeles', name: 'Los Angeles', image: 'Los Angeles', section: 'city' },
+      { id: 'las-vegas', name: 'Las Vegas', image: 'Las Vegas', section: 'city' },
+      { id: 'amsterdam', name: 'Amsterdam', image: 'Amsterdam', section: 'city' },
+      { id: 'barcelona', name: 'Barcelona', image: 'Barcelona', section: 'city' },
+      { id: 'rome', name: 'Rome', image: 'Rome', section: 'city' },
+      { id: 'istanbul', name: 'Istanbul', image: 'Istanbul', section: 'city' },
+      { id: 'dubai', name: 'Dubai', image: 'Dubai', section: 'city' },
+      { id: 'hong-kong', name: 'Hong Kong', image: 'Hong Kong', section: 'city' },
+      { id: 'bangkok', name: 'Bangkok', image: 'Bangkok', section: 'city' },
+      { id: 'seoul', name: 'Seoul', image: 'Seoul', section: 'city' },
+      { id: 'singapore', name: 'Singapore', image: 'Singapore', section: 'city' },
+      { id: 'sydney', name: 'Sydney', image: 'Sydney', section: 'city' },
+      { id: 'tokyo', name: 'Tokyo', image: 'Tokyo', section: 'city' },
     ];
     return { success: true, data: regions };
   } catch (error) {

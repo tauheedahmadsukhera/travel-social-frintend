@@ -1,8 +1,9 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { AuthBrandHeader } from '@/src/_components/auth/AuthBrandHeader';
 import CustomButton from '@/src/_components/auth/CustomButton';
 
 export default function PasswordResetSuccessScreen() {
@@ -11,19 +12,17 @@ export default function PasswordResetSuccessScreen() {
   return (
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
       <View style={styles.content}>
-        {/* Success Icon */}
+        <View style={styles.titleSection}>
+          <AuthBrandHeader
+            title="Password Reset Successfully!"
+            subtitle="Your password has been changed successfully. You can now login with your new password."
+          />
+        </View>
+
         <View style={styles.iconContainer}>
           <View style={styles.iconCircle}>
             <Ionicons name="checkmark" size={60} color="#fff" />
           </View>
-        </View>
-
-        {/* Title */}
-        <View style={styles.titleSection}>
-          <Text style={styles.title}>Password Reset Successfully!</Text>
-          <Text style={styles.subtitle}>
-            Your password has been changed successfully. You can now login with your new password.
-          </Text>
         </View>
 
         {/* Login Button */}
@@ -71,21 +70,7 @@ const styles = StyleSheet.create({
   },
   titleSection: {
     alignItems: 'center',
-    marginBottom: 20,
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: '#000',
     marginBottom: 12,
-    textAlign: 'center',
-  },
-  subtitle: {
-    fontSize: 14,
-    color: '#666',
-    textAlign: 'center',
-    lineHeight: 22,
-    paddingHorizontal: 20,
   },
   loginButton: {
     marginBottom: 12,

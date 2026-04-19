@@ -1,4 +1,5 @@
 import { DEFAULT_AVATAR_URL } from '../lib/api';
+import { safeRouterBack } from '@/lib/safeRouterBack';
 /**
  * Watch Live Screen - ZeegoCloud with Full Features
  * Features: Comments, Viewers, Map, Share, etc.
@@ -197,7 +198,7 @@ export default function WatchLiveScreen() {
   const handleJoinStream = async () => {
     if (!roomId) {
       Alert.alert('Error', 'Invalid room ID');
-      router.back();
+      safeRouterBack();
       return;
     }
 
@@ -257,7 +258,7 @@ export default function WatchLiveScreen() {
     } catch (error) {
       logger.error('Join stream error:', error);
       Alert.alert('Error', 'Failed to join stream');
-      router.back();
+      safeRouterBack();
     } finally {
       setIsJoining(false);
     }
@@ -287,10 +288,10 @@ export default function WatchLiveScreen() {
         logger.error('Leave live stream (backend) failed:', e);
       }
 
-      router.back();
+      safeRouterBack();
     } catch (error) {
       logger.error('Leave stream error:', error);
-      router.back();
+      safeRouterBack();
     }
   };
 

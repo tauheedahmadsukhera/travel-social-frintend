@@ -6,6 +6,7 @@ export type FeedEventType =
   | 'POST_DELETED'
   | 'POST_CREATED'
   | 'POST_UPDATED'
+  | 'HIGHLIGHT_DELETED'
   | 'USER_PRIVACY_CHANGED'
   | 'USER_BLOCKED'
   | 'USER_UNBLOCKED';
@@ -13,6 +14,7 @@ export type FeedEventType =
 export interface FeedEvent {
   type: FeedEventType;
   postId?: string;
+  highlightId?: string;
   userId?: string;
   data?: any;
 }
@@ -57,6 +59,10 @@ class FeedEventEmitter extends EventEmitter {
 
   emitPostUpdated(postId: string, data?: any) {
     this.emitFeedUpdate({ type: 'POST_UPDATED', postId, data });
+  }
+
+  emitHighlightDeleted(highlightId: string) {
+    this.emitFeedUpdate({ type: 'HIGHLIGHT_DELETED', highlightId });
   }
 
   // Listen to specific post updates

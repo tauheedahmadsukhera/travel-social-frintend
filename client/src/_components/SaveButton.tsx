@@ -1,4 +1,5 @@
 import { MaterialCommunityIcons } from "@expo/vector-icons";
+import * as Haptics from 'expo-haptics';
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import React, { useEffect, useState } from "react";
 import { TouchableOpacity, Alert } from "react-native";
@@ -60,18 +61,12 @@ export default function SaveButton({ post, currentUser }: any) {
       Alert.alert("Error", "User not logged in");
       return;
     }
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
 
-    if (saved) {
-      // If already saved — unsave directly (no modal needed)
-      const res = await unsavePost(post.id, uid);
-      if (res.success) setSaved(false);
-    } else {
-      // Open collection modal
-      setModalVisible(true);
-      // Also mark as globally saved in backend
-      await savePost(post.id, uid);
-      setSaved(true);
-    }
+    // Always open collection modal.
+    // Global "All" auto-save should be decided inside the modal after checking
+    // whether this post already exists in any collection.
+    setModalVisible(true);
   }
 
   return (
@@ -89,6 +84,9 @@ export default function SaveButton({ post, currentUser }: any) {
         onClose={() => setModalVisible(false)}
         postId={post.id || post._id || ""}
         postImageUrl={post.mediaUrl || post.imageUrl || post.media?.[0]?.url || undefined}
+        currentUserId={resolvedUserId || userId}
+        onSaveChange={(val: boolean) => setSaved(val)}
+        initialGloballySaved={saved}
       />
     </>
   );

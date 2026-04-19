@@ -20,9 +20,15 @@ export async function registerWithEmailPassword(email: string, password: string,
     
     if (response.success) {
       // Store JWT token from backend
-      await AsyncStorage.setItem('token', response.token);
-      await AsyncStorage.setItem('userId', response.user.id);
-      await AsyncStorage.setItem('userEmail', response.user.email);
+      const canonicalUserId = String(response.user?.id || response.user?._id || '');
+      const firebaseUid = String(response.user?.firebaseUid || response.user?.uid || canonicalUserId);
+      await AsyncStorage.multiSet([
+        ['token', response.token],
+        ['userId', canonicalUserId],
+        ['uid', firebaseUid],
+        ['firebaseUid', firebaseUid],
+        ['userEmail', response.user.email],
+      ]);
       console.log('[Auth] ✅ Registration successful');
       return { success: true, user: response.user };
     } else {
@@ -52,9 +58,15 @@ export async function signInWithEmailPassword(email: string, password: string) {
     
     if (response.success) {
       // Store JWT token from backend
-      await AsyncStorage.setItem('token', response.token);
-      await AsyncStorage.setItem('userId', response.user.id);
-      await AsyncStorage.setItem('userEmail', response.user.email);
+      const canonicalUserId = String(response.user?.id || response.user?._id || '');
+      const firebaseUid = String(response.user?.firebaseUid || response.user?.uid || canonicalUserId);
+      await AsyncStorage.multiSet([
+        ['token', response.token],
+        ['userId', canonicalUserId],
+        ['uid', firebaseUid],
+        ['firebaseUid', firebaseUid],
+        ['userEmail', response.user.email],
+      ]);
       console.log('[Auth] ✅ Sign in successful');
       return { success: true, user: response.user };
     } else {
@@ -77,18 +89,14 @@ export async function logoutUser() {
     await apiService.post('/auth/logout', {});
     
     // Clear AsyncStorage
-    await AsyncStorage.removeItem('token');
-    await AsyncStorage.removeItem('userId');
-    await AsyncStorage.removeItem('userEmail');
+    await AsyncStorage.multiRemove(['token', 'userId', 'uid', 'firebaseUid', 'userEmail']);
     
     console.log('[Auth] ✅ Logout successful');
     return { success: true };
   } catch (error: any) {
     console.error('[Auth] Logout error:', error.message);
     // Still clear local storage even if backend call fails
-    await AsyncStorage.removeItem('token');
-    await AsyncStorage.removeItem('userId');
-    await AsyncStorage.removeItem('userEmail');
+    await AsyncStorage.multiRemove(['token', 'userId', 'uid', 'firebaseUid', 'userEmail']);
     return { success: true };
   }
 }
@@ -134,9 +142,7 @@ export async function verifyToken() {
       return { success: true };
     } else {
       // Token expired, clear it
-      await AsyncStorage.removeItem('token');
-      await AsyncStorage.removeItem('userId');
-      await AsyncStorage.removeItem('userEmail');
+      await AsyncStorage.multiRemove(['token', 'userId', 'uid', 'firebaseUid', 'userEmail']);
       return { success: false, error: 'Token expired' };
     }
   } catch (error: any) {

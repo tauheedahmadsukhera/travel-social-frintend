@@ -14,6 +14,7 @@ import {
   PanResponder,
   Platform,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -25,14 +26,18 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { DEFAULT_AVATAR_URL, API_BASE_URL } from '../../lib/api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { deleteStory } from '../../lib/firebaseHelpers/deleteStory';
-import { addCommentReply, addStoryToHighlight, getUserHighlights } from '../../lib/firebaseHelpers/index';
+import { addCommentReply, addStoryToHighlight } from '../../lib/firebaseHelpers/index';
+import { getUserHighlights } from '../../lib/firebaseHelpers/core';
 import { getKeyboardOffset } from '../../utils/responsive';
 import { useUser } from './UserContext';
 import { formatDistanceToNow } from 'date-fns';
 import { useRouter } from 'expo-router';
 import ShareModal from './ShareModal';
 import HighlightSelectionModal from './HighlightSelectionModal';
-import CreateHighlightModal from './CreateHighlightModal';
+import Animated, { Easing, cancelAnimation, runOnJS, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
+import { storyForStoriesViewer } from '../../lib/storyViewer';
+import { highlightManager } from '../../lib/highlightManager';
+import { useAppDialog } from '@/src/_components/AppDialogProvider';
 
 const { width, height } = Dimensions.get('window');
 
@@ -79,16 +84,23 @@ export default function StoriesViewer({ stories, onClose, initialIndex = 0 }: { 
     if (!trimmed) return '';
     const lower = trimmed.toLowerCase();
     if (lower === 'null' || lower === 'undefined' || lower === 'n/a' || lower === 'na') return '';
-    if (lower.startsWith('http://')) return `https://${trimmed.slice(7)}`;
-    if (lower.startsWith('//')) return `https:${trimmed}`;
-    if (!lower.startsWith('https://')) return '';
-    return encodeURI(trimmed);
+    let u = trimmed;
+    if (lower.startsWith('http://')) u = `https://${trimmed.slice(7)}`;
+    else if (lower.startsWith('//')) u = `https:${trimmed}`;
+    const ul = u.toLowerCase();
+    if (!ul.startsWith('https://')) return '';
+    // Do not encodeURI() full signed URLs (Firebase etc.) — it can break tokens.
+    return u;
   };
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { showSuccess } = useAppDialog();
   const paddingTop = Platform.OS === 'ios' ? Math.max(insets.top, 50) : Math.max(insets.top, 50);
   const [currentIndex, setCurrentIndex] = useState(initialIndex);
   const [progress, setProgress] = useState(0);
+  const progressSv = useSharedValue(0);
+  const currentIndexRef = useRef(initialIndex);
+  useEffect(() => { currentIndexRef.current = currentIndex; }, [currentIndex]);
   const [imageLoading, setImageLoading] = useState(true);
   const [isPaused, setIsPaused] = useState(false);
   const [showComments, setShowComments] = useState(false);
@@ -111,6 +123,7 @@ export default function StoriesViewer({ stories, onClose, initialIndex = 0 }: { 
   const [replyToId, setReplyToId] = useState<string | null>(null);
   const [replyText, setReplyText] = useState('');
   const [localStories, setLocalStories] = useState(stories);
+  const currentStory = localStories[currentIndex];
   const [videoDuration, setVideoDuration] = useState(5000); // ms
   const videoRef = useRef<Video>(null);
   const userContextUser = useUser();
@@ -126,6 +139,7 @@ export default function StoriesViewer({ stories, onClose, initialIndex = 0 }: { 
   const [showHighlightModal, setShowHighlightModal] = useState(false);
   const [showNewHighlightModal, setShowNewHighlightModal] = useState(false);
   const [newHighlightName, setNewHighlightName] = useState('');
+  const [newHighlightVisibility, setNewHighlightVisibility] = useState<'Public' | 'Private'>('Public');
   const [userHighlights, setUserHighlights] = useState<any[]>([]);
   const [loadingHighlights, setLoadingHighlights] = useState(false);
 
@@ -166,6 +180,17 @@ export default function StoriesViewer({ stories, onClose, initialIndex = 0 }: { 
     const d = toDate(localStories[currentIndex]?.createdAt);
     return d ? formatDistanceToNow(d, { addSuffix: true }) : 'Just now';
   }, [localStories, currentIndex]);
+
+  // Keep localStories in sync with props and ensure index stays in-bounds.
+  useEffect(() => {
+    setLocalStories(Array.isArray(stories) ? stories : []);
+  }, [stories]);
+
+  useEffect(() => {
+    if (!Array.isArray(localStories) || localStories.length === 0) return;
+    if (currentIndex < 0) setCurrentIndex(0);
+    else if (currentIndex >= localStories.length) setCurrentIndex(localStories.length - 1);
+  }, [localStories, localStories.length, currentIndex]);
 
   // Load current user from AsyncStorage on mount
   useEffect(() => {
@@ -246,14 +271,9 @@ export default function StoriesViewer({ stories, onClose, initialIndex = 0 }: { 
 
   const handleAddToHighlight = async (highlightId: string) => {
     try {
-      const resolvedStoryId = String((currentStory as any)?.id || (currentStory as any)?._id || (currentStory as any)?.storyId || '');
-      if (!resolvedStoryId) {
-        Alert.alert('Error', 'Story id is missing');
-        return;
-      }
-      const result = await addStoryToHighlight(highlightId, resolvedStoryId);
+      const result = await highlightManager.addStoryToHighlight({ highlightId, story: currentStory });
       if (result.success) {
-        Alert.alert('Success', 'Story added to highlight!');
+        showSuccess('Story added to highlight!');
         setShowHighlightModal(false);
       } else {
         Alert.alert('Error', result.error || 'Failed to add story to highlight');
@@ -280,36 +300,22 @@ export default function StoriesViewer({ stories, onClose, initialIndex = 0 }: { 
       return;
     }
     try {
-      const { apiService } = await import('@/src/_services/apiService');
-      const resolvedStoryId = String((currentStory as any)?.id || (currentStory as any)?._id || (currentStory as any)?.storyId || '');
-      if (!resolvedStoryId) {
-        Alert.alert('Error', 'Story id is missing');
-        return;
-      }
-      const res = await apiService.post('/highlights', {
-        userId: currentUser.uid,
+      const res = await highlightManager.createAndAddStory({
+        userId: String(currentUser?.uid || ''),
         title: newHighlightName.trim(),
-        coverImage: currentStory.imageUrl || currentStory.videoUrl || '',
-        // Backend expects `stories` (used by our helper). Keep `storyIds` too for compatibility.
-        stories: [resolvedStoryId],
-        storyIds: [resolvedStoryId],
+        story: currentStory,
       });
       if (res.success) {
-        const created = (res?.data || res) as any;
-        const highlightId = String(created?._id || created?.id || created?.highlightId || '');
-        // Ensure story is actually attached even if backend ignores stories/storyIds on create.
-        if (highlightId) {
-          try {
-            await addStoryToHighlight(highlightId, resolvedStoryId);
-          } catch {}
-        }
-        Alert.alert('Success', 'Highlight created!');
+        showSuccess('Highlight created!');
         setShowNewHighlightModal(false);
         setShowHighlightModal(false);
         setNewHighlightName('');
+        setNewHighlightVisibility('Public');
         setIsPaused(false);
         // Refresh highlights list so the new one is selectable immediately
         loadUserHighlights();
+      } else {
+        Alert.alert('Error', res.error || 'Failed to create highlight');
       }
     } catch (err) {
       Alert.alert('Error', 'Failed to create highlight');
@@ -331,7 +337,8 @@ export default function StoriesViewer({ stories, onClose, initialIndex = 0 }: { 
 
   // Sync localStories and currentIndex when stories or initialIndex change
   useEffect(() => {
-    setLocalStories(stories);
+    const arr = Array.isArray(stories) ? stories : [];
+    setLocalStories(arr.map((s, i) => storyForStoriesViewer(s, i)));
     setCurrentIndex(initialIndex);
   }, [stories, initialIndex]);
 
@@ -386,27 +393,41 @@ export default function StoriesViewer({ stories, onClose, initialIndex = 0 }: { 
   useEffect(() => {
     const isVideo = currentStory?.videoUrl || currentStory?.mediaType === 'video';
     const duration = isVideo ? videoDuration : 5000;
-    if (isPaused || showComments || imageLoading) return;
-    const increment = 100 / (duration / 50);
-    const interval = setInterval(() => {
-      setProgress(prev => {
-        const newProgress = prev + increment;
-        if (newProgress >= 100) {
-          if (currentIndex < localStories.length - 1) {
-            setCurrentIndex(currentIndex + 1);
-            setImageLoading(true);
-            setVideoDuration(5000);
-            return 0;
-          } else {
-            // Don't call onClose here - use useEffect to watch for end condition
-            return 100;
-          }
+
+    if (isPaused || showComments || imageLoading) {
+      cancelAnimation(progressSv);
+      return;
+    }
+
+    // Restart progress for the current story.
+    cancelAnimation(progressSv);
+    progressSv.value = 0;
+    setProgress(0);
+
+    progressSv.value = withTiming(
+      100,
+      { duration: Math.max(300, duration), easing: Easing.linear },
+      (finished) => {
+        if (!finished) return;
+        const idx = currentIndexRef.current;
+        runOnJS(setProgress)(100);
+        if (idx < localStories.length - 1) {
+          runOnJS(setCurrentIndex)(idx + 1);
+          runOnJS(setImageLoading)(true);
+          runOnJS(setVideoDuration)(5000);
+          runOnJS(setProgress)(0);
         }
-        return newProgress;
-      });
-    }, 50);
-    return () => clearInterval(interval);
-  }, [currentIndex, localStories.length, isPaused, showComments, imageLoading, videoDuration]);
+      }
+    );
+
+    return () => {
+      cancelAnimation(progressSv);
+    };
+  }, [currentIndex, localStories.length, isPaused, showComments, imageLoading, videoDuration, currentStory?.id]);
+
+  const progressFillStyle = useAnimatedStyle(() => {
+    return { width: `${progressSv.value}%` } as any;
+  });
 
   // Call onClose when story reaches end
   useEffect(() => {
@@ -415,13 +436,12 @@ export default function StoriesViewer({ stories, onClose, initialIndex = 0 }: { 
     }
   }, [progress, currentIndex, localStories.length, onClose]);
 
-  const currentStory = localStories[currentIndex];
   const currentStoryAvatarUrl = normalizeRemoteUrl(currentStory?.userAvatar) || DEFAULT_AVATAR_URL;
   const currentStoryImageUrl = normalizeRemoteUrl(currentStory?.imageUrl);
   const currentStoryVideoUrl = normalizeRemoteUrl(currentStory?.videoUrl);
   const isOwnCurrentStory = String(currentStory?.userId || '') === String(currentUser?.uid || '');
-  const isLiked = currentStory.likes?.includes(currentUser?.uid || '') || false;
-  const likesCount = currentStory.likes?.length || 0;
+  const isLiked = (currentStory?.likes || [])?.includes(currentUser?.uid || '') || false;
+  const likesCount = currentStory?.likes?.length || 0;
 
   if (!currentStory) {
     return (
@@ -443,10 +463,11 @@ export default function StoriesViewer({ stories, onClose, initialIndex = 0 }: { 
     const userId = currentUser.uid;
 
     const updatedStories = [...localStories];
-    const likes = updatedStories[currentIndex].likes || [];
+    if (!updatedStories[currentIndex]) return;
+    const likes = (updatedStories[currentIndex] as any).likes || [];
 
     if (isLiked) {
-      updatedStories[currentIndex].likes = likes.filter(id => id !== userId);
+      updatedStories[currentIndex].likes = likes.filter((id: any) => id !== userId);
     } else {
       updatedStories[currentIndex].likes = [...likes, userId];
     }
@@ -571,7 +592,26 @@ export default function StoriesViewer({ stories, onClose, initialIndex = 0 }: { 
           style={{ flex: 1 }}
         >
           <View style={{ flex: 1, backgroundColor: '#000' }}>
-            {imageLoading && <ActivityIndicator size="large" color="#fff" style={{ position: 'absolute', top: '50%', left: '50%', marginLeft: -20, marginTop: -20, zIndex: 10 }} />}
+            {/* Instagram-like: never show a spinner/skeleton in viewer.
+                Show an instant blurred placeholder while media decodes. */}
+            {imageLoading && (
+              <View style={StyleSheet.absoluteFill} pointerEvents="none">
+                <Image
+                  source={{
+                    uri:
+                      currentStory?.imageUrl ||
+                      currentStory?.postMetadata?.imageUrl ||
+                      currentStory?.userAvatar ||
+                      currentStory?.postMetadata?.userAvatar ||
+                      DEFAULT_AVATAR_URL,
+                  }}
+                  style={[StyleSheet.absoluteFill, { opacity: 0.55, transform: [{ scale: 1.05 }] }]}
+                  blurRadius={Platform.OS === 'ios' ? 22 : 14}
+                  resizeMode="cover"
+                />
+                <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.35)' }]} />
+              </View>
+            )}
             
             {/* Background for Card Mode (Blurred) */}
             {currentStory.isPostShare && (
@@ -684,12 +724,16 @@ export default function StoriesViewer({ stories, onClose, initialIndex = 0 }: { 
           <View style={viewerStyles.progressContainer}>
             {localStories.map((_, index) => (
               <View key={index} style={viewerStyles.progressBarBg}>
-                <View
-                  style={[
-                    viewerStyles.progressBarFill,
-                    { width: index === currentIndex ? `${progress}%` : index < currentIndex ? '100%' : '0%' }
-                  ]}
-                />
+                {index === currentIndex ? (
+                  <Animated.View style={[viewerStyles.progressBarFill, progressFillStyle]} />
+                ) : (
+                  <View
+                    style={[
+                      viewerStyles.progressBarFill,
+                      { width: index < currentIndex ? '100%' : '0%' }
+                    ]}
+                  />
+                )}
               </View>
             ))}
           </View>
@@ -715,7 +759,9 @@ export default function StoriesViewer({ stories, onClose, initialIndex = 0 }: { 
                 style={viewerStyles.headerAvatar}
               />
               <View>
-                <Text style={viewerStyles.headerName}>{currentStory.userName}</Text>
+                <Text style={viewerStyles.headerName} numberOfLines={1} ellipsizeMode="tail">
+                  {currentStory.userName}
+                </Text>
                 <Text style={viewerStyles.headerTime}>{relativeTime}</Text>
               </View>
             </TouchableOpacity>
@@ -776,9 +822,8 @@ export default function StoriesViewer({ stories, onClose, initialIndex = 0 }: { 
              </TouchableOpacity>
 
              {isOwnCurrentStory && (
-                <TouchableOpacity onPress={handleOpenHighlightModal} style={viewerStyles.footerIconBtnRow}>
-                   <Ionicons name="heart-circle-outline" size={28} color="#fff" />
-                   <Text style={viewerStyles.footerIconText}>Highlight</Text>
+                <TouchableOpacity onPress={handleOpenHighlightModal} style={viewerStyles.footerIconBtn} accessibilityLabel="Add to highlight">
+                   <Feather name="chevrons-up" size={24} color="#fff" />
                 </TouchableOpacity>
              )}
 
@@ -868,19 +913,88 @@ export default function StoriesViewer({ stories, onClose, initialIndex = 0 }: { 
           loading={loadingHighlights}
         />
 
-        {/* Create Highlight Modal */}
-        <CreateHighlightModal
+        {/* Create Highlight (IG-like bottom sheet) */}
+        <Modal
           visible={showNewHighlightModal}
-          onClose={() => {
+          transparent
+          animationType="slide"
+          onRequestClose={() => {
             setShowNewHighlightModal(false);
             setIsPaused(false);
           }}
-          userId={currentUser?.uid}
-          defaultCoverUri={currentStory?.imageUrl || currentStory?.videoUrl}
-          onSuccess={() => {
-            loadUserHighlights(); // Refresh list
-          }}
-        />
+        >
+          <Pressable style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.45)' }} onPress={() => { setShowNewHighlightModal(false); setIsPaused(false); }} />
+          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} enabled={Platform.OS === 'ios'} style={{ justifyContent: 'flex-end' }}>
+            <SafeAreaView style={{ backgroundColor: '#fff', borderTopLeftRadius: 20, borderTopRightRadius: 20, maxHeight: height * 0.9, minHeight: 420, overflow: 'hidden' }}>
+              <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: '#ddd', alignSelf: 'center', marginTop: 10, marginBottom: 2 }} />
+
+              <View style={{ height: 52, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#eee' }}>
+                <TouchableOpacity
+                  onPress={() => { setShowNewHighlightModal(false); setIsPaused(false); }}
+                  activeOpacity={0.7}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                  style={{ minWidth: 80, alignItems: 'flex-start' }}
+                >
+                  <Text style={{ fontSize: 15, color: '#111', fontWeight: '500' }}>Cancel</Text>
+                </TouchableOpacity>
+
+                <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+                  <Text style={{ fontSize: 16, fontWeight: '700', color: '#111' }}>New highlight</Text>
+                </View>
+
+                <TouchableOpacity
+                  onPress={handleCreateNewHighlight}
+                  disabled={!newHighlightName.trim()}
+                  activeOpacity={0.7}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                  style={{ minWidth: 80, alignItems: 'flex-end' }}
+                >
+                  <Text style={{ fontSize: 15, color: newHighlightName.trim() ? '#111' : '#bbb', fontWeight: '700' }}>Save</Text>
+                </TouchableOpacity>
+              </View>
+
+              <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, 16) }}>
+                <View style={{ width: 140, height: 140, borderRadius: 16, alignSelf: 'center', marginTop: 22, marginBottom: 16, backgroundColor: '#f4f4f4', overflow: 'hidden' }}>
+                  <Image
+                    source={{ uri: String(currentStory?.imageUrl || currentStory?.videoUrl || '') }}
+                    style={{ width: '100%', height: '100%' }}
+                    resizeMode="cover"
+                  />
+                </View>
+
+                <View style={{ marginHorizontal: 16, borderWidth: 1, borderColor: '#e9ecef', borderRadius: 12, paddingHorizontal: 14, paddingVertical: 6, backgroundColor: '#fff' }}>
+                  <TextInput
+                    value={newHighlightName}
+                    onChangeText={setNewHighlightName}
+                    placeholder="Highlight name"
+                    placeholderTextColor="#999"
+                    autoCapitalize="words"
+                    returnKeyType="done"
+                    style={{ height: 44, color: '#111', fontSize: 16 }}
+                  />
+                </View>
+
+                <TouchableOpacity
+                  style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 18, gap: 12, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: '#f0f0f0', marginTop: 14 }}
+                  onPress={() => {
+                    Alert.alert('Visibility', 'Who can see this highlight?', [
+                      { text: 'Public', onPress: () => setNewHighlightVisibility('Public') },
+                      { text: 'Private', onPress: () => setNewHighlightVisibility('Private') },
+                      { text: 'Cancel', style: 'cancel' },
+                    ]);
+                  }}
+                >
+                  <Ionicons name="eye-outline" size={20} color="#444" />
+                  <Text style={{ flex: 1, fontSize: 15, color: '#000', fontWeight: '500' }}>Visibility</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                    <Text style={{ fontSize: 13, color: '#888' }}>{newHighlightVisibility}</Text>
+                    <Feather name="chevron-right" size={18} color="#aaa" />
+                  </View>
+                </TouchableOpacity>
+              </ScrollView>
+            </SafeAreaView>
+          </KeyboardAvoidingView>
+        </Modal>
 
         <ShareModal 
           visible={showShareModal}
@@ -907,7 +1021,7 @@ export default function StoriesViewer({ stories, onClose, initialIndex = 0 }: { 
               }
             }
             if (successCount > 0) {
-              Alert.alert('Success', `Story shared to ${successCount} user${successCount > 1 ? 's' : ''}`);
+              showSuccess(`Story shared to ${successCount} user${successCount > 1 ? 's' : ''}`);
             } else {
               Alert.alert('Failed', 'Story share failed. Please try again.');
             }

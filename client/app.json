@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "trave-social",
+    "name": "Trips",
     "slug": "trave-social",
     "version": "1.0.7",
     "orientation": "portrait",
@@ -11,7 +11,7 @@
       "versionCode": 107,
       "versionName": "1.0.7",
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
+        "backgroundColor": "#FFFFFF",
         "foregroundImage": "./assets/images/icon.png",
         "monochromeImage": "./assets/images/icon.png"
       },
@@ -33,7 +33,7 @@
       ],
       "config": {
         "googleMaps": {
-          "apiKey": "SET_GOOGLE_MAPS_API_KEY_IN_BUILD_ENV"
+          "apiKey": "AIzaSyCQ1Fe55xOwt9fFfAiGIDVoEt01i2hL-zs"
         }
       }
     },
@@ -43,16 +43,16 @@
       "buildNumber": "1.0.8",
       "googleServicesFile": "./GoogleService-Info.plist",
       "config": {
-        "googleMapsApiKey": "SET_GOOGLE_MAPS_API_KEY_IN_BUILD_ENV"
+        "googleMapsApiKey": "AIzaSyCQ1Fe55xOwt9fFfAiGIDVoEt01i2hL-zs"
       },
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
-        "NSCameraUsageDescription": "Allow Trave-Social to access your camera for posting photos and live streaming.",
-        "NSMicrophoneUsageDescription": "Allow Trave-Social to access your microphone for live streaming.",
-        "NSPhotoLibraryUsageDescription": "Allow Trave-Social to access your photos for posting.",
-        "NSLocationWhenInUseUsageDescription": "Allow Trave-Social to use your location for map features and location tagging.",
-        "NSLocationAlwaysAndWhenInUseUsageDescription": "Allow Trave-Social to track your travels to create passport stamps.",
-        "NSLocationAlwaysUsageDescription": "Allow Trave-Social to track your travels even when the app is closed to create passport stamps.",
+        "NSCameraUsageDescription": "Allow Trips to access your camera for posting photos and live streaming.",
+        "NSMicrophoneUsageDescription": "Allow Trips to access your microphone for live streaming.",
+        "NSPhotoLibraryUsageDescription": "Allow Trips to access your photos for posting.",
+        "NSLocationWhenInUseUsageDescription": "Allow Trips to use your location for map features and location tagging.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "Allow Trips to track your travels to create passport stamps.",
+        "NSLocationAlwaysUsageDescription": "Allow Trips to track your travels even when the app is closed to create passport stamps.",
         "UIBackgroundModes": [
           "audio",
           "location",
@@ -134,9 +134,9 @@
       [
         "expo-splash-screen",
         {
-          "image": "./assets/splash.png",
+          "image": "./assets/images/icon.png",
           "resizeMode": "contain",
-          "backgroundColor": "#667eea"
+          "backgroundColor": "#FFFFFF"
         }
       ],
       "react-native-compressor"
@@ -152,9 +152,9 @@
       "analyticsEnabled": true,
       "dailyCounterSampleRate": 0.05,
       "eas": {
-        "projectId": "513a1158-d790-4560-869c-77d75b5ffd6e"
+        "projectId": "acd24cff-c209-4589-86fa-508a00859191"
       }
     },
-    "owner": "tauheedahmad"
+    "owner": "tauheeddev56"
   }
 }

@@ -4,7 +4,7 @@ import * as Haptics from 'expo-haptics';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, Alert, Animated, FlatList, Image, KeyboardAvoidingView, Modal, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View, Pressable } from "react-native";
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Image as ExpoImage } from 'expo-image';
 import { Audio } from 'expo-av';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -21,8 +21,9 @@ import {
     sendMessage,
     clearConversation,
 } from '../lib/firebaseHelpers/index';
+import { safeRouterBack } from '@/lib/safeRouterBack';
 import { apiService } from '@/src/_services/apiService';
-import { uploadMedia, sendMediaMessage as sendMediaMessageApi } from '../lib/firebaseHelpers/messages';
+import { extensionFromFileUri, uploadMedia, sendMediaMessage as sendMediaMessageApi } from '../lib/firebaseHelpers/messages';
 import { getFormattedActiveStatus, subscribeToUserPresence, updateUserOffline, updateUserPresence, UserPresence } from '../lib/userPresence';
 import MessageBubble from '@/src/_components/MessageBubble';
 import ShareModal from '@/src/_components/ShareModal';
@@ -43,9 +44,15 @@ import {
 } from '@/src/_services/socketService';
 
 import { DEFAULT_AVATAR_URL } from '@/lib/api';
+import { useAppDialog } from '@/src/_components/AppDialogProvider';
+import { useOfflineBanner } from '../hooks/useOffline';
+import { OfflineBanner } from '@/src/_components/OfflineBanner';
 const REACTIONS = ['❤️', '😂', '😮', '😢', '😡', '👍'];
 
 export default function DM() {
+  const insets = useSafeAreaInsets();
+  const { showSuccess } = useAppDialog();
+  const { showBanner } = useOfflineBanner();
   const params = useLocalSearchParams();
   const router = useRouter();
   const rawParamConversationId = params.conversationId as unknown;
@@ -70,51 +77,70 @@ export default function DM() {
   );
   const [conversationMeta, setConversationMeta] = useState<any | null>(null);
   const [messages, setMessages] = useState<any[]>([]);
+
+  const toTimestampMs = useCallback((raw: any): number => {
+    if (!raw) return Date.now();
+    if (raw instanceof Date) return raw.getTime();
+
+    // Firestore Timestamp-like: { seconds, nanoseconds } or { _seconds, _nanoseconds }
+    if (typeof raw === 'object') {
+      const anyRaw: any = raw;
+      if (typeof anyRaw?.toDate === 'function') {
+        try {
+          const d = anyRaw.toDate();
+          if (d instanceof Date) return d.getTime();
+        } catch { }
+      }
+      const s = anyRaw?.seconds ?? anyRaw?._seconds;
+      const ns = anyRaw?.nanoseconds ?? anyRaw?._nanoseconds ?? 0;
+      if (typeof s === 'number' && Number.isFinite(s)) {
+        const extra = typeof ns === 'number' && Number.isFinite(ns) ? Math.floor(ns / 1_000_000) : 0;
+        return s * 1000 + extra;
+      }
+    }
+
+    if (typeof raw === 'number' && Number.isFinite(raw)) {
+      // seconds vs ms
+      if (raw > 0 && raw < 10_000_000_000) return raw * 1000;
+      return raw;
+    }
+
+    const parsed = Date.parse(String(raw));
+    return Number.isFinite(parsed) ? parsed : Date.now();
+  }, []);
+
   const messagesWithSeparators = useMemo(() => {
     const list: any[] = [];
     let lastDate: string | null = null;
     
     const parseTime = (msg: any) => {
+      // Fast-path: most messages will have cached timestamp
+      const cached = msg && (msg.__ts ?? msg.__timestampMs);
+      if (typeof cached === 'number' && Number.isFinite(cached)) return cached;
+
       // CRITICAL: Only use the ROOT-level createdAt/timestamp.
       // Never fall through to nested sharedStory.createdAt or sharedPost.createdAt
       // which represent when the story/post was originally posted, NOT when the
       // message was sent.
-      
-      // For temp/local messages, force to bottom
+
+      // Pending / optimistic messages: use a STABLE time from the message only.
+      // (Old code used Date.now() every render, which reshuffled the whole thread.)
       if (!msg || String(msg.id).startsWith('local_') || msg.tempOrigin) {
-        return Date.now() + 100000;
+        const t = toTimestampMs(msg?.createdAt ?? msg?.timestamp);
+        return Number.isFinite(t) && t > 0 ? t : 0;
       }
 
       // Extract only own-property timestamp - avoid nested object timestamps
       let t = undefined;
       if (msg.hasOwnProperty('createdAt') && msg.createdAt !== undefined && msg.createdAt !== null) {
-        // Guard: if createdAt is an object (like a nested story/post), skip it
-        if (typeof msg.createdAt !== 'object' || msg.createdAt instanceof Date) {
-          t = msg.createdAt;
-        }
+        t = msg.createdAt;
       }
       if (t === undefined && msg.hasOwnProperty('timestamp') && msg.timestamp !== undefined && msg.timestamp !== null) {
-        if (typeof msg.timestamp !== 'object' || msg.timestamp instanceof Date) {
-          t = msg.timestamp;
-        }
+        t = msg.timestamp;
       }
       
       if (!t) return Date.now();
-
-      // Handle Date objects
-      if (t instanceof Date) return t.getTime();
-      
-      // Handle numeric timestamps (ms or seconds)
-      if (typeof t === 'number' && Number.isFinite(t)) {
-        if (t > 0 && t < 10_000_000_000) return t * 1000;
-        return t;
-      }
-
-      // Handle ISO strings
-      const parsed = Date.parse(String(t));
-      if (Number.isFinite(parsed)) return parsed;
-      
-      return Date.now();
+      return toTimestampMs(t);
     };
 
     // Sort chronologically (oldest first)
@@ -143,7 +169,7 @@ export default function DM() {
       list.push(msg);
     });
     return list;
-  }, [messages]);
+  }, [messages, toTimestampMs]);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(true);
@@ -185,6 +211,8 @@ export default function DM() {
   const pendingStopAfterStartRef = useRef(false);
   const recordingStartedAtRef = useRef<number>(0);
   const routeChatKeyRef = useRef<string>('');
+  const preloadKeyRef = useRef<string>('');
+  const hasPreloadedMessagesRef = useRef<boolean>(false);
 
   const createTempId = (prefix: string) => `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 
@@ -263,8 +291,17 @@ export default function DM() {
       ...(normalizedAudioDuration ? { audioDuration: normalizedAudioDuration } : {}),
     };
 
-    if (id) return { ...base, id };
-    return { ...base, id: `local_${getMessageFallbackKey(base)}` };
+    const withId = id ? { ...base, id } : { ...base, id: `local_${getMessageFallbackKey(base)}` };
+
+    // Cache a stable message timestamp (ms) to avoid repeated deep parsing/sorting work.
+    const t = (() => {
+      const createdAt = withId?.createdAt;
+      const timestamp = withId?.timestamp;
+      const raw = (createdAt ?? timestamp);
+      return toTimestampMs(raw);
+    })();
+
+    return { ...withId, __ts: t };
   };
 
   const mergeMessages = (existing: any[], incoming: any[]): any[] => {
@@ -272,8 +309,12 @@ export default function DM() {
 
     // Index existing messages by ID
     existing.forEach((m) => {
-      const n = normalizeMessage(m);
-      map.set(n.id, n);
+      const id = getMessageId(m) || String(m?.id || '');
+      const key = id || `local_${getMessageFallbackKey(m)}`;
+      // Avoid re-normalizing existing messages; just ensure they have __ts for fast sorting.
+      const hasTs = typeof m?.__ts === 'number' && Number.isFinite(m.__ts);
+      const withTs = hasTs ? m : { ...m, __ts: normalizeMessage(m).__ts };
+      map.set(String(key), withTs);
     });
 
     // Merge incoming messages
@@ -307,6 +348,7 @@ export default function DM() {
       map.set(n.id, {
         ...prev,
         ...n,
+        __ts: typeof n?.__ts === 'number' ? n.__ts : prev.__ts,
         reactions: mergedReactions,
         mediaType: isDowngrade ? prev.mediaType : (n.mediaType || prev.mediaType),
         mediaUrl: n.mediaUrl || prev.mediaUrl,
@@ -327,7 +369,7 @@ export default function DM() {
     const twoMinutesAgo = Date.now() - 120000;
     existing.forEach((m) => {
       const isTempPending = String(m.id || '').startsWith('temp_') || m.sent === false;
-      const createdAtMs = new Date(m.createdAt || m.timestamp).getTime();
+      const createdAtMs = toTimestampMs(m?.createdAt ?? m?.timestamp);
       if (isTempPending && createdAtMs > twoMinutesAgo && !map.has(m.id)) {
         map.set(m.id, m);
       }
@@ -349,10 +391,57 @@ export default function DM() {
     const routeChatKey = `${paramConversationId || ''}|${otherUserId || ''}|${isGroupParam ? '1' : '0'}`;
     if (routeChatKeyRef.current === routeChatKey) return;
     routeChatKeyRef.current = routeChatKey;
+    hasPreloadedMessagesRef.current = false;
 
     // Critical: reset old thread state when navigating to a different DM target.
-    setMessages([]);
-    setLoading(true);
+    // Instagram-like UX: warm start messages from local cache immediately (if we have a conversationId).
+    // This avoids a blank full-screen loader flash.
+    const preloadKey = typeof paramConversationId === 'string' && paramConversationId
+      ? `messages_cache_${paramConversationId}`
+      : '';
+    preloadKeyRef.current = preloadKey;
+
+    // Don't force a blocking loader; we'll only show it if we truly have no cached messages.
+    setLoading(false);
+    setReplyingTo(null);
+    setSelectedMessage(null);
+    setShowMessageMenu(false);
+    setOtherUserPresence(null);
+    setActiveSoundId(null);
+    setConversationMeta(null);
+    setConversationId(shouldResolveConversationFromUser ? null : (paramConversationId || null));
+
+    if (!preloadKey) {
+      // No conversationId to preload from; clear immediately.
+      setMessages([]);
+      setLoading(true);
+      return;
+    }
+
+    // Preload cached messages for this convo ASAP.
+    AsyncStorage.getItem(preloadKey).then((cached) => {
+      // Ignore if user navigated away quickly.
+      if (preloadKeyRef.current !== preloadKey) return;
+      if (!cached) {
+        setMessages([]);
+        setLoading(true);
+        return;
+      }
+      try {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          hasPreloadedMessagesRef.current = true;
+          setMessages(parsed);
+          // If we have cache, avoid a blocking full-screen loader.
+          setLoading(false);
+          return;
+        }
+      } catch { }
+      setMessages([]);
+      setLoading(true);
+    }).catch(() => {
+      if (preloadKeyRef.current === preloadKey) setMessages([]);
+    });
     setReplyingTo(null);
     setSelectedMessage(null);
     setShowMessageMenu(false);
@@ -380,13 +469,20 @@ export default function DM() {
       }
     });
 
-    getOrCreateConversation(currentUserId, otherUserId || '').then(res => {
-      if (res?.success && res?.conversationId) {
-        setConversationId(res.conversationId);
-        // 2. Update cache
-        AsyncStorage.setItem(cacheKey, res.conversationId).catch(() => {});
-      }
-    });
+    getOrCreateConversation(currentUserId, otherUserId || '')
+      .then((res) => {
+        if (res?.success && res?.conversationId) {
+          setConversationId(res.conversationId);
+          AsyncStorage.setItem(cacheKey, res.conversationId).catch(() => {});
+        } else {
+          console.warn('[DM] getOrCreateConversation failed:', res?.error);
+          setLoading(false);
+        }
+      })
+      .catch((e) => {
+        console.warn('[DM] getOrCreateConversation error:', e);
+        setLoading(false);
+      });
   }, [currentUserId, otherUserId]);
 
   // Track pending temp IDs to prevent socket echos from creating duplicates
@@ -394,13 +490,26 @@ export default function DM() {
 
   useEffect(() => {
     if (!conversationId) return;
-    setLoading(true);
+    let cancelled = false;
+    const cid = conversationId;
+
+    // If we already preloaded cached messages for this convo, don't block UI.
+    if (!hasPreloadedMessagesRef.current && messages.length === 0) {
+      setLoading(true);
+    }
     setSkip(0);
     setHasMore(true);
-    
+
+    const safetyTimer = setTimeout(() => {
+      if (!cancelled && cid === conversationId) {
+        setLoading(false);
+      }
+    }, 20000);
+
     // 1. Warm start from cache if available
     const cacheKey = `messages_cache_${conversationId}`;
-    AsyncStorage.getItem(cacheKey).then(cached => {
+    AsyncStorage.getItem(cacheKey).then((cached) => {
+      if (cancelled || cid !== conversationId) return;
       if (cached) {
         try {
           const parsed = JSON.parse(cached);
@@ -417,17 +526,19 @@ export default function DM() {
       try {
         const [msgRes, metaRes] = await Promise.all([
           fetchMessages(conversationId),
-          isGroupConversation ? apiService.get(`/conversations/${conversationId}`) : Promise.resolve(null)
+          isGroupConversation ? apiService.get(`/conversations/${conversationId}`) : Promise.resolve(null),
         ]);
+
+        if (cancelled || cid !== conversationId) return;
 
         if (metaRes?.success && metaRes?.data) {
           setConversationMeta(metaRes.data);
         }
 
         const incoming = Array.isArray(msgRes?.messages) ? msgRes.messages : [];
-        setMessages(prev => {
+        setMessages((prev) => {
+          if (cid !== conversationId) return prev;
           const merged = mergeMessages(prev, incoming);
-          // 3. Persist to cache
           AsyncStorage.setItem(cacheKey, JSON.stringify(merged.slice(0, 50))).catch(() => {});
           return merged;
         });
@@ -435,7 +546,9 @@ export default function DM() {
       } catch (err) {
         console.error('[DM] Parallel fetch error:', err);
       } finally {
-        setLoading(false);
+        if (!cancelled && cid === conversationId) {
+          setLoading(false);
+        }
       }
     };
 
@@ -485,10 +598,12 @@ export default function DM() {
     }, 60000);
 
     return () => {
+      cancelled = true;
+      clearTimeout(safetyTimer);
       unsub();
       clearInterval(pollInterval);
     };
-  }, [conversationId, currentUserId]);
+  }, [conversationId, currentUserId, isGroupConversation]);
 
   const loadMore = async () => {
     if (loadingMore || !hasMore || !conversationId) return;
@@ -561,11 +676,13 @@ export default function DM() {
     setSending(true);
 
     const tempId = createTempId('temp_text');
+    const sentAtMs = Date.now();
     const tempMsg = {
       id: tempId,
       senderId: currentUserId,
       text: msgText,
-      createdAt: new Date().toISOString(),
+      createdAt: new Date(sentAtMs).toISOString(),
+      __ts: sentAtMs,
       sent: false,
       tempOrigin: true,
       replyTo: replyData
@@ -579,9 +696,13 @@ export default function DM() {
       const res = await sendMessage(conversationId, currentUserId, msgText, otherUserId || undefined, replyData, tempId);
       if (res?.success && res.message) {
         setMessages(prev => {
-          const mapped = prev.map(m => m.id === tempId ? { ...res.message, sent: true } : m);
+          const finalized = normalizeMessage({ ...res.message, sent: true });
+          const mapped = prev.map(m => m.id === tempId ? finalized : m);
           return dedupeById(mapped);
         });
+      } else if (res && !res.success) {
+        setMessages(prev => prev.filter(m => m.id !== tempId));
+        Alert.alert('Error', (res as any)?.error || 'Failed to send message');
       }
     } catch (e) {
       setMessages(prev => prev.filter(m => m.id !== tempId));
@@ -740,7 +861,8 @@ export default function DM() {
       const info = await FileSystem.getInfoAsync(inputUri);
       if (!info.exists) return uri;
 
-      const fileName = `voice_${Date.now()}.m4a`;
+      const ext = extensionFromFileUri(inputUri) || '.m4a';
+      const fileName = `voice_${Date.now()}${ext}`;
       const baseDir = FileSystem.documentDirectory || FileSystem.cacheDirectory;
       if (!baseDir) return inputUri;
       const targetUri = `${baseDir}${fileName}`;
@@ -755,7 +877,17 @@ export default function DM() {
   const handleSharePost = async (post: any): Promise<boolean> => {
     if (!conversationId || !currentUserId) return false;
     const tempId = createTempId('temp_post');
-    const tempMsg = { id: tempId, senderId: currentUserId, mediaType: 'post', sharedPost: post, createdAt: new Date().toISOString(), sent: false, tempOrigin: true };
+    const sentAtMs = Date.now();
+    const tempMsg = {
+      id: tempId,
+      senderId: currentUserId,
+      mediaType: 'post',
+      sharedPost: post,
+      createdAt: new Date(sentAtMs).toISOString(),
+      __ts: sentAtMs,
+      sent: false,
+      tempOrigin: true,
+    };
     setMessages(prev => [...prev, tempMsg]);
     setShowPostSelector(false);
     try {
@@ -839,7 +971,20 @@ export default function DM() {
   async function sendMediaMessage(mediaType: string, uri: string, options?: any) {
     if (!conversationId || !currentUserId) return;
     const tempId = createTempId(`temp_${mediaType}`);
-    const tempMsg = { id: tempId, senderId: currentUserId, mediaType, mediaUrl: uri, createdAt: new Date().toISOString(), sent: false, tempOrigin: true };
+    const sentAtMs = Date.now();
+    const tempMsg = {
+      id: tempId,
+      senderId: currentUserId,
+      mediaType,
+      mediaUrl: uri,
+      createdAt: new Date(sentAtMs).toISOString(),
+      __ts: sentAtMs,
+      sent: false,
+      tempOrigin: true,
+      ...(mediaType === 'audio' && options?.audioDuration
+        ? { audioDuration: options.audioDuration, audioUrl: uri }
+        : {}),
+    };
     
     // Track this temp ID so socket echo handler knows to skip duplicates
     pendingTempIdsRef.current.add(tempId);
@@ -1000,11 +1145,18 @@ export default function DM() {
   }
 
   return (
-    <SafeAreaView style={styles.container} edges={["top", "bottom"]}>
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'} keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}>
+    <SafeAreaView style={styles.container} edges={['top']}>
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={0}
+      >
+        {showBanner && (
+          <OfflineBanner text="You’re offline — showing cached messages" style={{ marginHorizontal: 12 }} />
+        )}
         {/* Header */}
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+          <TouchableOpacity onPress={() => safeRouterBack()} style={styles.backBtn}>
             <Feather name="arrow-left" size={26} color="#000" />
           </TouchableOpacity>
           <TouchableOpacity style={styles.headerUser} onPress={() => !isGroupConversation && otherUserId && router.push(`/user-profile?id=${otherUserId}` as any)}>
@@ -1080,7 +1232,7 @@ export default function DM() {
         )}
 
         {/* Input Bar */}
-        <View style={styles.inputBar}>
+        <View style={[styles.inputBar, { paddingBottom: Math.max(insets.bottom, 10) }]}>
           <TouchableOpacity style={styles.mainCameraBtn} onPress={handleLaunchCamera}>
             <View style={styles.mainCameraCircle}>
                <Ionicons name="camera" size={24} color="#fff" />
@@ -1174,7 +1326,7 @@ export default function DM() {
               console.error('Failed to share to user:', targetUid, err);
             }
           }
-          Alert.alert('Success', 'Post shared successfully!');
+          showSuccess('Post shared successfully!');
         }}
       />
 

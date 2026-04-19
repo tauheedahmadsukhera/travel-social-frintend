@@ -1,3 +1,5 @@
+import { DEFAULT_AVATAR_URL } from '../../lib/api';
+import { getAPIBaseURL } from '../../config/environment';
 import { Feather, MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
@@ -6,6 +8,9 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { createPost, searchUsers } from '../../lib/firebaseHelpers/index';
 import { useUser } from '@/src/_components/UserContext';
 import VerifiedBadge from '@/src/_components/VerifiedBadge';
+import { hapticLight, hapticMedium, hapticSuccess } from '../../lib/haptics';
+import { useAppDialog } from '@/src/_components/AppDialogProvider';
+import { safeRouterBack } from '@/lib/safeRouterBack';
 
 // Runtime import of ImagePicker with graceful fallback
 let ImagePicker: any = null;
@@ -19,9 +24,10 @@ try {
 
 export default function PostScreen() {
     // Default avatar from Firebase Storage
-    const DEFAULT_AVATAR_URL = 'https://res.cloudinary.com/YOUR_CLOUD_NAME/image/upload/v1/default/default-pic.jpg';
+    
   const router = useRouter();
   const user = useUser();
+  const { showSuccess } = useAppDialog();
   const [caption, setCaption] = useState('');
   const [location, setLocation] = useState<any>(null);
   const [verifiedLocation, setVerifiedLocation] = useState<any>(null);
@@ -71,7 +77,7 @@ export default function PostScreen() {
   // Fetch locations from backend
   const fetchLocations = async () => {
     try {
-      const response = await fetch(`${process.env.EXPO_PUBLIC_API_BASE_URL}/locations`);
+      const response = await fetch(`${getAPIBaseURL()}/locations`);
       const data = await response.json();
       if (Array.isArray(data)) setLocationResults(data);
     } catch (err) {
@@ -84,7 +90,7 @@ export default function PostScreen() {
       Alert.alert('Not available', 'Image picker not installed. Run: npx expo install expo-image-picker');
       return;
     }
-    
+    hapticLight();
     try {
       const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (!permission.granted) {
@@ -116,7 +122,7 @@ export default function PostScreen() {
       Alert.alert('No image', 'Please select an image first');
       return;
     }
-    
+    hapticMedium();
     // const user = getCurrentUser() as { uid: string } | null;
     // if (!user || !user.uid) {
     //   Alert.alert('Not signed in', 'Please sign in to create a post');
@@ -129,16 +135,17 @@ export default function PostScreen() {
     try {
       const result = await createPost(user.uid, selectedImages, caption, location?.name || '');
       if (result && typeof result.success === 'boolean' && result.success) {
-        Alert.alert('Success', 'Post created successfully!', [
-          { text: 'OK', onPress: () => {
+        hapticSuccess();
+        showSuccess('Post created successfully!', {
+          onOk: () => {
             setSelectedImages([]);
             setCaption('');
             setLocation(null);
             setVerifiedLocation(null);
             setTaggedUsers([]);
             router.push('/(tabs)/home?refresh=1');
-          }}
-        ]);
+          },
+        });
       } else {
         Alert.alert('Error', 'Failed to create post');
       }
@@ -157,7 +164,12 @@ export default function PostScreen() {
       >
         {/* Header */}
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()}>
+          <TouchableOpacity
+            onPress={() => {
+              hapticLight();
+              safeRouterBack();
+            }}
+          >
             <Feather name="x" size={24} color="#000" />
           </TouchableOpacity>
           <Text style={styles.title}>New post</Text>
@@ -177,6 +189,7 @@ export default function PostScreen() {
                     key={index} 
                     style={[styles.gridItem, index === 0 && styles.gridItemActive]}
                     onPress={() => {
+                      hapticLight();
                       const newImages = [...selectedImages];
                       [newImages[0], newImages[index]] = [newImages[index], newImages[0]];
                       setSelectedImages(newImages);
@@ -187,7 +200,13 @@ export default function PostScreen() {
                   </TouchableOpacity>
                 ))}
                 {selectedImages.length < 4 && (
-                  <TouchableOpacity style={styles.gridItem} onPress={() => setShowImagePicker(true)}>
+                  <TouchableOpacity
+                    style={styles.gridItem}
+                    onPress={() => {
+                      hapticLight();
+                      setShowImagePicker(true);
+                    }}
+                  >
                     <View style={styles.addMore}>
                       <Feather name="plus" size={20} color="#999" />
                     </View>
@@ -196,7 +215,13 @@ export default function PostScreen() {
               </View>
             </View>
           ) : (
-            <TouchableOpacity style={styles.imagePlaceholder} onPress={() => setShowImagePicker(true)}>
+            <TouchableOpacity
+              style={styles.imagePlaceholder}
+              onPress={() => {
+                hapticLight();
+                setShowImagePicker(true);
+              }}
+            >
               <Feather name="image" size={48} color="#ccc" />
               <Text style={styles.placeholderText}>Tap to select image</Text>
             </TouchableOpacity>
@@ -232,7 +257,13 @@ export default function PostScreen() {
             </TouchableOpacity>
 
             {/* Location */}
-            <TouchableOpacity style={styles.optionRow} onPress={() => setShowLocationModal(true)}>
+            <TouchableOpacity
+              style={styles.optionRow}
+              onPress={() => {
+                hapticLight();
+                setShowLocationModal(true);
+              }}
+            >
               <Feather name="map-pin" size={20} color="#000" style={{ marginRight: 12 }} />
               <Text style={styles.optionText}>
                 {location ? location.name : "Add a location"}
@@ -241,7 +272,13 @@ export default function PostScreen() {
             </TouchableOpacity>
 
             {/* Verified Location */}
-            <TouchableOpacity style={styles.optionRow} onPress={() => setShowVerifiedModal(true)}>
+            <TouchableOpacity
+              style={styles.optionRow}
+              onPress={() => {
+                hapticLight();
+                setShowVerifiedModal(true);
+              }}
+            >
               <View style={{ marginRight: 12 }}><VerifiedBadge size={20} color="#000" /></View>
               <View style={{ flex: 1 }}>
                 <Text style={styles.optionText}>
@@ -255,7 +292,12 @@ export default function PostScreen() {
                 )}
               </View>
               {verifiedLocation ? (
-                <TouchableOpacity onPress={() => setVerifiedLocation(null)}>
+                <TouchableOpacity
+                  onPress={() => {
+                    hapticLight();
+                    setVerifiedLocation(null);
+                  }}
+                >
                   <Feather name="x" size={20} color="#000" />
                 </TouchableOpacity>
               ) : (
@@ -264,7 +306,13 @@ export default function PostScreen() {
             </TouchableOpacity>
 
             {/* Tag People */}
-            <TouchableOpacity style={styles.optionRow} onPress={() => setShowTagModal(true)}>
+            <TouchableOpacity
+              style={styles.optionRow}
+              onPress={() => {
+                hapticLight();
+                setShowTagModal(true);
+              }}
+            >
               <Feather name="users" size={20} color="#000" style={{ marginRight: 12 }} />
               <Text style={styles.optionText}>Tag people</Text>
               <Feather name="chevron-right" size={20} color="#999" style={{ marginLeft: "auto" }} />
@@ -284,6 +332,7 @@ export default function PostScreen() {
           <TouchableOpacity 
             style={styles.clearAllBottomBtn} 
             onPress={() => {
+              hapticLight();
               setCaption(""); setLocation(null); setVerifiedLocation(null); setTaggedUsers([]); setSelectedImages([]);
             }}
           >
@@ -308,7 +357,12 @@ export default function PostScreen() {
       <Modal visible={showImagePicker} animationType="slide">
         <SafeAreaView style={{ flex: 1, backgroundColor: '#000' }}>
           <View style={styles.pickerHeader}>
-            <TouchableOpacity onPress={() => setShowImagePicker(false)}>
+            <TouchableOpacity
+              onPress={() => {
+                hapticLight();
+                setShowImagePicker(false);
+              }}
+            >
               <Feather name="x" size={24} color="#fff" />
             </TouchableOpacity>
             <Text style={styles.pickerTitle}>Select photos</Text>

@@ -1,5 +1,4 @@
 import { Feather, Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
-import { Image as ExpoImage } from 'expo-image';
 import { Tabs, useFocusEffect, useRouter, usePathname, useSegments } from "expo-router";
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, Animated, Dimensions, StyleSheet, Text, TouchableOpacity, View, FlatList, Modal, ScrollView, Platform } from 'react-native';
@@ -7,8 +6,14 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useNotifications } from '../../hooks/useNotifications';
 import { notificationService } from '../../lib/notificationService';
 import { getPushNotificationToken, requestNotificationPermissions, savePushToken } from '../../services/notificationService';
+import { getAllStoriesForFeed, getUserProfile } from "../../lib/firebaseHelpers/index";
+import { DEFAULT_AVATAR_URL } from "../../lib/api";
+import { useLocalSearchParams } from "expo-router";
+import { AppBrandMark } from '@/src/_components/AppBrandMark';
 import GroupsDrawer from '@/src/_components/GroupsDrawer';
 import NotificationsModal from '@/src/_components/NotificationsModal';
+import StoriesRow from '@/src/_components/StoriesRow';
+import StoriesViewer from '@/src/_components/StoriesViewer';
 
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { logAnalyticsEvent, setAnalyticsUserId } from '../../lib/analytics';
@@ -36,6 +41,8 @@ const TabEventContext = createContext<{ emitHomeTabPress: () => void; subscribeH
 type HeaderVisibilityApi = {
   hideHeader: () => void;
   showHeader: () => void;
+  headerHeight: number;
+  headerScrollY?: Animated.Value;
 };
 
 const HeaderVisibilityContext = createContext<HeaderVisibilityApi | undefined>(undefined);
@@ -46,9 +53,15 @@ export const useHeaderVisibility = (): HeaderVisibilityApi => {
     return {
       hideHeader: () => { },
       showHeader: () => { },
+      headerHeight: 0,
     };
   }
   return ctx;
+};
+
+export const useHeaderHeight = (): number => {
+  const insets = useSafeAreaInsets();
+  return (isSmallDevice ? 50 : 56) + Math.max(insets.top, 12);
 };
 
 export const useTabEvent = () => useContext(TabEventContext);
@@ -69,55 +82,154 @@ export default function TabsLayout() {
   const pathname = usePathname();
   const [menuVisible, setMenuVisible] = useState(false);
   const [groupsDrawerVisible, setGroupsDrawerVisible] = useState(false);
+  const [showStoriesViewer, setShowStoriesViewer] = useState(false);
+  const [selectedStories, setSelectedStories] = useState<any[]>([]);
+  const [storyInitialIndex, setStoryInitialIndex] = useState(0);
+  const [storiesRefreshTrigger, setStoriesRefreshTrigger] = useState(0);
+  const [storiesRowResetTrigger, setStoriesRowResetTrigger] = useState(0);
+  const [storyMedia, setStoryMedia] = useState<{ uri: string; type: string } | null>(null);
+  const params = useLocalSearchParams();
+  const openedStoryIdRef = useRef<string | null>(null);
   const isSearchScreen = pathname === '/search' || pathname.includes('/search');
+  const isSavedScreen = pathname === '/saved' || pathname.includes('/saved');
+  const isHomeScreen = pathname === '/home' || pathname === '/' || pathname.includes('home');
+  const hideTopOverlay = isSearchScreen || isSavedScreen;
   const insets = useSafeAreaInsets();
+  const safeTop = Math.max(insets.top, 12);
+  const totalHeaderHeight = TOP_MENU_HEIGHT + safeTop;
 
-  const headerHeightRef = useRef<number>(TOP_MENU_HEIGHT);
-  const animatedHeaderHeight = useRef(new Animated.Value(TOP_MENU_HEIGHT)).current;
-  const animatedHeaderTranslateY = useRef(new Animated.Value(0)).current;
+  /** Standard-height bottom bar (content ~56pt) + safe inset; sync with floating UI `bottom`. */
+  const bottomTabLayout = useMemo(() => {
+    const bottomTabSafe = Math.max(insets.bottom, Platform.OS === 'android' ? 8 : 10);
+    const contentMin = 64;
+    const height = contentMin + bottomTabSafe;
+    return { bottomTabSafe, height };
+  }, [insets.bottom]);
 
-  const applyHeaderState = useCallback((hidden: boolean) => {
-    const h = headerHeightRef.current;
-    if (!h) return;
+  const tabBarStyle = useMemo(
+    () => ({
+      height: bottomTabLayout.height,
+      paddingBottom: bottomTabLayout.bottomTabSafe,
+      paddingTop: 6,
+      paddingHorizontal: 12,
+      backgroundColor: '#FFFFFF',
+      borderTopWidth: 0,
+      borderTopColor: 'transparent' as const,
+      elevation: 0,
+      shadowOpacity: 0,
+    }),
+    [bottomTabLayout.bottomTabSafe, bottomTabLayout.height]
+  );
 
-    Animated.parallel([
-      Animated.timing(animatedHeaderHeight, {
-        toValue: hidden ? 0 : h,
-        duration: 180,
-        useNativeDriver: false,
-      }),
-      Animated.timing(animatedHeaderTranslateY, {
-        toValue: hidden ? -h : 0,
-        duration: 180,
-        useNativeDriver: false,
-      }),
-    ]).start();
-  }, [animatedHeaderHeight, animatedHeaderTranslateY]);
+  const headerScrollY = useRef(new Animated.Value(0)).current;
 
   const hideHeader = useCallback(() => {
-    applyHeaderState(true);
-  }, [applyHeaderState]);
+    // Static header: do nothing.
+  }, []);
 
   const showHeader = useCallback(() => {
-    applyHeaderState(false);
-  }, [applyHeaderState]);
+    // Static header: do nothing.
+  }, [headerScrollY]);
 
   const headerVisibilityValue = useMemo(() => {
-    return { hideHeader, showHeader };
-  }, [hideHeader, showHeader]);
+    return { hideHeader, showHeader, headerHeight: totalHeaderHeight, headerScrollY };
+  }, [hideHeader, showHeader, totalHeaderHeight, headerScrollY]);
+
+  // Handle media returning from story-creator screen
+  useEffect(() => {
+    const uri = params?.storyMediaUri != null ? String(params.storyMediaUri) : '';
+    const type = params?.storyMediaType != null ? String(params.storyMediaType) : 'photo';
+    if (!uri) return;
+    setStoryMedia({ uri, type });
+  }, [params?.storyMediaUri, params?.storyMediaType]);
+
+  // Handle storyId deep-link (moved from home.tsx)
+  useEffect(() => {
+    const storyIdParam = params?.storyId != null ? String(params.storyId) : '';
+    if (!storyIdParam) return;
+
+    if (openedStoryIdRef.current === storyIdParam) return;
+    openedStoryIdRef.current = storyIdParam;
+
+    (async () => {
+      try {
+        const normalizeRemoteUrl = (value: any): string => {
+          if (typeof value !== 'string') return '';
+          const trimmed = value.trim();
+          if (!trimmed) return '';
+          const lower = trimmed.toLowerCase();
+          if (lower === 'null' || lower === 'undefined' || lower === 'n/a' || lower === 'na') return '';
+          if (lower.startsWith('http://')) return `https://${trimmed.slice(7)}`;
+          if (lower.startsWith('//')) return `https:${trimmed}`;
+          return trimmed;
+        };
+
+        const res = await getAllStoriesForFeed();
+        if (!res?.success || !Array.isArray(res.data)) return;
+
+        const now = Date.now();
+        const activeStories = res.data.filter((s: any) => {
+          if (s?.expiresAt == null) return true;
+          return Number(s.expiresAt) > now;
+        });
+
+        const target = activeStories.find((s: any) => {
+          const id = s?._id || s?.id;
+          return id != null && String(id) === storyIdParam;
+        });
+        if (!target) return;
+
+        const ownerId = typeof target?.userId === 'string'
+          ? target.userId
+          : String(target?.userId?._id || target?.userId?.id || target?.userId?.uid || target?.userId?.firebaseUid || '');
+        if (!ownerId) return;
+
+        let ownerAvatar = DEFAULT_AVATAR_URL;
+        try {
+          const profileRes: any = await getUserProfile(ownerId);
+          if (profileRes?.success && profileRes?.data) {
+            ownerAvatar = normalizeRemoteUrl(profileRes.data.avatar || profileRes.data.photoURL || profileRes.data.profilePicture) || DEFAULT_AVATAR_URL;
+          }
+        } catch (err) {
+          console.error('[Layout] Avatar fetch error:', err);
+        }
+
+        const ownerStoriesRaw = activeStories.filter((s: any) => {
+          const sid = typeof s?.userId === 'string'
+            ? s.userId
+            : String(s?.userId?._id || s?.userId?.id || s?.userId?.uid || s?.userId?.firebaseUid || '');
+          return sid === ownerId;
+        });
+        const transformed = ownerStoriesRaw.map((story: any) => ({
+          ...story,
+          id: story._id || story.id,
+          userId: ownerId,
+          userName: story.userName || 'Anonymous',
+          userAvatar: ownerAvatar,
+          imageUrl: normalizeRemoteUrl(story.image || story.imageUrl || story.mediaUrl),
+          videoUrl: normalizeRemoteUrl(story.video || story.videoUrl),
+          mediaType: (story.video || story.videoUrl || story.mediaType === 'video') ? 'video' : 'image'
+        }));
+
+        const idx = Math.max(0, transformed.findIndex((s: any) => String(s?.id || '') === storyIdParam));
+        if (transformed.length === 0) return;
+
+        setSelectedStories(transformed);
+        setStoryInitialIndex(idx);
+        setShowStoriesViewer(true);
+      } catch (e) {
+        console.log('[Layout] Failed to open story deep-link:', e);
+      }
+    })();
+  }, [params?.storyId]);
 
   return (
-    <SafeAreaView style={{ flex: 1 }} edges={["top", "bottom"]}>
-      {!isSearchScreen && (
-        <Animated.View
-          style={{
-            height: animatedHeaderHeight,
-            transform: [{ translateY: animatedHeaderTranslateY }],
-            overflow: 'hidden',
-          }}
-        >
+    <View style={{ flex: 1, backgroundColor: '#fff' }}>
+      {/* Non-sticky header: part of layout flow (not absolute overlay) */}
+      {!hideTopOverlay && (
+        <View style={{ height: totalHeaderHeight, overflow: 'hidden' }}>
           <TopMenu setMenuVisible={setMenuVisible} setGroupsDrawerVisible={setGroupsDrawerVisible} />
-        </Animated.View>
+        </View>
       )}
 
       <HeaderVisibilityContext.Provider value={headerVisibilityValue}>
@@ -125,29 +237,30 @@ export default function TabsLayout() {
           <Tabs
             screenOptions={{
               headerShown: false,
+              // Header is now in-flow and animates its own height.
+              sceneStyle: {
+                backgroundColor: '#fff',
+                paddingTop: 0,
+              },
               tabBarActiveTintColor: TAB_ACTIVE_COLOR,
               tabBarInactiveTintColor: TAB_INACTIVE_COLOR,
               tabBarShowLabel: true,
               tabBarItemStyle: {
                 flex: 1,
+                justifyContent: 'flex-start',
+                paddingTop: 4,
               },
               tabBarLabelStyle: {
                 fontSize: TAB_LABEL_SIZE,
                 marginTop: 2,
+                marginBottom: 10,
+              },
+              tabBarIconStyle: {
+                marginTop: -2,
               },
               lazy: true,
               freezeOnBlur: true,
-              tabBarStyle: {
-                height: 70,
-                paddingBottom: 10,
-                paddingTop: 8,
-                paddingHorizontal: 12,
-                backgroundColor: '#FFFFFF',
-                borderTopWidth: 1,
-                borderTopColor: '#D8DCE0',
-                elevation: 0,
-                shadowOpacity: 0,
-              },
+              tabBarStyle,
             }}
           >
             <Tabs.Screen
@@ -164,6 +277,7 @@ export default function TabsLayout() {
                   fontSize: TAB_LABEL_SIZE,
                   fontWeight: '600',
                   marginTop: 2,
+                  marginBottom: 10,
                 },
                 tabBarIcon: ({ color, focused }) => (
                   <MaterialCommunityIcons
@@ -187,6 +301,7 @@ export default function TabsLayout() {
                   fontSize: TAB_LABEL_SIZE,
                   fontWeight: '600',
                   marginTop: 2,
+                  marginBottom: 10,
                 },
                 tabBarIcon: ({ color }) => (
                   <Ionicons name="search" size={ICON_SIZE + 2} color={color} />
@@ -208,6 +323,7 @@ export default function TabsLayout() {
                   fontSize: TAB_LABEL_SIZE,
                   fontWeight: '600',
                   marginTop: 2,
+                  marginBottom: 10,
                 },
                 tabBarIcon: ({ color }) => (
                   <Ionicons name="add" size={ICON_SIZE + 6} color={TAB_INACTIVE_COLOR} />
@@ -248,6 +364,7 @@ export default function TabsLayout() {
                   fontSize: TAB_LABEL_SIZE,
                   fontWeight: '600',
                   marginTop: 2,
+                  marginBottom: 10,
                 },
                 tabBarIcon: ({ color }) => (
                   <Feather
@@ -271,6 +388,7 @@ export default function TabsLayout() {
                   fontSize: TAB_LABEL_SIZE,
                   fontWeight: '600',
                   marginTop: 2,
+                  marginBottom: 10,
                 },
                 tabBarIcon: ({ color, focused }) => (
                   <Ionicons
@@ -284,6 +402,58 @@ export default function TabsLayout() {
           </Tabs>
         </TabEventContext.Provider>
       </HeaderVisibilityContext.Provider>
+
+      {/* Stories Floating Bar above Tab Bar (Only on Home) */}
+      {(pathname === '/home' || pathname === '/') && (
+        <View
+          style={[
+            styles.floatingStoriesContainer,
+            { bottom: bottomTabLayout.height + 6 },
+          ]}
+        >
+          <StoriesRow
+            onStoryPress={(stories, initialIndex) => {
+              setSelectedStories(stories);
+              setStoryInitialIndex(initialIndex || 0);
+              setShowStoriesViewer(true);
+            }}
+            onStoryViewerClose={() => {
+              setShowStoriesViewer(false);
+              setSelectedStories([]);
+              setStoryInitialIndex(0);
+              setStoriesRowResetTrigger(prev => prev + 1);
+            }}
+            refreshTrigger={storiesRefreshTrigger}
+            resetTrigger={storiesRowResetTrigger}
+            incomingMedia={storyMedia}
+          />
+        </View>
+      )}
+
+      {showStoriesViewer && (
+        <Modal
+          visible={showStoriesViewer}
+          animationType="fade"
+          onRequestClose={() => {
+            setShowStoriesViewer(false);
+            setSelectedStories([]);
+            setStoryInitialIndex(0);
+            setStoriesRowResetTrigger(prev => prev + 1);
+          }}
+        >
+          <StoriesViewer
+            stories={selectedStories}
+            initialIndex={storyInitialIndex}
+            onClose={() => {
+              setShowStoriesViewer(false);
+              setSelectedStories([]);
+              setStoryInitialIndex(0);
+              setStoriesRowResetTrigger(prev => prev + 1);
+            }}
+          />
+        </Modal>
+      )}
+
 
       {/* Modern clean bottom sheet for settings/activity */}
       {menuVisible && (
@@ -406,25 +576,72 @@ export default function TabsLayout() {
 
       {/* Groups Drawer */}
       <GroupsDrawer visible={groupsDrawerVisible} onClose={() => setGroupsDrawerVisible(false)} />
-    </SafeAreaView >
+    </View>
   );
 }
 
 function TopMenu({ setMenuVisible, setGroupsDrawerVisible }: { setMenuVisible: (v: boolean) => void; setGroupsDrawerVisible: (v: boolean) => void }): React.ReactElement {
   const router = useRouter();
+  const tabEvents = useTabEvent();
+  const insets = useSafeAreaInsets();
   const [currentUserId, setCurrentUserId] = useState<string>('');
   const [unreadNotif, setUnreadNotif] = useState(0);
   const [unreadMsg, setUnreadMsg] = useState(0);
 
   const [notificationsModalVisible, setNotificationsModalVisible] = React.useState(false);
 
-  const [logoUrl, setLogoUrl] = useState<string | null>('https://res.cloudinary.com/dinwxxnzm/image/upload/v1766418070/logo/logo.png');
+  const [logoUrl, setLogoUrl] = useState<string | null>(null);
   const [logoLoading, setLogoLoading] = useState(false);
   const segments = useSegments();
   const isProfileScreen = segments[segments.length - 1] === 'profile';
+  const isHomeScreen = segments[segments.length - 1] === 'home';
 
   // Get notifications from hook
   const { notifications, unreadCount, fetchNotifications, markAsRead, markAllAsRead } = useNotifications(currentUserId || '');
+
+  const renderCountBadge = useCallback((count: number, bgColor: string, top: number, right: number) => {
+    if (!count || count <= 0) return null;
+    const display = count > 99 ? '99+' : String(count);
+    const isWide = display.length >= 3;
+    const height = isSmallDevice ? 14 : 16;
+    const minWidth = isWide ? (isSmallDevice ? 20 : 22) : (isSmallDevice ? 14 : 16);
+
+    return (
+      <View
+        style={{
+          position: 'absolute',
+          top,
+          right,
+          backgroundColor: bgColor,
+          height,
+          minWidth,
+          paddingHorizontal: isWide ? 4 : 3,
+          borderRadius: height / 2,
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 200,
+          borderWidth: 1,
+          borderColor: '#fff',
+        }}
+        pointerEvents="none"
+      >
+        <Text
+          style={{
+            color: '#fff',
+            fontWeight: '800',
+            fontSize: isSmallDevice ? (isWide ? 8 : 9) : (isWide ? 9 : 10),
+            lineHeight: height - 2,
+            textAlign: 'center',
+            textAlignVertical: 'center',
+            includeFontPadding: false,
+          }}
+          numberOfLines={1}
+        >
+          {display}
+        </Text>
+      </View>
+    );
+  }, []);
 
   useEffect(() => {
     let isMounted = true;
@@ -516,67 +733,35 @@ function TopMenu({ setMenuVisible, setGroupsDrawerVisible }: { setMenuVisible: (
 
 
   return (
-    <View style={styles.topMenu}>
+    <View style={[styles.topMenu, { paddingTop: Math.max(insets.top, 12), height: (isSmallDevice ? 50 : 56) + Math.max(insets.top, 12) }]}>
       <View style={{ flexDirection: 'row', alignItems: 'center', minWidth: 150 }}>
-        <View style={{ position: 'relative', height: 40, justifyContent: 'center' }}>
-          {/* Base Text Logo - Always visible immediately */}
-          <Text style={{
-            fontSize: 22,
-            fontWeight: '900',
-            color: '#0A3D62',
-            letterSpacing: -0.5
-          }}>
-            Trave<Text style={{ color: '#667eea' }}>Social</Text>
-          </Text>
-
-          {/* Branding Image - Loads on top if available */}
-          <ExpoImage
-            source={{ uri: logoUrl || 'https://res.cloudinary.com/dinwxxnzm/image/upload/v1766418070/logo/logo.png' }}
-            style={{
-              position: 'absolute',
-              top: 0,
-              left: 0,
-              right: 0,
-              bottom: 0,
-              backgroundColor: 'transparent'
-            }}
-            contentFit="contain"
-            transition={300}
-            cachePolicy="memory-disk"
+        <TouchableOpacity
+          style={{ flexDirection: 'row', alignItems: 'center', height: 40, justifyContent: 'center' }}
+          activeOpacity={0.85}
+          onPress={() => {
+            tabEvents?.emitHomeTabPress?.();
+            if (!isHomeScreen) {
+              router.replace('/(tabs)/home');
+            }
+          }}
+        >
+          <AppBrandMark
+            logoUri={logoUrl || undefined}
+            size="sm"
+            showWordmark
+            iconAsset="app"
+            variant="tabBar"
           />
-        </View>
+        </TouchableOpacity>
       </View>
       {isProfileScreen ? (
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 20 }}>
           <TouchableOpacity style={styles.topBtn} onPress={() => { logAnalyticsEvent('open_passport'); router.push('/passport' as any); }}>
             <Feather name="briefcase" size={20} color="#000" />
           </TouchableOpacity>
-          <TouchableOpacity style={styles.topBtn} onPress={async () => { logAnalyticsEvent('open_notifications'); setNotificationsModalVisible(true); try { await notificationService.markAllAsRead(); await fetchNotifications(); } catch { } }}>
+          <TouchableOpacity style={styles.topBtn} onPress={async () => { logAnalyticsEvent('open_notifications'); setNotificationsModalVisible(true); try { await markAllAsRead(); await fetchNotifications({ force: true }); } catch { } }}>
             <Feather name="bell" size={20} color="#000" />
-            {unreadCount > 0 && (
-              <View style={{
-                position: 'absolute',
-                top: isSmallDevice ? -4 : -6,
-                right: isSmallDevice ? -4 : -6,
-                backgroundColor: '#ff3b30',
-                borderRadius: isSmallDevice ? 7 : 8,
-                minWidth: unreadCount > 99 ? (isSmallDevice ? 16 : 18) : (isSmallDevice ? 14 : 16),
-                height: unreadCount > 99 ? (isSmallDevice ? 14 : 16) : (isSmallDevice ? 12 : 14),
-                paddingHorizontal: unreadCount > 99 ? 1 : (isSmallDevice ? 2 : 3),
-                alignItems: 'center',
-                justifyContent: 'center',
-                zIndex: 100,
-                borderWidth: 1,
-                borderColor: '#fff',
-              }}>
-                <Text style={{
-                   color: '#fff',
-                   fontWeight: 'bold',
-                   fontSize: unreadCount > 99 ? (isSmallDevice ? 6 : 7) : unreadCount > 9 ? (isSmallDevice ? 7 : 8) : (isSmallDevice ? 9 : 10),
-                   lineHeight: unreadCount > 99 ? (isSmallDevice ? 9 : 10) : (isSmallDevice ? 11 : 12)
-                }}>{unreadCount}</Text>
-              </View>
-            )}
+            {renderCountBadge(unreadCount, '#ff3b30', isSmallDevice ? -4 : -6, isSmallDevice ? -4 : -6)}
           </TouchableOpacity>
           <TouchableOpacity style={[styles.topBtn, { zIndex: 101 }]} onPress={() => { logAnalyticsEvent('open_menu'); setMenuVisible(true); }}>
             <Feather name="more-vertical" size={20} color="#000" />
@@ -589,40 +774,11 @@ function TopMenu({ setMenuVisible, setGroupsDrawerVisible }: { setMenuVisible: (
           </TouchableOpacity>
           <TouchableOpacity style={styles.topBtn} onPress={() => { logAnalyticsEvent('open_inbox'); router.push('/inbox' as any); }}>
             <Feather name="message-square" size={20} color="#000" />
-            {unreadMsg > 0 && (
-              <View style={{
-                position: 'absolute',
-                top: -4,
-                right: -4,
-                backgroundColor: '#0A3D62',
-                borderRadius: 10,
-                minWidth: 16,
-                paddingHorizontal: 4,
-                alignItems: 'center',
-                justifyContent: 'center'
-              }}>
-                <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 10 }}>{unreadMsg}</Text>
-              </View>
-            )}
+            {renderCountBadge(unreadMsg, '#0A3D62', -4, -4)}
           </TouchableOpacity>
-          <TouchableOpacity style={styles.topBtn} onPress={async () => { logAnalyticsEvent('open_notifications'); setNotificationsModalVisible(true); try { await notificationService.markAllAsRead(); await fetchNotifications(); } catch { } }}>
+          <TouchableOpacity style={styles.topBtn} onPress={async () => { logAnalyticsEvent('open_notifications'); setNotificationsModalVisible(true); try { await markAllAsRead(); await fetchNotifications({ force: true }); } catch { } }}>
             <Feather name="bell" size={20} color="#000" />
-            {unreadCount > 0 && (
-              <View style={{
-                position: 'absolute',
-                top: -4,
-                right: -4,
-                backgroundColor: '#ff3b30',
-                borderRadius: 10,
-                minWidth: 16,
-                paddingHorizontal: unreadCount > 99 ? 2 : 4,
-                alignItems: 'center',
-                justifyContent: 'center',
-                zIndex: 100
-              }}>
-                <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: unreadCount > 99 ? 8 : 10 }}>{unreadCount}</Text>
-              </View>
-            )}
+            {renderCountBadge(unreadCount, '#ff3b30', -4, -4)}
           </TouchableOpacity>
           {/* Three-dot → Groups Drawer */}
           <TouchableOpacity
@@ -639,7 +795,7 @@ function TopMenu({ setMenuVisible, setGroupsDrawerVisible }: { setMenuVisible: (
         visible={notificationsModalVisible}
         onClose={async () => {
           setNotificationsModalVisible(false);
-          try { await fetchNotifications(); } catch { }
+          try { await fetchNotifications({ force: true }); } catch { }
         }}
       />
 
@@ -657,6 +813,24 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: isSmallDevice ? 12 : 14,
+  },
+  floatingStoriesContainer: {
+    position: 'absolute',
+    bottom: 0,
+    left: 12, 
+    maxWidth: SCREEN_WIDTH - 40, 
+    paddingVertical: 5, 
+    paddingHorizontal: 8,
+    backgroundColor: 'rgba(255, 255, 255, 0.5)', // Premium transparent white
+    borderRadius: 40, // Perfect pill shape
+    zIndex: 90,
+    borderWidth: 1.5, 
+    borderColor: 'rgba(255, 255, 255, 0.4)', // Reflective border
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 5,
   },
   logo: {
     fontSize: isSmallDevice ? 14 : (isLargeDevice ? 17 : 16),
@@ -887,5 +1061,3 @@ const styles = StyleSheet.create({
   },
   miniBtn: { padding: 4 },
 });
-
-// MiniStreamOverlay removed

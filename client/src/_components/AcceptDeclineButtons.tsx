@@ -1,5 +1,7 @@
+import { hapticLight, hapticMedium } from '@/lib/haptics';
 import React, { useState } from 'react';
 import { Text, TouchableOpacity, Alert } from 'react-native';
+import { useAppDialog } from '@/src/_components/AppDialogProvider';
 
 interface AcceptDeclineButtonsProps {
   item: any;
@@ -8,6 +10,7 @@ interface AcceptDeclineButtonsProps {
 
 const AcceptDeclineButtons: React.FC<AcceptDeclineButtonsProps> = ({ item, onActionTaken }) => {
   const [actionTaken, setActionTaken] = useState(false);
+  const { showSuccess } = useAppDialog();
 
   return (
     <>
@@ -22,6 +25,7 @@ const AcceptDeclineButtons: React.FC<AcceptDeclineButtonsProps> = ({ item, onAct
         }}
         disabled={actionTaken}
         onPress={async () => {
+          hapticMedium();
           setActionTaken(true);
           try {
             // Backend API call to accept follow request
@@ -30,7 +34,7 @@ const AcceptDeclineButtons: React.FC<AcceptDeclineButtonsProps> = ({ item, onAct
               headers: { 'Content-Type': 'application/json' },
             });
             if (!response.ok) throw new Error('Failed to accept request');
-            Alert.alert('Success', 'Follow request accepted');
+            showSuccess('Follow request accepted');
             if (onActionTaken) onActionTaken(item.id);
           } catch (err) {
             console.error('Error accepting request:', err);
@@ -51,6 +55,7 @@ const AcceptDeclineButtons: React.FC<AcceptDeclineButtonsProps> = ({ item, onAct
         }}
         disabled={actionTaken}
         onPress={async () => {
+          hapticLight();
           setActionTaken(true);
           try {
             // Backend API call to reject follow request
@@ -59,7 +64,7 @@ const AcceptDeclineButtons: React.FC<AcceptDeclineButtonsProps> = ({ item, onAct
               headers: { 'Content-Type': 'application/json' },
             });
             if (!response.ok) throw new Error('Failed to reject request');
-            Alert.alert('Success', 'Follow request rejected');
+            showSuccess('Follow request rejected');
             if (onActionTaken) onActionTaken(item.id);
           } catch (err) {
             console.error('Error rejecting request:', err);

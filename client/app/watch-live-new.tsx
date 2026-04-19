@@ -1,3 +1,4 @@
+import { safeRouterBack } from '@/lib/safeRouterBack';
 /**
  * Watch Live Screen - Simplified with ZeegoCloud UIKit
  */
@@ -38,7 +39,7 @@ export default function WatchLive() {
       
       if (!storedUserId) {
         Alert.alert('Error', 'Please login first');
-        router.back();
+        safeRouterBack();
         return;
       }
 
@@ -47,7 +48,7 @@ export default function WatchLive() {
       
       if (!liveRoomId) {
         Alert.alert('Error', 'Invalid live stream');
-        router.back();
+        safeRouterBack();
         return;
       }
 
@@ -59,14 +60,14 @@ export default function WatchLive() {
     } catch (error) {
       console.error('❌ Initialize viewer error:', error);
       Alert.alert('Error', 'Failed to join stream');
-      router.back();
+      safeRouterBack();
     } finally {
       setIsLoading(false);
     }
   };
 
   const handleLeave = () => {
-    router.back();
+    safeRouterBack();
   };
 
   if (isLoading) {
@@ -86,7 +87,7 @@ export default function WatchLive() {
         <View style={styles.errorContainer}>
           <Ionicons name="alert-circle" size={60} color="#FF385C" />
           <Text style={styles.errorText}>Stream not found</Text>
-          <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+          <TouchableOpacity style={styles.backButton} onPress={() => safeRouterBack()}>
             <Text style={styles.backButtonText}>Go Back</Text>
           </TouchableOpacity>
         </View>

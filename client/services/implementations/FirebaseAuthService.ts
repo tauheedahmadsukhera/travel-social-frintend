@@ -15,10 +15,18 @@ import {
 } from 'firebase/auth';
 import { auth } from '../../config/firebase';
 import { AuthResult, IAuthService, User } from '../interfaces/IAuthService';
+import { Auth } from 'firebase/auth';
 
 export class FirebaseAuthService implements IAuthService {
+  private getAuth(): Auth {
+    if (!auth) {
+      throw new Error('Firebase Auth was not initialized. Check your EXPO_PUBLIC_FIREBASE_* environment variables.');
+    }
+    return auth;
+  }
+
   async signUpWithEmail(email: string, password: string): Promise<AuthResult> {
-    const credential = await createUserWithEmailAndPassword(auth, email, password);
+    const credential = await createUserWithEmailAndPassword(this.getAuth(), email, password);
     return {
       user: this.mapFirebaseUser(credential.user),
       token: await credential.user.getIdToken()
@@ -30,7 +38,7 @@ export class FirebaseAuthService implements IAuthService {
   }
 
   async signInWithEmail(email: string, password: string): Promise<AuthResult> {
-    const credential = await signInWithEmailAndPassword(auth, email, password);
+    const credential = await signInWithEmailAndPassword(this.getAuth(), email, password);
     return {
       user: this.mapFirebaseUser(credential.user),
       token: await credential.user.getIdToken()
@@ -43,7 +51,7 @@ export class FirebaseAuthService implements IAuthService {
 
   async signInWithGoogle(): Promise<AuthResult> {
     const provider = new GoogleAuthProvider();
-    const credential = await signInWithPopup(auth, provider);
+    const credential = await signInWithPopup(this.getAuth(), provider);
     return {
       user: this.mapFirebaseUser(credential.user),
       token: await credential.user.getIdToken()
@@ -55,7 +63,7 @@ export class FirebaseAuthService implements IAuthService {
   }
 
   async sendPasswordResetEmail(email: string): Promise<void> {
-    await firebaseSendPasswordResetEmail(auth, email);
+    await firebaseSendPasswordResetEmail(this.getAuth(), email);
   }
 
   async resetPassword(code: string, newPassword: string): Promise<void> {
@@ -63,16 +71,16 @@ export class FirebaseAuthService implements IAuthService {
   }
 
   getCurrentUser(): User | null {
-    const firebaseUser = auth.currentUser;
+    const firebaseUser = this.getAuth().currentUser;
     return firebaseUser ? this.mapFirebaseUser(firebaseUser) : null;
   }
 
   async signOut(): Promise<void> {
-    await firebaseSignOut(auth);
+    await firebaseSignOut(this.getAuth());
   }
 
   onAuthStateChanged(callback: (user: User | null) => void): () => void {
-    return firebaseOnAuthStateChanged(auth, (firebaseUser) => {
+    return firebaseOnAuthStateChanged(this.getAuth(), (firebaseUser) => {
       callback(firebaseUser ? this.mapFirebaseUser(firebaseUser) : null);
     });
   }

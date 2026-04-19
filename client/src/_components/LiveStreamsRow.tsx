@@ -1,3 +1,4 @@
+import { DEFAULT_AVATAR_URL } from '../../lib/api';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 // Firestore imports removed
@@ -5,7 +6,7 @@ import React, { useEffect, useState } from 'react';
 import { Image, ScrollView, StyleSheet, Text, TouchableOpacity, View, ActivityIndicator } from 'react-native';
 import { apiService } from '../_services/apiService';
 
-const DEFAULT_AVATAR_URL = 'https://via.placeholder.com/200x200.png?text=Profile';
+
 
 interface LiveStream {
   id: string;

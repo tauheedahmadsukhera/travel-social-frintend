@@ -1,0 +1,13 @@
+# Sub-apps ship their own ESLint / react-scripts; do not merge their package.json eslintConfig.
+admin/
+functions/
+
+node_modules/
+.expo/
+dist/
+coverage/
+*.generated.ts
+
+# Ad-hoc scripts (not part of the app bundle)
+test-api.js
+test-google-api.js

@@ -5,6 +5,7 @@ import { useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
     ActivityIndicator,
+    Animated,
     Dimensions,
     FlatList,
     Image,
@@ -22,6 +23,7 @@ import {
     TouchableWithoutFeedback,
     View,
 } from 'react-native';
+import { safeRouterBack } from '@/lib/safeRouterBack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 // ─────────────────────────────────────────────
@@ -86,6 +88,7 @@ export default function StoryCreatorScreen() {
     const [editingText, setEditingText] = useState('');
     const [editingColor, setEditingColor] = useState('#ffffff');
     const [editingFontStyle, setEditingFontStyle] = useState<FontStyleKey>('classic');
+    const [selectedOverlayId, setSelectedOverlayId] = useState<string | null>(null);
 
     // ─────────────────────────────────────────
     // Gallery permissions + load
@@ -104,7 +107,7 @@ export default function StoryCreatorScreen() {
             const page = await MediaLibrary.getAssetsAsync({
                 mediaType: [MediaLibrary.MediaType.photo, MediaLibrary.MediaType.video],
                 sortBy: [[MediaLibrary.SortBy.creationTime, false]],
-                first: 60,
+                first: 30,
                 after,
             });
             const mapped: GalleryAsset[] = page.assets.map((a) => ({
@@ -175,15 +178,7 @@ export default function StoryCreatorScreen() {
 
     const handleNext = () => {
         if (!selectedAsset) return;
-        router.push({
-            pathname: '/create-post',
-            params: {
-                selectedImages: JSON.stringify([selectedAsset.uri]),
-                postType: 'STORY',
-                step: 'details',
-                mediaType: selectedAsset.mediaType === 'video' ? 'video' : 'image'
-            }
-        } as any);
+        navigateWithMedia(selectedAsset.uri, selectedAsset.mediaType);
     };
 
 
@@ -217,33 +212,53 @@ export default function StoryCreatorScreen() {
 
     const deleteOverlay = (id: string) => {
         setTextOverlays((prev) => prev.filter((o) => o.id !== id));
+        setSelectedOverlayId((prev) => (prev === id ? null : prev));
     };
 
     // ─────────────────────────────────────────
     // Draggable text overlay component
     // ─────────────────────────────────────────
     const DraggableText = ({ overlay }: { overlay: TextOverlay }) => {
-        const posRef = useRef({ x: overlay.x * SCREEN_W, y: overlay.y * PREVIEW_H });
-        const [pos, setPos] = useState({ x: overlay.x * SCREEN_W, y: overlay.y * PREVIEW_H });
+        const isSelected = selectedOverlayId === overlay.id;
+        const baseRef = useRef({ x: overlay.x * SCREEN_W, y: overlay.y * PREVIEW_H });
+        const pan = useRef(new Animated.ValueXY({ x: baseRef.current.x, y: baseRef.current.y })).current;
+
+        // If overlays are re-hydrated or changed, keep animation state in sync
+        useEffect(() => {
+            const nx = overlay.x * SCREEN_W;
+            const ny = overlay.y * PREVIEW_H;
+            baseRef.current = { x: nx, y: ny };
+            pan.setValue({ x: nx, y: ny });
+        }, [overlay.id, overlay.x, overlay.y, pan]);
 
         const panResponder = useRef(
             PanResponder.create({
                 onStartShouldSetPanResponder: () => true,
-                onMoveShouldSetPanResponder: () => true,
-                onPanResponderGrant: () => { },
-                onPanResponderMove: (_, gestureState) => {
-                    const newX = Math.max(0, Math.min(SCREEN_W - 40, posRef.current.x + gestureState.dx));
-                    const newY = Math.max(0, Math.min(PREVIEW_H - 20, posRef.current.y + gestureState.dy));
-                    setPos({ x: newX, y: newY });
+                onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dx) + Math.abs(g.dy) > 2,
+                onPanResponderGrant: () => {
+                    setSelectedOverlayId(overlay.id);
+                    pan.stopAnimation();
+                    // Offset-based drag so we don't re-render on move.
+                    pan.setOffset(baseRef.current);
+                    pan.setValue({ x: 0, y: 0 });
                 },
-                onPanResponderRelease: (_, gestureState) => {
-                    const newX = Math.max(0, Math.min(SCREEN_W - 40, posRef.current.x + gestureState.dx));
-                    const newY = Math.max(0, Math.min(PREVIEW_H - 20, posRef.current.y + gestureState.dy));
-                    posRef.current = { x: newX, y: newY };
-                    setPos({ x: newX, y: newY });
+                onPanResponderMove: Animated.event([null, { dx: pan.x, dy: pan.y }], { useNativeDriver: false }),
+                onPanResponderRelease: () => {
+                    pan.flattenOffset();
+                    // Clamp within preview bounds on release
+                    const cur: any = (pan as any).__getValue ? (pan as any).__getValue() : { x: baseRef.current.x, y: baseRef.current.y };
+                    const rawX = typeof cur?.x === 'number' ? cur.x : baseRef.current.x;
+                    const rawY = typeof cur?.y === 'number' ? cur.y : baseRef.current.y;
+
+                    const clampedX = Math.max(0, Math.min(SCREEN_W, rawX));
+                    const clampedY = Math.max(0, Math.min(PREVIEW_H - 10, rawY));
+
+                    baseRef.current = { x: clampedX, y: clampedY };
+                    pan.setValue({ x: clampedX, y: clampedY });
+
                     setTextOverlays((prev) =>
                         prev.map((o) =>
-                            o.id === overlay.id ? { ...o, x: newX / SCREEN_W, y: newY / PREVIEW_H } : o
+                            o.id === overlay.id ? { ...o, x: clampedX / SCREEN_W, y: clampedY / PREVIEW_H } : o
                         )
                     );
                 },
@@ -253,17 +268,24 @@ export default function StoryCreatorScreen() {
         const fs = FONT_STYLES[overlay.fontStyle];
 
         return (
-            <View
+            <Animated.View
                 {...panResponder.panHandlers}
                 style={[
                     styles.textOverlay,
-                    { left: pos.x, top: pos.y, transform: [{ translateX: -40 }] },
+                    {
+                        transform: [
+                            { translateX: pan.x },
+                            { translateY: pan.y },
+                            { translateX: -40 },
+                        ],
+                    },
                 ]}
             >
                 <TouchableOpacity
-                    onLongPress={() => deleteOverlay(overlay.id)}
                     activeOpacity={1}
-                    delayLongPress={400}
+                    onPress={() => setSelectedOverlayId(overlay.id)}
+                    onLongPress={() => deleteOverlay(overlay.id)}
+                    delayLongPress={450}
                 >
                     <Text
                         style={[
@@ -279,7 +301,17 @@ export default function StoryCreatorScreen() {
                         {overlay.text}
                     </Text>
                 </TouchableOpacity>
-            </View>
+
+                {isSelected && (
+                    <TouchableOpacity
+                        onPress={() => deleteOverlay(overlay.id)}
+                        style={styles.overlayDeleteBadge}
+                        hitSlop={{ top: 10, left: 10, right: 10, bottom: 10 }}
+                    >
+                        <Feather name="x" size={14} color="#fff" />
+                    </TouchableOpacity>
+                )}
+            </Animated.View>
         );
     };
 
@@ -340,7 +372,7 @@ export default function StoryCreatorScreen() {
         return (
             <View style={[styles.screen, { paddingTop: insets.top }]}>
                 <View style={styles.header}>
-                    <TouchableOpacity onPress={() => router.back()} style={styles.headerBtn}>
+                    <TouchableOpacity onPress={() => safeRouterBack()} style={styles.headerBtn}>
                         <Feather name="x" size={26} color="#fff" />
                     </TouchableOpacity>
                     <Text style={styles.headerTitle}>Add to story</Text>
@@ -364,7 +396,7 @@ export default function StoryCreatorScreen() {
 
             {/* ── Header ── */}
             <View style={styles.header}>
-                <TouchableOpacity onPress={() => router.back()} style={styles.headerBtn}>
+                <TouchableOpacity onPress={() => safeRouterBack()} style={styles.headerBtn}>
                     <Feather name="x" size={26} color="#000" />
                 </TouchableOpacity>
                 <Text style={styles.headerTitle}>Add to story</Text>
@@ -385,24 +417,6 @@ export default function StoryCreatorScreen() {
                     <Image source={{ uri: selectedUri }} style={styles.previewImg} resizeMode="cover" />
                 ) : null}
 
-                {/* Text overlays */}
-                {textOverlays.map((overlay) => (
-                    <DraggableText key={overlay.id} overlay={overlay} />
-                ))}
-
-                {/* Aa button on preview */}
-                {selectedUri && (
-                    <TouchableOpacity style={styles.aaBtn} onPress={openTextEditor} activeOpacity={0.8}>
-                        <Text style={styles.aaBtnText}>Aa</Text>
-                    </TouchableOpacity>
-                )}
-
-                {/* Hint if overlays exist */}
-                {textOverlays.length > 0 && (
-                    <View style={styles.dragHint}>
-                        <Text style={styles.dragHintText}>Long-press text to delete · Drag to move</Text>
-                    </View>
-                )}
             </View>
 
             {/* ── Recents label ── */}
@@ -438,110 +452,6 @@ export default function StoryCreatorScreen() {
                 />
             )}
 
-            {/* ── Text Editor Modal ── */}
-            <Modal visible={showTextEditor} transparent animationType="fade" statusBarTranslucent>
-                <KeyboardAvoidingView
-                    style={{ flex: 1 }}
-                    behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-                >
-                    <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-                        <View style={styles.textEditorBg}>
-                            {/* ── Editor header ── */}
-                            <View style={[styles.textEditorHeader, { paddingTop: insets.top + 8 }]}>
-                                <TouchableOpacity onPress={() => setShowTextEditor(false)} style={styles.headerBtn}>
-                                    <Feather name="x" size={24} color="#fff" />
-                                </TouchableOpacity>
-                                <Text style={styles.headerTitle}>Add Text</Text>
-                                <TouchableOpacity
-                                    onPress={commitText}
-                                    style={styles.doneBtn}
-                                >
-                                    <Text style={styles.doneBtnText}>Done</Text>
-                                </TouchableOpacity>
-                            </View>
-
-                            {/* ── Preview with text input ── */}
-                            <View style={styles.textEditorPreview}>
-                                {selectedUri && (
-                                    <Image
-                                        source={{ uri: selectedUri }}
-                                        style={StyleSheet.absoluteFillObject}
-                                        resizeMode="cover"
-                                    />
-                                )}
-                                <View style={styles.textEditorOverlay} />
-                                <TextInput
-                                    style={[
-                                        styles.textInput,
-                                        {
-                                            color: editingColor,
-                                            fontFamily: FONT_STYLES[editingFontStyle].fontFamily,
-                                            letterSpacing: FONT_STYLES[editingFontStyle].letterSpacing,
-                                            textTransform: FONT_STYLES[editingFontStyle].textTransform as any,
-                                        },
-                                    ]}
-                                    placeholder="Type something..."
-                                    placeholderTextColor="rgba(255,255,255,0.4)"
-                                    value={editingText}
-                                    onChangeText={setEditingText}
-                                    multiline
-                                    autoFocus
-                                    maxLength={100}
-                                    textAlign="center"
-                                    blurOnSubmit={false}
-                                />
-                            </View>
-
-                            {/* ── Font style picker ── */}
-                            <View style={styles.fontStyleRow}>
-                                {(Object.keys(FONT_STYLES) as FontStyleKey[]).map((key) => (
-                                    <TouchableOpacity
-                                        key={key}
-                                        style={[
-                                            styles.fontStyleBtn,
-                                            editingFontStyle === key && styles.fontStyleBtnActive,
-                                        ]}
-                                        onPress={() => setEditingFontStyle(key)}
-                                    >
-                                        <Text
-                                            style={[
-                                                styles.fontStyleLabel,
-                                                editingFontStyle === key && styles.fontStyleLabelActive,
-                                                {
-                                                    fontFamily: FONT_STYLES[key].fontFamily,
-                                                    letterSpacing: FONT_STYLES[key].letterSpacing,
-                                                    textTransform: FONT_STYLES[key].textTransform as any,
-                                                },
-                                            ]}
-                                        >
-                                            {FONT_STYLES[key].label}
-                                        </Text>
-                                    </TouchableOpacity>
-                                ))}
-                            </View>
-
-                            {/* ── Color picker ── */}
-                            <ScrollView
-                                horizontal
-                                showsHorizontalScrollIndicator={false}
-                                contentContainerStyle={styles.colorRow}
-                            >
-                                {TEXT_COLORS.map((c) => (
-                                    <TouchableOpacity
-                                        key={c}
-                                        onPress={() => setEditingColor(c)}
-                                        style={[
-                                            styles.colorDot,
-                                            { backgroundColor: c },
-                                            editingColor === c && styles.colorDotSelected,
-                                        ]}
-                                    />
-                                ))}
-                            </ScrollView>
-                        </View>
-                    </TouchableWithoutFeedback>
-                </KeyboardAvoidingView>
-            </Modal>
         </View>
     );
 }
@@ -617,6 +527,19 @@ const styles = StyleSheet.create({
         textShadowColor: 'rgba(255,255,255,0.3)',
         textShadowOffset: { width: 1, height: 1 },
         textShadowRadius: 4,
+    },
+    overlayDeleteBadge: {
+        position: 'absolute',
+        top: -6,
+        right: -6,
+        width: 26,
+        height: 26,
+        borderRadius: 13,
+        backgroundColor: 'rgba(0,0,0,0.65)',
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderWidth: 1.5,
+        borderColor: '#fff',
     },
 
     // Gallery

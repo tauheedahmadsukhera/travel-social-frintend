@@ -4,6 +4,7 @@ import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import { Alert, ScrollView, Switch, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { safeRouterBack } from '@/lib/safeRouterBack';
 
 type StorySettings = {
   allowReplies: boolean;
@@ -89,7 +90,7 @@ export default function StorySettingsScreen() {
       <ScrollView>
         {/* Header */}
         <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: '#eee' }}>
-          <TouchableOpacity onPress={() => router.back()}>
+          <TouchableOpacity onPress={() => safeRouterBack()}>
             <Feather name="chevron-left" size={24} color="#000" />
           </TouchableOpacity>
           <Text style={{ fontWeight: '600', fontSize: 18, color: '#000', flex: 1, textAlign: 'center', marginRight: 24 }}>Story Settings</Text>
