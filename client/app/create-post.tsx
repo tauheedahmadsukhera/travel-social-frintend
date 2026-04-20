@@ -75,7 +75,7 @@ export default function CreatePostScreen() {
   const router = useRouter();
   const user = useUser();
   const { showSuccess } = useAppDialog();
-  const [step, setStep] = useState<'picker' | 'details'>('picker');
+  const [step, setStep] = useState<'picker' | 'preview' | 'details'>('picker');
   const [uploading, setUploading] = useState(false);
   const [loading, setLoading] = useState<boolean>(false);
   const insets = useSafeAreaInsets();
@@ -930,6 +930,45 @@ export default function CreatePostScreen() {
   };
 
   // --- END OF COMPONENT ---
+  const goNextFromPicker = () => {
+    if (selectedImages.length === 0) return;
+    const first = selectedImages[0];
+    const isVideo = typeof first === 'string' && isVideoUri(first);
+    if (isVideo) {
+      setStep('preview');
+      return;
+    }
+    if (postType === 'STORY') {
+      router.push({
+        pathname: '/story-upload',
+        params: {
+          storyMediaUri: first,
+          storyMediaType: 'photo',
+          storyTextOverlays: '',
+        },
+      });
+      return;
+    }
+    setStep('details');
+  };
+
+  const goNextFromPreview = () => {
+    if (selectedImages.length === 0) return;
+    const first = selectedImages[0];
+    if (postType === 'STORY') {
+      router.push({
+        pathname: '/story-upload',
+        params: {
+          storyMediaUri: first,
+          storyMediaType: isVideoUri(first) ? 'video' : 'photo',
+          storyTextOverlays: '',
+        },
+      });
+      return;
+    }
+    setStep('details');
+  };
+
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: '#fff' }} edges={["top"]}>
         {step === 'picker' ? (
@@ -1105,20 +1144,7 @@ export default function CreatePostScreen() {
               <TouchableOpacity
                 onPress={() => {
                   hapticLight();
-                  if (postType === 'STORY' && selectedImages.length > 0) {
-                    // Navigate directly to story-upload for STORY
-                    router.push({
-                      pathname: '/story-upload',
-                      params: {
-                        storyMediaUri: selectedImages[0],
-                        storyMediaType: isVideoUri(selectedImages[0]) ? 'video' : 'photo',
-                        storyTextOverlays: '',
-                      },
-                    });
-                  } else {
-                    // Go to details form for POST
-                    setStep('details');
-                  }
+                  goNextFromPicker();
                 }}
                 disabled={selectedImages.length === 0}
                 style={{
@@ -1130,6 +1156,55 @@ export default function CreatePostScreen() {
                 }}
               >
                 <Text style={{ color: selectedImages.length > 0 ? '#fff' : '#888', fontWeight: '700', fontSize: 18 }}>Next</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        ) : step === 'preview' ? (
+          <View style={{ flex: 1, backgroundColor: '#000' }}>
+            {/* Preview Header */}
+            <View style={{ flexDirection: 'row', alignItems: 'center', height: 56, paddingHorizontal: 16, backgroundColor: '#000' }}>
+              <TouchableOpacity
+                onPress={() => {
+                  hapticLight();
+                  setStep('picker');
+                }}
+                style={{ width: 40, height: 40, borderRadius: 20, borderWidth: 1, borderColor: 'rgba(255,255,255,0.25)', alignItems: 'center', justifyContent: 'center' }}
+              >
+                <Ionicons name="arrow-back" size={20} color="#fff" />
+              </TouchableOpacity>
+              <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+                <Text style={{ fontWeight: '600', fontSize: 16, color: '#fff' }}>Preview</Text>
+              </View>
+              <View style={{ width: 40 }} />
+            </View>
+
+            {/* Video preview */}
+            <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+              <Video
+                source={{ uri: selectedImages[0] }}
+                style={{ width: windowWidth, height: Math.min(windowWidth * 1.25, height * 0.75) }}
+                resizeMode={ResizeMode.CONTAIN}
+                useNativeControls
+                shouldPlay={false}
+                isLooping
+              />
+            </View>
+
+            {/* Bottom bar */}
+            <View style={{ flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center', paddingHorizontal: 24, paddingTop: 12, paddingBottom: Platform.OS === 'ios' ? insets.bottom : 16, backgroundColor: '#000' }}>
+              <TouchableOpacity
+                onPress={() => {
+                  hapticLight();
+                  goNextFromPreview();
+                }}
+                style={{
+                  backgroundColor: '#0A3D62',
+                  paddingHorizontal: 40,
+                  paddingVertical: 10,
+                  borderRadius: 12,
+                }}
+              >
+                <Text style={{ color: '#fff', fontWeight: '800', fontSize: 18 }}>Next</Text>
               </TouchableOpacity>
             </View>
           </View>
