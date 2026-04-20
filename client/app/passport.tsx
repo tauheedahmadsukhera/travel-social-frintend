@@ -31,7 +31,7 @@ import Svg, {
   TextPath,
   SvgUri,
 } from 'react-native-svg';
-import { addPassportStamp, getPassportData, Stamp } from '../lib/firebaseHelpers/passport';
+import { addPassportStamp, deletePassportStamp, getPassportData, Stamp } from '../lib/firebaseHelpers/passport';
 import { BACKEND_URL } from '../lib/api';
 import { reverseGeocode } from '../services/locationService';
 import * as Location from 'expo-location';
@@ -263,6 +263,9 @@ export default function PassportScreen() {
   const { showBanner } = useOfflineBanner();
 
   const [stamps, setStamps] = useState<Stamp[]>([]);
+  const [deleteStamp, setDeleteStamp] = useState<Stamp | null>(null);
+  const [deleteVisible, setDeleteVisible] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [loading, setLoading] = useState(true);
   const [activeFilter, setActiveFilter] = useState<FilterTab>('All');
   const [suggestion, setSuggestion] = useState<any>(null);
@@ -640,6 +643,52 @@ export default function PassportScreen() {
     return stamp.type;
   };
 
+  const openDeleteSheet = (stamp: Stamp) => {
+    if (!isOwner) return;
+    hapticLight();
+    setDeleteStamp(stamp);
+    setDeleteVisible(true);
+  };
+
+  const closeDeleteSheet = () => {
+    if (deleting) return;
+    setDeleteVisible(false);
+    setDeleteStamp(null);
+  };
+
+  const handleConfirmDeleteStamp = async () => {
+    if (!isOwner) return;
+    if (!userId) return;
+    const target = deleteStamp;
+    if (!target?._id) return;
+
+    try {
+      setDeleting(true);
+      const stampId = String(target._id);
+      const res = await deletePassportStamp(String(userId), stampId) as any;
+      const ok = res?.success !== false;
+      if (!ok) {
+        Alert.alert('Could not delete', res?.error || 'Failed to delete stamp. Please try again.');
+        return;
+      }
+
+      setStamps((prev) => prev.filter((s) => String(s?._id) !== stampId));
+      try {
+        const cached = await getCachedData<any>(PASSPORT_CACHE_KEY);
+        const cachedStamps = Array.isArray(cached?.stamps) ? cached.stamps : [];
+        const next = cachedStamps.filter((s: any) => String(s?._id) !== stampId);
+        await setCachedData(PASSPORT_CACHE_KEY, { stamps: next }, { ttl: 24 * 60 * 60 * 1000 });
+      } catch {}
+
+      closeDeleteSheet();
+    } catch (e: any) {
+      console.error('[Passport] delete stamp error:', e);
+      Alert.alert('Error', 'Failed to delete stamp. Please try again.');
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       {showBanner && stamps.length > 0 && (
@@ -735,6 +784,8 @@ export default function PassportScreen() {
                 onPress={() => {
                   if (displayType === 'country') setSelectedCountry(stamp.name);
                 }}
+                onLongPress={() => openDeleteSheet(stamp)}
+                delayLongPress={350}
               >
                 <>
                   <PassportStamp 
@@ -772,6 +823,55 @@ export default function PassportScreen() {
           </View>
         )}
       </ScrollView>
+
+      {/* Delete stamp sheet (owner only) */}
+      <Modal
+        visible={deleteVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={closeDeleteSheet}
+      >
+        <TouchableOpacity
+          style={styles.deleteOverlay}
+          activeOpacity={1}
+          onPress={closeDeleteSheet}
+        >
+          <TouchableOpacity
+            activeOpacity={1}
+            onPress={(e) => e.stopPropagation()}
+            style={styles.deleteSheet}
+          >
+            <View style={styles.deleteHeader}>
+              <View style={styles.deleteIcon}>
+                <Feather name="trash-2" size={18} color="#fff" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.deleteTitle}>Delete stamp?</Text>
+                <Text style={styles.deleteSub} numberOfLines={2}>
+                  {deleteStamp ? `This will remove “${deleteStamp.name}” from your passport.` : 'This will remove this stamp from your passport.'}
+                </Text>
+              </View>
+            </View>
+
+            <View style={{ marginTop: 14 }}>
+              <TouchableOpacity
+                style={[styles.deleteBtn, deleting && { opacity: 0.7 }]}
+                onPress={handleConfirmDeleteStamp}
+                disabled={deleting}
+              >
+                <Text style={styles.deleteBtnText}>{deleting ? 'Deleting…' : 'Delete'}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.deleteCancelBtn}
+                onPress={closeDeleteSheet}
+                disabled={deleting}
+              >
+                <Text style={styles.deleteCancelText}>Cancel</Text>
+              </TouchableOpacity>
+            </View>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
 
       {/* Manual Add FAB - Redesigned to Pill Center */}
       {isOwner && (
@@ -1007,6 +1107,71 @@ const styles = StyleSheet.create({
   tabItemActive: { backgroundColor: '#fff', borderColor: '#000' },
   tabText: { fontSize: 14, fontWeight: '600', color: '#666' },
   tabTextActive: { color: '#000' },
+
+  deleteOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    justifyContent: 'flex-end',
+    padding: 16,
+  },
+  deleteSheet: {
+    backgroundColor: '#fff',
+    borderRadius: 18,
+    padding: 16,
+    shadowColor: '#000',
+    shadowOpacity: 0.15,
+    shadowRadius: 16,
+    elevation: 10,
+  },
+  deleteHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  deleteIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#ff3b30',
+  },
+  deleteTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#111',
+  },
+  deleteSub: {
+    marginTop: 3,
+    fontSize: 13,
+    color: '#666',
+    lineHeight: 18,
+  },
+  deleteBtn: {
+    height: 46,
+    borderRadius: 12,
+    backgroundColor: '#ff3b30',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  deleteBtnText: {
+    color: '#fff',
+    fontWeight: '800',
+    fontSize: 15,
+  },
+  deleteCancelBtn: {
+    height: 46,
+    borderRadius: 12,
+    backgroundColor: '#f2f2f7',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 10,
+  },
+  deleteCancelText: {
+    color: '#111',
+    fontWeight: '700',
+    fontSize: 15,
+  },
 
   stampsGrid: {
     paddingHorizontal: 20,
