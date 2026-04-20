@@ -1,11 +1,9 @@
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import React, { useEffect, useRef } from 'react';
-import { Dimensions, FlatList, Modal, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { FlatList, Modal, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import PostCard from './PostCard';
-
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 interface Post {
   id: string;
@@ -66,25 +64,30 @@ export default function PostViewerModal({
 }: PostViewerModalProps): React.ReactElement {
   const flatListRef = useRef<FlatList>(null);
   const insets = useSafeAreaInsets();
+  const didInitialScrollRef = useRef(false);
+  const prevVisibleRef = useRef(false);
 
   useEffect(() => {
-    if (
-      visible &&
-      flatListRef.current &&
-      Array.isArray(posts) &&
-      posts.length > 0 &&
-      selectedPostIndex >= 0 &&
-      selectedPostIndex < posts.length
-    ) {
-      // Small timeout to ensure list is ready
-      setTimeout(() => {
-        flatListRef.current?.scrollToIndex({
-          index: selectedPostIndex,
-          animated: false,
-        });
-      }, 100);
+    const wasVisible = prevVisibleRef.current;
+    prevVisibleRef.current = visible;
+    if (!visible) {
+      didInitialScrollRef.current = false;
+      return;
     }
-  }, [visible, selectedPostIndex, posts]);
+    // Only run the initial positioning when the modal transitions from hidden -> visible.
+    if (wasVisible) return;
+    if (!flatListRef.current) return;
+    if (!Array.isArray(posts) || posts.length === 0) return;
+    if (selectedPostIndex < 0 || selectedPostIndex >= posts.length) return;
+
+    didInitialScrollRef.current = true;
+    // Let layout settle, then jump without fighting user scroll.
+    requestAnimationFrame(() => {
+      try {
+        flatListRef.current?.scrollToIndex({ index: selectedPostIndex, animated: false });
+      } catch {}
+    });
+  }, [visible, selectedPostIndex, posts?.length]);
 
   return (
     <Modal
@@ -116,6 +119,10 @@ export default function PostViewerModal({
           data={posts}
           keyExtractor={(item, index) => String(item?.id || item?._id || index)}
           showsVerticalScrollIndicator={false}
+          // Instagram-like: don't auto-reset scroll after initial open.
+          onScrollBeginDrag={() => {
+            didInitialScrollRef.current = true;
+          }}
           initialNumToRender={3}
           maxToRenderPerBatch={4}
           windowSize={5}

@@ -1782,23 +1782,6 @@ export default function Profile({ userIdProp }: any) {
                   activeOpacity={0.8}
                   onPress={() => {
                     hapticLight();
-                    const postUserId = typeof p?.userId === 'string' ? p.userId : p?.userId?._id;
-                    const targetUserId = postUserId || viewedUserId || '';
-                    const tappedPostId = String(p?.id || p?._id || '');
-
-                    if (targetUserId && tappedPostId) {
-                      router.push({
-                        pathname: '/user/[userId]/posts',
-                        params: {
-                          userId: String(targetUserId),
-                          postId: tappedPostId,
-                          single: segmentTab === 'tagged' ? 'true' : 'false'
-                        }
-                      } as any);
-                      return;
-                    }
-
-                    // Fallback to existing modal behavior if params are missing
                     const modalIndex = currentPostsArray.findIndex(post => (post.id || post._id) === (p.id || p._id));
                     setSelectedPostIndex(modalIndex >= 0 ? modalIndex : index);
                     setPostViewerVisible(true);
