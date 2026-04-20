@@ -1645,9 +1645,10 @@ function PostCard({ post, currentUser, showMenu = true, highlightedCommentId, hi
                         recyclingKey={String(item || index)}
                         style={styles.image}
                         contentFit="contain"
-                        placeholder={IMAGE_PLACEHOLDER}
+                        // Perf: blurhash placeholder + high priority on every cell can stutter while scrolling
+                        placeholder={null as any}
                         cachePolicy="memory-disk"
-                        priority="high"
+                        priority="normal"
                         transition={0}
                         onLoad={(e: any) => {
                           // ONLY calculate ratio for the first image to lock the carousel height!
