@@ -8,7 +8,7 @@ import { Image as ExpoImage } from 'expo-image';
 import { useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import * as Haptics from 'expo-haptics';
-import { ActivityIndicator, Alert, Animated, Dimensions, FlatList, KeyboardAvoidingView, Modal, PanResponder, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { ActivityIndicator, Alert, Animated, Dimensions, FlatList, Image, KeyboardAvoidingView, Modal, PanResponder, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 
 import { feedEventEmitter } from '@/lib/feedEventEmitter';
 import { getLocationVisitCount, likePost, unlikePost } from "../../lib/firebaseHelpers";
@@ -66,6 +66,61 @@ async function loadAuthSnapshotOnce(): Promise<AuthSnapshot> {
   })();
 
   return authSnapshotPromise;
+}
+
+// PERF: Persist media ratios so the carousel height doesn't "jump" (small → big) on scroll-back.
+const MEDIA_RATIO_CACHE_KEY = 'media_ratio_cache_v1';
+let mediaRatioCache: Map<string, number> | null = null;
+let mediaRatioLoadPromise: Promise<Map<string, number>> | null = null;
+let mediaRatioSaveTimer: ReturnType<typeof setTimeout> | null = null;
+const mediaRatioInFlight = new Set<string>();
+
+async function loadMediaRatioCacheOnce(): Promise<Map<string, number>> {
+  if (mediaRatioCache) return mediaRatioCache;
+  if (mediaRatioLoadPromise) return mediaRatioLoadPromise;
+  mediaRatioLoadPromise = (async () => {
+    try {
+      const raw = await AsyncStorage.getItem(MEDIA_RATIO_CACHE_KEY);
+      const parsed = raw ? (JSON.parse(raw) as Record<string, number>) : {};
+      const m = new Map<string, number>();
+      for (const [k, v] of Object.entries(parsed || {})) {
+        if (typeof v === 'number' && Number.isFinite(v) && v > 0) m.set(k, v);
+      }
+      mediaRatioCache = m;
+      return m;
+    } catch {
+      const m = new Map<string, number>();
+      mediaRatioCache = m;
+      return m;
+    } finally {
+      mediaRatioLoadPromise = null;
+    }
+  })();
+  return mediaRatioLoadPromise;
+}
+
+function scheduleSaveMediaRatioCache() {
+  if (mediaRatioSaveTimer) return;
+  mediaRatioSaveTimer = setTimeout(() => {
+    mediaRatioSaveTimer = null;
+    try {
+      const m = mediaRatioCache;
+      if (!m) return;
+      const entries = Array.from(m.entries()).slice(-500);
+      const obj: Record<string, number> = {};
+      for (const [k, v] of entries) obj[k] = v;
+      AsyncStorage.setItem(MEDIA_RATIO_CACHE_KEY, JSON.stringify(obj)).catch(() => {});
+    } catch {}
+  }, 700);
+}
+
+function setCachedRatio(url: string, ratio: number) {
+  if (!url) return;
+  if (!Number.isFinite(ratio) || ratio <= 0) return;
+  const m = mediaRatioCache ?? new Map<string, number>();
+  mediaRatioCache = m;
+  m.set(url, ratio);
+  scheduleSaveMediaRatioCache();
 }
 
 // Props type for PostCard
@@ -1169,16 +1224,61 @@ function PostCard({ post, currentUser, showMenu = true, highlightedCommentId, hi
 
   useEffect(() => {
     const firstMediaUrl = (showImages && images.length > 0) ? images[0] : (videos.length > 0 ? videos[0] : undefined);
-    if (typeof firstMediaUrl === 'string' && firstMediaUrl) {
-      const cached = mediaRatioCacheRef.current.get(firstMediaUrl);
-      if (typeof cached === 'number') {
-        setHeightFromRatio(cached);
-      } else {
-        // We will set height when the first image loads in FlatList
-      }
-    } else {
+    if (typeof firstMediaUrl !== 'string' || !firstMediaUrl) {
       setHeightFromRatio(1);
+      return;
     }
+
+    // 1) Fast in-memory cache (per-card)
+    const localCached = mediaRatioCacheRef.current.get(firstMediaUrl);
+    if (typeof localCached === 'number') {
+      setHeightFromRatio(localCached);
+      return;
+    }
+
+    let cancelled = false;
+
+    // 2) Persistent cache (loaded once)
+    loadMediaRatioCacheOnce()
+      .then((m) => {
+        if (cancelled) return;
+        const persisted = m.get(firstMediaUrl);
+        if (typeof persisted === 'number') {
+          mediaRatioCacheRef.current.set(firstMediaUrl, persisted);
+          // Only adjust height if we haven't already locked it via onLoad.
+          if (!heightLockedRef.current) setHeightFromRatio(persisted);
+        }
+      })
+      .catch(() => {});
+
+    // 3) Pre-measure ratio before image finishes loading (reduces "small→big" jump).
+    if (showImages && images.length > 0 && !heightLockedRef.current) {
+      if (!mediaRatioInFlight.has(firstMediaUrl)) {
+        mediaRatioInFlight.add(firstMediaUrl);
+        const uri = getOptimizedImageUrl(firstMediaUrl, 'feed');
+        Image.getSize(
+          uri,
+          (w, h) => {
+            mediaRatioInFlight.delete(firstMediaUrl);
+            if (cancelled) return;
+            if (typeof w === 'number' && typeof h === 'number' && h > 0) {
+              const ratio = w / h;
+              mediaRatioCacheRef.current.set(firstMediaUrl, ratio);
+              setCachedRatio(firstMediaUrl, ratio);
+              setHeightFromRatio(ratio);
+              heightLockedRef.current = true;
+            }
+          },
+          () => {
+            mediaRatioInFlight.delete(firstMediaUrl);
+          }
+        );
+      }
+    }
+
+    return () => {
+      cancelled = true;
+    };
   }, [showImages, images[0], videos[0]]); // Only lock to the FIRST media item
 
 
