@@ -1585,7 +1585,8 @@ function PostCard({ post, currentUser, showMenu = true, highlightedCommentId, hi
                 maxToRenderPerBatch={2}
                 windowSize={3}
                 updateCellsBatchingPeriod={40}
-                removeClippedSubviews={true}
+                // iOS: clipping can cause extra churn / stutter during vertical scroll
+                removeClippedSubviews={Platform.OS === 'android'}
                 scrollsToTop={false}
                 showsHorizontalScrollIndicator={false}
                 bounces={false}
