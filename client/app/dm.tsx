@@ -1326,7 +1326,7 @@ export default function DM() {
               console.error('Failed to share to user:', targetUid, err);
             }
           }
-          showSuccess('Post shared successfully!');
+          // No success toast — Instagram-like silent share.
         }}
       />
 
