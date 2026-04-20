@@ -284,8 +284,6 @@ export default function StoryCreatorScreen() {
                 <TouchableOpacity
                     activeOpacity={1}
                     onPress={() => setSelectedOverlayId(overlay.id)}
-                    onLongPress={() => deleteOverlay(overlay.id)}
-                    delayLongPress={450}
                 >
                     <Text
                         style={[

@@ -271,8 +271,6 @@ export default function StoryUploadScreen() {
                 <TouchableOpacity
                     activeOpacity={1}
                     onPress={() => openTextEditorForOverlay(overlay)}
-                    onLongPress={() => deleteOverlay(overlay.id)}
-                    delayLongPress={350}
                 >
                     <Text
                         style={[
