@@ -856,7 +856,8 @@ export default function Home() {
         initialNumToRender={4}
         maxToRenderPerBatch={6}
         windowSize={9}
-        removeClippedSubviews={true}
+        // iOS: avoid blank/jitter from offscreen unmount/remount
+        removeClippedSubviews={Platform.OS === 'android'}
         updateCellsBatchingPeriod={50}
 
         contentContainerStyle={contentContainerStyle}
