@@ -81,8 +81,6 @@ function ConversationItem({ item, userId, router, formatTime, profilesById, setC
     // Never show raw IDs in UI as a name
     const fallback = String(otherUserId || '').trim();
     if (fallback && !isLikelyOpaqueId(fallback)) return fallback.substring(0, 16);
-    // Last-resort: show a stable short token instead of a blank/placeholder.
-    if (fallback) return `User ${fallback.substring(0, 6)}`;
     return 'User';
   };
 
@@ -456,7 +454,8 @@ function Inbox() {
     const missingAll = ids
       .filter((id) => shouldRefetchProfile(profilesByIdRef.current?.[id]))
       .filter((id) => !requestedProfileIdsRef.current.has(id));
-    const missing = missingAll.slice(0, 12);
+    // Fetch a bit more aggressively so names appear quickly (still bounded).
+    const missing = missingAll.slice(0, 24);
     if (missing.length === 0) return;
 
     // Mark as requested immediately to avoid duplicate fanout during rapid re-renders.
