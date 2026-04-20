@@ -733,7 +733,7 @@ function TopMenu({ setMenuVisible, setGroupsDrawerVisible }: { setMenuVisible: (
         >
           <AppBrandMark
             size="sm"
-            showWordmark
+            showWordmark={false}
             iconAsset="mark"
             variant="tabBar"
           />
