@@ -891,80 +891,86 @@ export default function PassportScreen() {
         onRequestClose={closeStampSearch}
       >
         <TouchableOpacity style={styles.deleteOverlay} activeOpacity={1} onPress={closeStampSearch}>
-          <TouchableOpacity
-            activeOpacity={1}
-            onPress={(e) => e.stopPropagation()}
-            style={styles.deleteSheet}
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            style={{ width: '100%' }}
+            keyboardVerticalOffset={0}
           >
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-              <View style={[styles.deleteIcon, { backgroundColor: '#0A3D62' }]}>
-                <Feather name="search" size={18} color="#fff" />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.deleteTitle}>Search stamps</Text>
-                <Text style={styles.deleteSub}>Find countries, cities, and places</Text>
-              </View>
-            </View>
-
-            <View style={[styles.modalSearchContainer, { marginTop: 14 }]}>
-              <Feather name="search" size={18} color="#0A3D62" style={{ marginRight: 12 }} />
-              <TextInput
-                style={styles.modalSearchInput}
-                placeholder="Search (e.g. Dubai, France, city, place)"
-                placeholderTextColor="#999"
-                value={stampSearchQuery}
-                onChangeText={setStampSearchQuery}
-                autoFocus
-                returnKeyType="search"
-              />
-              {!!stampSearchQuery && (
-                <TouchableOpacity onPress={() => setStampSearchQuery('')} style={{ padding: 6 }}>
-                  <Feather name="x" size={18} color="#999" />
-                </TouchableOpacity>
-              )}
-            </View>
-
-            <ScrollView
-              style={{ marginTop: 10, maxHeight: 420 }}
-              showsVerticalScrollIndicator={false}
-              keyboardShouldPersistTaps="handled"
+            <TouchableOpacity
+              activeOpacity={1}
+              onPress={(e) => e.stopPropagation()}
+              style={styles.deleteSheet}
             >
-              {stampSearchQuery.trim() ? (
-                stampSearchResults.length > 0 ? (
-                  stampSearchResults.map((s) => (
-                    <TouchableOpacity
-                      key={`ss_${String(s._id)}`}
-                      style={{
-                        paddingVertical: 12,
-                        borderBottomWidth: StyleSheet.hairlineWidth,
-                        borderBottomColor: '#eee',
-                      }}
-                      onPress={() => handlePickStampFromSearch(s)}
-                    >
-                      <Text style={{ fontWeight: '800', color: '#111' }}>{s.name}</Text>
-                      <Text style={{ marginTop: 2, color: '#666', fontSize: 12 }}>
-                        {s.type.toUpperCase()}
-                        {s.parentCity ? ` • ${s.parentCity}` : ''}
-                        {s.parentCountry ? ` • ${s.parentCountry}` : ''}
-                      </Text>
-                    </TouchableOpacity>
-                  ))
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                <View style={[styles.deleteIcon, { backgroundColor: '#0A3D62' }]}>
+                  <Feather name="search" size={18} color="#fff" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.deleteTitle}>Search stamps</Text>
+                  <Text style={styles.deleteSub}>Find countries, cities, and places</Text>
+                </View>
+              </View>
+
+              <View style={[styles.modalSearchContainer, { marginTop: 14 }]}>
+                <Feather name="search" size={18} color="#0A3D62" style={{ marginRight: 12 }} />
+                <TextInput
+                  style={styles.modalSearchInput}
+                  placeholder="Search (e.g. Dubai, France, city, place)"
+                  placeholderTextColor="#999"
+                  value={stampSearchQuery}
+                  onChangeText={setStampSearchQuery}
+                  autoFocus
+                  returnKeyType="search"
+                />
+                {!!stampSearchQuery && (
+                  <TouchableOpacity onPress={() => setStampSearchQuery('')} style={{ padding: 6 }}>
+                    <Feather name="x" size={18} color="#999" />
+                  </TouchableOpacity>
+                )}
+              </View>
+
+              <ScrollView
+                style={{ marginTop: 10, maxHeight: 420 }}
+                showsVerticalScrollIndicator={false}
+                keyboardShouldPersistTaps="handled"
+              >
+                {stampSearchQuery.trim() ? (
+                  stampSearchResults.length > 0 ? (
+                    stampSearchResults.map((s) => (
+                      <TouchableOpacity
+                        key={`ss_${String(s._id)}`}
+                        style={{
+                          paddingVertical: 12,
+                          borderBottomWidth: StyleSheet.hairlineWidth,
+                          borderBottomColor: '#eee',
+                        }}
+                        onPress={() => handlePickStampFromSearch(s)}
+                      >
+                        <Text style={{ fontWeight: '800', color: '#111' }}>{s.name}</Text>
+                        <Text style={{ marginTop: 2, color: '#666', fontSize: 12 }}>
+                          {s.type.toUpperCase()}
+                          {s.parentCity ? ` • ${s.parentCity}` : ''}
+                          {s.parentCountry ? ` • ${s.parentCountry}` : ''}
+                        </Text>
+                      </TouchableOpacity>
+                    ))
+                  ) : (
+                    <View style={{ paddingVertical: 18 }}>
+                      <Text style={{ color: '#666', textAlign: 'center' }}>No matching stamps found.</Text>
+                    </View>
+                  )
                 ) : (
                   <View style={{ paddingVertical: 18 }}>
-                    <Text style={{ color: '#666', textAlign: 'center' }}>No matching stamps found.</Text>
+                    <Text style={{ color: '#666', textAlign: 'center' }}>Type to search your passport stamps.</Text>
                   </View>
-                )
-              ) : (
-                <View style={{ paddingVertical: 18 }}>
-                  <Text style={{ color: '#666', textAlign: 'center' }}>Type to search your passport stamps.</Text>
-                </View>
-              )}
-            </ScrollView>
+                )}
+              </ScrollView>
 
-            <TouchableOpacity style={styles.deleteCancelBtn} onPress={closeStampSearch}>
-              <Text style={styles.deleteCancelText}>Close</Text>
+              <TouchableOpacity style={styles.deleteCancelBtn} onPress={closeStampSearch}>
+                <Text style={styles.deleteCancelText}>Close</Text>
+              </TouchableOpacity>
             </TouchableOpacity>
-          </TouchableOpacity>
+          </KeyboardAvoidingView>
         </TouchableOpacity>
       </Modal>
 
