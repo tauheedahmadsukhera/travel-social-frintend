@@ -1452,15 +1452,13 @@ function PostCard({ post, currentUser, showMenu = true, highlightedCommentId, hi
   const locationName = post?.locationData?.name || post?.locationName ||
     (typeof post?.location === 'string' ? post.location : post?.location?.name) || '';
 
-  // Perf: the viewer modal renders many PostCards; keep carousels lightweight there.
-  // Feed can use a large bounded "infinite" window.
-  const enableInfiniteCarousel = !inPostViewer;
-  const CAROUSEL_LOOPS = enableInfiniteCarousel ? 31 : 1;
+  // PERF: Infinite-looping the carousel multiplies items (e.g. 3 images -> 93 items) and
+  // noticeably hurts vertical scroll on both iOS/Android. Keep it simple (Instagram-like).
+  const enableInfiniteCarousel = false;
+  const CAROUSEL_LOOPS = 1;
   const carouselImages = React.useMemo(() => {
-    if (!enableInfiniteCarousel) return images;
-    if (images.length <= 1) return images;
-    return Array(CAROUSEL_LOOPS).fill(images).flat();
-  }, [images, enableInfiniteCarousel]);
+    return images;
+  }, [images]);
 
   // PERF: avoid re-setting height from ratio repeatedly (looped carousel has many "index 0"s).
   const heightLockedRef = useRef(false);
@@ -1469,15 +1467,9 @@ function PostCard({ post, currentUser, showMenu = true, highlightedCommentId, hi
   }, [post?.id, post?._id, images?.length]);
 
   // Using a custom index to compute the actual original index
-  const getActualIndex = (idx: number) => {
-    if (!enableInfiniteCarousel) return idx;
-    return images.length > 1 ? idx % images.length : idx;
-  };
+  const getActualIndex = (idx: number) => idx;
 
-  const initialScrollIndex =
-    enableInfiniteCarousel && images.length > 1
-      ? images.length * Math.floor(CAROUSEL_LOOPS / 2)
-      : 0;
+  const initialScrollIndex = 0;
 
   return (
     <View style={{ flex: 1, backgroundColor: appColors.background }}>
