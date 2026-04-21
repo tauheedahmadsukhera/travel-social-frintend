@@ -9,6 +9,7 @@ import {
   ActivityIndicator,
   Dimensions,
   FlatList,
+  InteractionManager,
   Modal,
   RefreshControl,
   ScrollView,
@@ -97,6 +98,8 @@ export default function Home() {
   }, [allLoadedPosts]);
 
   const nextPageRef = useRef(0);
+  const avatarHydrateReqIdRef = useRef(0);
+  const avatarHydrateTaskRef = useRef<any>(null);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [currentUserData, setCurrentUserData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -381,93 +384,70 @@ export default function Home() {
         allowedFollowers: p.allowedFollowers || [], // Default to empty array
       }));
 
-      // Hydrate missing/invalid avatars in a limited batch before rendering
-      const postsWithAvatar = await (async () => {
-        const authorIds = Array.from(new Set(normalizedPosts
-          .map((p: any) => getPostAuthorId(p))
-          .filter(Boolean)));
-
-        const avatarMap: Record<string, string> = {};
-        // Limit fanout to keep Home snappy
-        const idsToFetch = authorIds.slice(0, 12);
-        await Promise.all(idsToFetch.map(async (authorId) => {
-          try {
-            const profileRes: any = await getUserProfile(authorId);
-            if (profileRes?.success && profileRes?.data) {
-              const resolved = normalizeAvatar(
-                profileRes.data.avatar || profileRes.data.photoURL || profileRes.data.profilePicture
-              );
-              if (resolved) avatarMap[authorId] = resolved;
-            }
-          } catch {
-            // best-effort only
-          }
-        }));
-
-        return normalizedPosts.map((p: any) => {
-          const authorId = getPostAuthorId(p);
-          const directAvatar = normalizeAvatar(
-            p.userAvatar ||
-            p.avatar ||
-            p.photoURL ||
-            p.profilePicture ||
-            p?.userId?.avatar ||
-            p?.userId?.photoURL ||
-            p?.userId?.profilePicture
-          );
-
-          const hydratedAvatar = directAvatar || avatarMap[authorId] || '';
-          if (!hydratedAvatar) return p;
-
-          const hydratedUserObj = (p.userId && typeof p.userId === 'object')
-            ? {
-              ...p.userId,
-              avatar: p.userId.avatar || hydratedAvatar,
-              photoURL: p.userId.photoURL || hydratedAvatar,
-              profilePicture: p.userId.profilePicture || hydratedAvatar,
-            }
-            : p.userId;
-
-          return {
-            ...p,
-            userAvatar: p.userAvatar || hydratedAvatar,
-            avatar: p.avatar || hydratedAvatar,
-            photoURL: p.photoURL || hydratedAvatar,
-            profilePicture: p.profilePicture || hydratedAvatar,
-            userId: hydratedUserObj,
-          };
-        });
-      })();
+      // Render immediately (no network fanout before UI). Avatar hydration happens after interactions.
+      const postsForRender = normalizedPosts;
 
       // Cache the raw feed (not the filtered/paginated list).
       // This enables offline-first rendering next time.
       if (pageNum === 0) {
         try {
-          await setCachedData(HOME_CACHE_KEY, postsWithAvatar, { ttl: 24 * 60 * 60 * 1000 });
+          await setCachedData(HOME_CACHE_KEY, postsForRender, { ttl: 24 * 60 * 60 * 1000 });
         } catch { }
-      }
-
-      if (__DEV__) {
-        console.log('[Home] Loaded posts count:', postsWithAvatar.length);
-        // Log post details (dev-only; very expensive on device)
-        postsWithAvatar.forEach((p) => {
-          console.log(`  Loaded Post: id=${p.id}, userId=${p.userId}, isPrivate=${p.isPrivate}, category=${p.category}, location=${p.location?.name || p.location}`);
-        });
       }
 
       if (pageNum === 0) {
         // First page: replace all
-        if (__DEV__) console.log('[Home] Setting allLoadedPosts to:', postsWithAvatar.length);
-        setAllLoadedPosts(postsWithAvatar);
-        const mixedFeed = createMixedFeed(postsWithAvatar);
-        if (__DEV__) console.log('[Home] Mixed feed count:', mixedFeed.length);
+        setAllLoadedPosts(postsForRender);
+        const mixedFeed = createMixedFeed(postsForRender);
         setPosts(mixedFeed);
         setPaginationOffset(20); // Reset pagination
         nextPageRef.current = 0;
+
+        // Background hydrate avatars (bounded) after scroll/gestures finish.
+        avatarHydrateReqIdRef.current += 1;
+        const reqId = avatarHydrateReqIdRef.current;
+        try { avatarHydrateTaskRef.current?.cancel?.(); } catch { }
+        avatarHydrateTaskRef.current = InteractionManager.runAfterInteractions(() => {
+          (async () => {
+            if (reqId !== avatarHydrateReqIdRef.current) return;
+            const authorIds = Array.from(new Set(postsForRender
+              .map((p: any) => getPostAuthorId(p))
+              .filter(Boolean)));
+            const avatarMap: Record<string, string> = {};
+            const idsToFetch = authorIds.slice(0, 10); // keep fanout low for iOS smoothness
+            await Promise.all(idsToFetch.map(async (authorId) => {
+              try {
+                const profileRes: any = await getUserProfile(authorId);
+                if (profileRes?.success && profileRes?.data) {
+                  const resolved = normalizeAvatar(
+                    profileRes.data.avatar || profileRes.data.photoURL || profileRes.data.profilePicture
+                  );
+                  if (resolved) avatarMap[authorId] = resolved;
+                }
+              } catch { }
+            }));
+            if (reqId !== avatarHydrateReqIdRef.current) return;
+            const apply = (p: any) => {
+              const authorId = getPostAuthorId(p);
+              const directAvatar = normalizeAvatar(
+                p.userAvatar || p.avatar || p.photoURL || p.profilePicture ||
+                p?.userId?.avatar || p?.userId?.photoURL || p?.userId?.profilePicture
+              );
+              const hydratedAvatar = directAvatar || avatarMap[authorId] || '';
+              if (!hydratedAvatar) return p;
+              const hydratedUserObj = (p.userId && typeof p.userId === 'object')
+                ? { ...p.userId, avatar: p.userId.avatar || hydratedAvatar, photoURL: p.userId.photoURL || hydratedAvatar, profilePicture: p.userId.profilePicture || hydratedAvatar }
+                : p.userId;
+              return { ...p, userAvatar: p.userAvatar || hydratedAvatar, avatar: p.avatar || hydratedAvatar, photoURL: p.photoURL || hydratedAvatar, profilePicture: p.profilePicture || hydratedAvatar, userId: hydratedUserObj };
+            };
+            setAllLoadedPosts((prev) => (Array.isArray(prev) ? prev.map(apply) : prev));
+            setPosts((prev) => (Array.isArray(prev) ? prev.map(apply) : prev));
+          })();
+        });
       } else {
         // Subsequent pages: append
         setAllLoadedPosts(prev => {
-          const updated = [...(Array.isArray(prev) ? prev : []), ...postsWithAvatar];
+          const updated = [...(Array.isArray(prev) ? prev : []), ...postsForRender];
           const unique = Array.from(new Map(updated.map((p: any) => [String(p?.id || p?._id || ''), p])).values())
             .filter((p: any) => p && (p.id || p._id));
           return unique;
@@ -476,7 +456,7 @@ export default function Home() {
         setPosts((prev: any[]) => {
           const cur = Array.isArray(prev) ? prev : [];
           const seen = new Set(cur.map((p: any) => String(p?.id || p?._id || '')));
-          const toAdd = postsWithAvatar.filter((p: any) => {
+          const toAdd = postsForRender.filter((p: any) => {
             const id = String(p?.id || p?._id || '');
             if (!id) return false;
             if (seen.has(id)) return false;
