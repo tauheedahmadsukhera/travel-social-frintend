@@ -9,7 +9,7 @@ import { Image as ExpoImage } from 'expo-image';
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { getOrCreateConversation, getRegions, searchUsers } from "../lib/firebaseHelpers/index";
 import { followUser, sendFollowRequest, unfollowUser } from "../lib/firebaseHelpers/follow";
-import { CITY_CARD_IMAGES, COUNTRY_CARD_IMAGES, DEFAULT_CARD_IMAGE, REGION_CARD_IMAGES } from "./searchCardAssets.generated";
+import { CITY_CARD_IMAGES, COUNTRY_CARD_IMAGES, DEFAULT_CARD_IMAGE, REGION_CARD_IMAGES } from "../src/assets/searchCardAssets.generated";
 import { getCachedData, setCachedData, useNetworkStatus, useOfflineBanner } from '../hooks/useOffline';
 import { OfflineBanner } from '@/src/_components/OfflineBanner';
 import { safeRouterBack } from '@/lib/safeRouterBack';
@@ -54,6 +54,9 @@ const LEGACY_IMAGE_ALIASES: Record<string, string> = {
 };
 
 function getCardImageSource(item: Region) {
+  if (item.image && (item.image.startsWith('http') || item.image.startsWith('https'))) {
+    return { uri: item.image };
+  }
   const key = LEGACY_IMAGE_ALIASES[item.image] ?? item.image;
   if (item.section === 'country') {
     return COUNTRY_CARD_IMAGES[key] ?? DEFAULT_CARD_IMAGE;

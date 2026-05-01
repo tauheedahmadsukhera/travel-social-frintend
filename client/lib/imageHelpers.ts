@@ -11,8 +11,8 @@
  * @param height - Desired height (optional; defaults to width for square)
  * @returns Optimized thumbnail URL or original if not Cloudinary URL
  */
-export function getThumbnailUrl(imageUrl: string, width: number = 400, height?: number): string {
-  if (!imageUrl || typeof imageUrl !== 'string') return imageUrl;
+export function getThumbnailUrl(imageUrl: string | null | undefined, width: number = 400, height?: number): string {
+  if (!imageUrl || typeof imageUrl !== 'string') return '';
 
   // Only optimize Cloudinary URLs that contain the upload segment
   if (!imageUrl.includes('res.cloudinary.com') || !imageUrl.includes('/upload/')) {
@@ -40,8 +40,8 @@ export function getThumbnailUrl(imageUrl: string, width: number = 400, height?: 
  * @param imageUrl - Original image URL
  * @param context - 'feed' (400px), 'map-marker' (200px), 'thumbnail' (150px), 'detail' (full)
  */
-export function getOptimizedImageUrl(imageUrl: string, context: 'feed' | 'map-marker' | 'thumbnail' | 'detail' = 'feed'): string {
-  if (!imageUrl) return imageUrl;
+export function getOptimizedImageUrl(imageUrl: string | null | undefined, context: 'feed' | 'map-marker' | 'thumbnail' | 'detail' = 'feed'): string {
+  if (!imageUrl || typeof imageUrl !== 'string') return '';
 
   // If Firebase Storage URL, return original (no transformation)
   if (imageUrl.includes('firebasestorage.googleapis.com')) {
@@ -55,12 +55,45 @@ export function getOptimizedImageUrl(imageUrl: string, context: 'feed' | 'map-ma
 
   // Size recommendations per context (width in pixels)
   const sizes = {
-    feed: 1080,       // Feed/profile grid: 1080px for higher quality
+    feed: 800,       // Feed/profile grid: 800px is enough for most devices
     'map-marker': 200, // Map markers: tiny, 200px is plenty
     thumbnail: 150,   // Thumbnail/avatar: 150px is max
   };
 
   return getThumbnailUrl(imageUrl, sizes[context]);
+}
+
+/**
+ * Get a thumbnail for a video URL
+ * If Cloudinary, converts to JPG. Otherwise returns original or provided poster.
+ */
+export function getVideoThumbnailUrl(videoUrl: string, posterUrl?: string): string {
+  if (posterUrl && typeof posterUrl === 'string' && posterUrl.trim()) {
+    return posterUrl;
+  }
+  
+  if (!videoUrl || typeof videoUrl !== 'string') return '';
+
+  // Cloudinary video thumbnail trick: change extension to .jpg and use transformations
+  if (videoUrl.includes('res.cloudinary.com') && videoUrl.includes('/video/upload/')) {
+    try {
+      // Replace /video/upload/ with /video/upload/c_limit,w_800,q_auto,f_auto,so_0/
+      // And change extension to .jpg
+      let thumb = videoUrl
+        .replace('/video/upload/', '/video/upload/c_limit,w_800,q_auto,f_auto,so_0/')
+        .replace(/\.(mp4|mov|wmv|avi|mkv|webm)$/i, '.jpg');
+      
+      // If it doesn't have an extension we recognize, still try appending .jpg
+      if (thumb === videoUrl) {
+        thumb = thumb + '.jpg';
+      }
+      return thumb;
+    } catch (e) {
+      return videoUrl;
+    }
+  }
+
+  return videoUrl;
 }
 
 /**

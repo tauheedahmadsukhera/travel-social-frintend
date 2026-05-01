@@ -2,11 +2,12 @@ import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, Image, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, Image, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { uploadImage } from '../../lib/firebaseHelpers';
 import { checkUsernameAvailability, signUpWithUsername } from '../../services/usernameAuthService';
 import { AuthBrandHeader } from '@/src/_components/auth/AuthBrandHeader';
+import { AuthKeyboardScroll } from '@/src/_components/auth/AuthKeyboardScroll';
 import CustomButton from '@/src/_components/auth/CustomButton';
 import { safeRouterBack } from '@/lib/safeRouterBack';
 
@@ -104,17 +105,9 @@ export default function UsernameSignUpScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      >
-        <ScrollView
-          contentContainerStyle={styles.scrollContent}
-          showsVerticalScrollIndicator={false}
-          keyboardShouldPersistTaps="handled"
-        >
-          <View style={styles.content}>
+    <SafeAreaView style={styles.container} edges={['top']}>
+      <AuthKeyboardScroll contentContainerStyle={styles.scrollContent}>
+        <View style={styles.content}>
             {/* Header */}
             <View style={styles.header}>
               <TouchableOpacity
@@ -161,6 +154,8 @@ export default function UsernameSignUpScreen() {
                   value={username}
                   onChangeText={setUsername}
                   autoCapitalize="none"
+                  autoCorrect={false}
+                  spellCheck={false}
                   editable={!loading}
                 />
                 {checkingUsername && (
@@ -193,8 +188,16 @@ export default function UsernameSignUpScreen() {
                 placeholderTextColor="#999"
                 value={name}
                 onChangeText={setName}
+                autoCorrect={false}
               />
             </View>
+
+            {/* EULA Text */}
+            <Text style={{ fontSize: 12, color: '#666', textAlign: 'center', marginBottom: 12, marginTop: 10 }}>
+              By signing up, you agree to our{' '}
+              <Text style={{ fontWeight: '600' }} onPress={() => router.push('/legal/terms' as any)}>Terms of Service</Text> and{' '}
+              <Text style={{ fontWeight: '600' }} onPress={() => router.push('/legal/privacy' as any)}>Privacy Policy</Text>.
+            </Text>
 
             {/* Next Button */}
             <CustomButton
@@ -211,8 +214,7 @@ export default function UsernameSignUpScreen() {
               </View>
             )}
           </View>
-        </ScrollView>
-      </KeyboardAvoidingView>
+      </AuthKeyboardScroll>
     </SafeAreaView>
   );
 }

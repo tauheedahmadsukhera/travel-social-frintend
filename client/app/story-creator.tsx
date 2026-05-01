@@ -215,103 +215,112 @@ export default function StoryCreatorScreen() {
         setSelectedOverlayId((prev) => (prev === id ? null : prev));
     };
 
-    // ─────────────────────────────────────────
-    // Draggable text overlay component
-    // ─────────────────────────────────────────
-    const DraggableText = ({ overlay }: { overlay: TextOverlay }) => {
-        const isSelected = selectedOverlayId === overlay.id;
-        const baseRef = useRef({ x: overlay.x * SCREEN_W, y: overlay.y * PREVIEW_H });
-        const pan = useRef(new Animated.ValueXY({ x: baseRef.current.x, y: baseRef.current.y })).current;
+// ─────────────────────────────────────────────
+// Draggable text overlay component (Moved outside to prevent re-creation lag)
+// ─────────────────────────────────────────────
+const DraggableText = ({ 
+    overlay, 
+    isSelected, 
+    onSelect, 
+    onDelete, 
+    onUpdatePosition 
+}: { 
+    overlay: TextOverlay; 
+    isSelected: boolean;
+    onSelect: (id: string) => void;
+    onDelete: (id: string) => void;
+    onUpdatePosition: (id: string, x: number, y: number) => void;
+}) => {
+    const baseRef = useRef({ x: overlay.x * SCREEN_W, y: overlay.y * PREVIEW_H });
+    const pan = useRef(new Animated.ValueXY({ x: baseRef.current.x, y: baseRef.current.y })).current;
 
-        // If overlays are re-hydrated or changed, keep animation state in sync
-        useEffect(() => {
-            const nx = overlay.x * SCREEN_W;
-            const ny = overlay.y * PREVIEW_H;
+    // Sync position if changed externally (e.g. initial load)
+    useEffect(() => {
+        const nx = overlay.x * SCREEN_W;
+        const ny = overlay.y * PREVIEW_H;
+        if (Math.abs(baseRef.current.x - nx) > 1 || Math.abs(baseRef.current.y - ny) > 1) {
             baseRef.current = { x: nx, y: ny };
             pan.setValue({ x: nx, y: ny });
-        }, [overlay.id, overlay.x, overlay.y, pan]);
+        }
+    }, [overlay.x, overlay.y]);
 
-        const panResponder = useRef(
-            PanResponder.create({
-                onStartShouldSetPanResponder: () => true,
-                onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dx) + Math.abs(g.dy) > 2,
-                onPanResponderGrant: () => {
-                    setSelectedOverlayId(overlay.id);
-                    pan.stopAnimation();
-                    // Offset-based drag so we don't re-render on move.
-                    pan.setOffset(baseRef.current);
-                    pan.setValue({ x: 0, y: 0 });
+    const panResponder = useRef(
+        PanResponder.create({
+            onStartShouldSetPanResponder: () => true,
+            onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dx) > 2 || Math.abs(g.dy) > 2,
+            onPanResponderGrant: () => {
+                onSelect(overlay.id);
+                pan.stopAnimation();
+                pan.setOffset({ x: baseRef.current.x, y: baseRef.current.y });
+                pan.setValue({ x: 0, y: 0 });
+            },
+            onPanResponderMove: Animated.event([null, { dx: pan.x, dy: pan.y }], { useNativeDriver: false }),
+            onPanResponderRelease: () => {
+                pan.flattenOffset();
+                const cur: any = (pan as any).__getValue ? (pan as any).__getValue() : { x: baseRef.current.x, y: baseRef.current.y };
+                const rawX = typeof cur?.x === 'number' ? cur.x : baseRef.current.x;
+                const rawY = typeof cur?.y === 'number' ? cur.y : baseRef.current.y;
+
+                const clampedX = Math.max(0, Math.min(SCREEN_W, rawX));
+                const clampedY = Math.max(0, Math.min(PREVIEW_H - 10, rawY));
+
+                baseRef.current = { x: clampedX, y: clampedY };
+                pan.setValue({ x: clampedX, y: clampedY });
+                onUpdatePosition(overlay.id, clampedX / SCREEN_W, clampedY / PREVIEW_H);
+            },
+            onPanResponderTerminate: () => {
+                pan.flattenOffset();
+            }
+        })
+    ).current;
+
+    const fs = FONT_STYLES[overlay.fontStyle];
+
+    return (
+        <Animated.View
+            {...panResponder.panHandlers}
+            style={[
+                styles.textOverlay,
+                {
+                    transform: [
+                        { translateX: pan.x },
+                        { translateY: pan.y },
+                    ],
                 },
-                onPanResponderMove: Animated.event([null, { dx: pan.x, dy: pan.y }], { useNativeDriver: false }),
-                onPanResponderRelease: () => {
-                    pan.flattenOffset();
-                    // Clamp within preview bounds on release
-                    const cur: any = (pan as any).__getValue ? (pan as any).__getValue() : { x: baseRef.current.x, y: baseRef.current.y };
-                    const rawX = typeof cur?.x === 'number' ? cur.x : baseRef.current.x;
-                    const rawY = typeof cur?.y === 'number' ? cur.y : baseRef.current.y;
-
-                    const clampedX = Math.max(0, Math.min(SCREEN_W, rawX));
-                    const clampedY = Math.max(0, Math.min(PREVIEW_H - 10, rawY));
-
-                    baseRef.current = { x: clampedX, y: clampedY };
-                    pan.setValue({ x: clampedX, y: clampedY });
-
-                    setTextOverlays((prev) =>
-                        prev.map((o) =>
-                            o.id === overlay.id ? { ...o, x: clampedX / SCREEN_W, y: clampedY / PREVIEW_H } : o
-                        )
-                    );
-                },
-            })
-        ).current;
-
-        const fs = FONT_STYLES[overlay.fontStyle];
-
-        return (
-            <Animated.View
-                {...panResponder.panHandlers}
-                style={[
-                    styles.textOverlay,
-                    {
-                        transform: [
-                            { translateX: pan.x },
-                            { translateY: pan.y },
-                            { translateX: -40 },
-                        ],
-                    },
-                ]}
+                isSelected && styles.textOverlaySelected,
+            ]}
+        >
+            <TouchableOpacity
+                activeOpacity={1}
+                onPress={() => onSelect(overlay.id)}
             >
-                <TouchableOpacity
-                    activeOpacity={1}
-                    onPress={() => setSelectedOverlayId(overlay.id)}
+                <Text
+                    style={[
+                        styles.overlayText,
+                        {
+                            color: overlay.color,
+                            fontFamily: fs.fontFamily,
+                            letterSpacing: fs.letterSpacing,
+                            textTransform: fs.textTransform as any,
+                        },
+                    ]}
                 >
-                    <Text
-                        style={[
-                            styles.overlayText,
-                            {
-                                color: overlay.color,
-                                fontFamily: fs.fontFamily,
-                                letterSpacing: fs.letterSpacing,
-                                textTransform: fs.textTransform as any,
-                            },
-                        ]}
-                    >
-                        {overlay.text}
-                    </Text>
-                </TouchableOpacity>
+                    {overlay.text}
+                </Text>
+            </TouchableOpacity>
 
-                {isSelected && (
-                    <TouchableOpacity
-                        onPress={() => deleteOverlay(overlay.id)}
-                        style={styles.overlayDeleteBadge}
-                        hitSlop={{ top: 10, left: 10, right: 10, bottom: 10 }}
-                    >
-                        <Feather name="x" size={14} color="#fff" />
-                    </TouchableOpacity>
-                )}
-            </Animated.View>
-        );
-    };
+            {isSelected && (
+                <TouchableOpacity
+                    onPress={() => onDelete(overlay.id)}
+                    style={styles.overlayDeleteBadge}
+                    hitSlop={{ top: 10, left: 10, right: 10, bottom: 10 }}
+                >
+                    <Feather name="x" size={14} color="#fff" />
+                </TouchableOpacity>
+            )}
+        </Animated.View>
+    );
+};
 
     // ─────────────────────────────────────────
     // Gallery tile
@@ -415,6 +424,19 @@ export default function StoryCreatorScreen() {
                     <Image source={{ uri: selectedUri }} style={styles.previewImg} resizeMode="cover" />
                 ) : null}
 
+                {/* Text overlays preview */}
+                {textOverlays.map((o) => (
+                    <DraggableText 
+                        key={o.id} 
+                        overlay={o} 
+                        isSelected={selectedOverlayId === o.id}
+                        onSelect={setSelectedOverlayId}
+                        onDelete={deleteOverlay}
+                        onUpdatePosition={(id, x, y) => {
+                            setTextOverlays(prev => prev.map(item => item.id === id ? { ...item, x, y } : item));
+                        }}
+                    />
+                ))}
             </View>
 
             {/* ── Recents label ── */}
@@ -517,7 +539,16 @@ const styles = StyleSheet.create({
     // Text overlay on preview
     textOverlay: {
         position: 'absolute',
+        left: -40,
+        top: 0,
         maxWidth: SCREEN_W - 20,
+        padding: 4,
+    },
+    textOverlaySelected: {
+        borderWidth: 1,
+        borderColor: 'rgba(255,255,255,0.4)',
+        borderRadius: 8,
+        backgroundColor: 'rgba(0,0,0,0.1)',
     },
     overlayText: {
         fontSize: 26,

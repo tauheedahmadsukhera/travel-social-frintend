@@ -2,8 +2,10 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Clipboard from 'expo-clipboard';
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
-import { Alert, FlatList, Modal, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { FlatList, Modal, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { AuthBrandHeader } from '@/src/_components/auth/AuthBrandHeader';
+import { AuthKeyboardScroll } from '@/src/_components/auth/AuthKeyboardScroll';
 import CustomButton from '@/src/_components/auth/CustomButton';
 import { safeRouterBack } from '@/lib/safeRouterBack';
 
@@ -115,23 +117,12 @@ export default function PhoneSignUpScreen() {
           }
         }
 
-        Alert.alert(
-          'Check Your Email! ðŸ“§',
-          `Account created successfully!\n\nA verification link has been sent to:\n${email}\n\nPlease check your email (including spam folder) and click the link to verify your account.\n\nAfter verification, login with:\nEmail: ${email}\nPassword: ${tempPassword}\n\n(Save this password! You can change it later in settings)`,
-          [
-            {
-              text: 'Copy Password',
-              onPress: async () => {
-                await Clipboard.setStringAsync(tempPassword);
-                Alert.alert('Copied! âœ…', `Password copied to clipboard:\n${tempPassword}`);
-              }
-            },
-            {
-              text: 'Go to Login',
-              onPress: () => router.replace('/auth/login-options')
-            }
-          ]
-        );
+        try {
+          await Clipboard.setStringAsync(tempPassword);
+        } catch {
+          /* best-effort: no modal */
+        }
+        router.replace('/auth/login-options');
       } else {
         setError(result.error || 'Signup failed');
       }
@@ -144,8 +135,8 @@ export default function PhoneSignUpScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <ScrollView contentContainerStyle={styles.scrollContent}>
+    <SafeAreaView style={styles.container} edges={['top']}>
+      <AuthKeyboardScroll contentContainerStyle={styles.scrollContent}>
         {/* Header */}
         <View style={styles.header}>
           <TouchableOpacity
@@ -182,6 +173,8 @@ export default function PhoneSignUpScreen() {
               value={phoneNumber}
               onChangeText={setPhoneNumber}
               keyboardType="phone-pad"
+              autoCorrect={false}
+              spellCheck={false}
             />
           </View>
 
@@ -195,6 +188,8 @@ export default function PhoneSignUpScreen() {
             onChangeText={setEmail}
             keyboardType="email-address"
             autoCapitalize="none"
+            autoCorrect={false}
+            spellCheck={false}
           />
 
           {error ? <Text style={styles.errorText}>{error}</Text> : null}
@@ -233,6 +228,13 @@ export default function PhoneSignUpScreen() {
               </View>
             </View>
           </Modal>
+
+          {/* EULA Text */}
+          <Text style={{ fontSize: 12, color: '#666', textAlign: 'center', marginBottom: 12 }}>
+            By signing up, you agree to our{' '}
+            <Text style={{ fontWeight: '600' }} onPress={() => router.push('/legal/terms' as any)}>Terms of Service</Text> and{' '}
+            <Text style={{ fontWeight: '600' }} onPress={() => router.push('/legal/privacy' as any)}>Privacy Policy</Text>.
+          </Text>
 
           {/* Next Button */}
           <CustomButton
@@ -284,7 +286,7 @@ export default function PhoneSignUpScreen() {
             </Text>
           </Text>
         </View>
-      </ScrollView>
+      </AuthKeyboardScroll>
     </SafeAreaView>
   );
 }

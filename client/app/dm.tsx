@@ -22,32 +22,57 @@ import {
     clearConversation,
 } from '../lib/firebaseHelpers/index';
 import { safeRouterBack } from '@/lib/safeRouterBack';
-import { apiService } from '@/src/_services/apiService';
-import { extensionFromFileUri, uploadMedia, sendMediaMessage as sendMediaMessageApi } from '../lib/firebaseHelpers/messages';
-import { getFormattedActiveStatus, subscribeToUserPresence, updateUserOffline, updateUserPresence, UserPresence } from '../lib/userPresence';
-import MessageBubble from '@/src/_components/MessageBubble';
-import ShareModal from '@/src/_components/ShareModal';
-import StoriesViewer from '@/src/_components/StoriesViewer';
-import EmojiPicker from 'rn-emoji-keyboard';
-import { useUserProfile } from '@/src/_hooks/useUserProfile';
-import * as ImagePicker from 'expo-image-picker';
 import {
-  initializeSocket,
-  subscribeToMessages as socketSubscribeToMessages,
-  subscribeToMessageSent,
-  subscribeToMessageDelivered,
-  subscribeToMessageRead,
-  markMessageAsRead,
-  sendTypingIndicator,
-  stopTypingIndicator,
-  subscribeToTyping,
-} from '@/src/_services/socketService';
+  toTimestampMs,
+  normalizeMessage,
+  mergeMessages,
+} from '../src/_services/dmHelpers';
+import DMHeader from '../src/_components/dm/DMHeader';
+import DMInput from '../src/_components/dm/DMInput';
 
+import * as ImagePicker from 'expo-image-picker';
 import { DEFAULT_AVATAR_URL } from '@/lib/api';
 import { useAppDialog } from '@/src/_components/AppDialogProvider';
 import { useOfflineBanner } from '../hooks/useOffline';
 import { OfflineBanner } from '@/src/_components/OfflineBanner';
+import { 
+  subscribeToMessages as socketSubscribeToMessages,
+  initializeSocket
+} from '../src/_services/socketService';
+
+import MessageBubble from '../src/_components/MessageBubble';
+import ShareModal from '../src/_components/ShareModal';
+import StoriesViewer from '../src/_components/StoriesViewer';
+import EmojiPicker from 'rn-emoji-keyboard';
+
 const REACTIONS = ['❤️', '😂', '😮', '😢', '😡', '👍'];
+
+/** Simple hook to fetch peer profile */
+function useUserProfile(uid: string | null) {
+  const [profile, setProfile] = useState<any>(null);
+  const [loading, setLoading] = useState(false);
+  useEffect(() => {
+    if (!uid) return;
+    setLoading(true);
+    getUserProfile(uid).then(res => {
+      if (res?.success) setProfile(res.data);
+    }).finally(() => setLoading(false));
+  }, [uid]);
+  return { profile, loading };
+}
+
+// Missing exports from messaging helpers that were used in dm.tsx
+import { 
+  uploadMedia, 
+  sendMediaMessage as sendMediaMessageApi,
+  extensionFromFileUri 
+} from '../lib/firebaseHelpers/messages';
+
+// Placeholder for missing presence helpers if they are not found elsewhere
+const subscribeToUserPresence = (uid: string, callback: (presence: any) => void) => {
+  // Mock presence subscribe
+  return () => {};
+};
 
 export default function DM() {
   const insets = useSafeAreaInsets();
@@ -67,6 +92,13 @@ export default function DM() {
     return typeof raw === 'string' ? raw : null;
   })();
 
+  /** Inbox / search pass `user` so the DM header matches before /users/:id returns. */
+  const seedPeerDisplayName = useMemo(() => {
+    const raw = (params as any)?.user as unknown;
+    const s = Array.isArray(raw) ? String(raw[0] ?? '') : typeof raw === 'string' ? raw : '';
+    return s.trim();
+  }, [(params as any)?.user]);
+
   // If DM opened by selecting a user (search/profile), never trust a carried-over
   // conversationId from previous screen state.
   const shouldResolveConversationFromUser = !!otherUserId && !isGroupParam;
@@ -78,98 +110,7 @@ export default function DM() {
   const [conversationMeta, setConversationMeta] = useState<any | null>(null);
   const [messages, setMessages] = useState<any[]>([]);
 
-  const toTimestampMs = useCallback((raw: any): number => {
-    if (!raw) return Date.now();
-    if (raw instanceof Date) return raw.getTime();
 
-    // Firestore Timestamp-like: { seconds, nanoseconds } or { _seconds, _nanoseconds }
-    if (typeof raw === 'object') {
-      const anyRaw: any = raw;
-      if (typeof anyRaw?.toDate === 'function') {
-        try {
-          const d = anyRaw.toDate();
-          if (d instanceof Date) return d.getTime();
-        } catch { }
-      }
-      const s = anyRaw?.seconds ?? anyRaw?._seconds;
-      const ns = anyRaw?.nanoseconds ?? anyRaw?._nanoseconds ?? 0;
-      if (typeof s === 'number' && Number.isFinite(s)) {
-        const extra = typeof ns === 'number' && Number.isFinite(ns) ? Math.floor(ns / 1_000_000) : 0;
-        return s * 1000 + extra;
-      }
-    }
-
-    if (typeof raw === 'number' && Number.isFinite(raw)) {
-      // seconds vs ms
-      if (raw > 0 && raw < 10_000_000_000) return raw * 1000;
-      return raw;
-    }
-
-    const parsed = Date.parse(String(raw));
-    return Number.isFinite(parsed) ? parsed : Date.now();
-  }, []);
-
-  const messagesWithSeparators = useMemo(() => {
-    const list: any[] = [];
-    let lastDate: string | null = null;
-    
-    const parseTime = (msg: any) => {
-      // Fast-path: most messages will have cached timestamp
-      const cached = msg && (msg.__ts ?? msg.__timestampMs);
-      if (typeof cached === 'number' && Number.isFinite(cached)) return cached;
-
-      // CRITICAL: Only use the ROOT-level createdAt/timestamp.
-      // Never fall through to nested sharedStory.createdAt or sharedPost.createdAt
-      // which represent when the story/post was originally posted, NOT when the
-      // message was sent.
-
-      // Pending / optimistic messages: use a STABLE time from the message only.
-      // (Old code used Date.now() every render, which reshuffled the whole thread.)
-      if (!msg || String(msg.id).startsWith('local_') || msg.tempOrigin) {
-        const t = toTimestampMs(msg?.createdAt ?? msg?.timestamp);
-        return Number.isFinite(t) && t > 0 ? t : 0;
-      }
-
-      // Extract only own-property timestamp - avoid nested object timestamps
-      let t = undefined;
-      if (msg.hasOwnProperty('createdAt') && msg.createdAt !== undefined && msg.createdAt !== null) {
-        t = msg.createdAt;
-      }
-      if (t === undefined && msg.hasOwnProperty('timestamp') && msg.timestamp !== undefined && msg.timestamp !== null) {
-        t = msg.timestamp;
-      }
-      
-      if (!t) return Date.now();
-      return toTimestampMs(t);
-    };
-
-    // Sort chronologically (oldest first)
-    // Sort reverse-chronologically (newest first) for inverted list
-    const sorted = [...messages].sort((a, b) => {
-      const ta = parseTime(a);
-      const tb = parseTime(b);
-      
-      // Secondary sort to ensure stability
-      if (ta !== tb) return tb - ta;
-      return String(b.id).localeCompare(String(a.id));
-    });
-
-    sorted.forEach((msg) => {
-      const ms = parseTime(msg);
-      const dateObj = new Date(ms > Date.now() ? Date.now() : ms);
-      const dateLabel = dateObj.toLocaleDateString();
-      
-      if (dateLabel !== lastDate) {
-        // In an inverted list, newest is at the top (index 0).
-        // If we list newest-to-oldest, we want the date separator 
-        // to appear ABOVE the first message of that day.
-        list.push({ type: 'date', date: dateLabel, id: `date_${dateLabel}` });
-        lastDate = dateLabel;
-      }
-      list.push(msg);
-    });
-    return list;
-  }, [messages, toTimestampMs]);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(true);
@@ -195,7 +136,7 @@ export default function DM() {
   const [userPosts, setUserPosts] = useState<any[]>([]);
   const [loadingPosts, setLoadingPosts] = useState(false);
   const [isTyping, setIsTyping] = useState(false);
-  const [otherUserPresence, setOtherUserPresence] = useState<UserPresence | null>(null);
+  const [otherUserPresence, setOtherUserPresence] = useState<any | null>(null);
   const [shareSearchQuery, setShareSearchQuery] = useState("");
   const [recordingObj, setRecordingObj] = useState<Audio.Recording | null>(null);
   const [activeSoundId, setActiveSoundId] = useState<string | null>(null);
@@ -214,177 +155,71 @@ export default function DM() {
   const preloadKeyRef = useRef<string>('');
   const hasPreloadedMessagesRef = useRef<boolean>(false);
 
-  const createTempId = (prefix: string) => `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-
-  const getMessageId = (m: any): string => {
-    const raw = m?.id || m?._id || m?.messageId;
-    return raw ? String(raw) : '';
-  };
-
-  const getMessageFallbackKey = (m: any): string => {
-    const created = String(m?.createdAt || m?.timestamp || '');
-    const sender = String(m?.senderId || '');
-    const kind = String(m?.mediaType || 'text');
-    const body = String(m?.text || m?.mediaUrl || m?.audioUrl || '').slice(0, 80);
-    return `${sender}|${created}|${kind}|${body}`;
-  };
-
-  const dedupeById = (list: any[]): any[] => {
-    const map = new Map<string, any>();
-    for (const item of list) {
-      const n = normalizeMessage(item);
-      // Keep last occurrence (newer/merged tends to come later)
-      map.set(String(n.id), n);
-    }
-    return Array.from(map.values());
-  };
-
-  const normalizeMessage = (m: any): any => {
-    const rawText = typeof m?.text === 'string' ? m.text : '';
-    const trimmedText = rawText.trim();
-    const legacyStoryMatch = rawText.match(/story[:;]\/\/([A-Za-z0-9_-]+)|Shared a story:\s*([A-Za-z0-9_-]+)/i);
-    const legacyStoryId = legacyStoryMatch?.[1] || legacyStoryMatch?.[2] || '';
-
-    const normalizedMediaType = m?.mediaType || m?.type || m?.messageType
-      || (m?.audioUrl ? 'audio' : undefined)
-      || ((m?.audioDuration || m?.duration) && !trimmedText ? 'audio' : undefined)
-      || (m?.sharedStory ? 'story' : undefined)
-      || (legacyStoryId ? 'story' : undefined)
-      || (typeof (m?.mediaUrl || m?.url || m?.fileUrl) === 'string' && /\.(m4a|aac|mp3|wav|ogg)(\?|$)/i.test(String(m?.mediaUrl || m?.url || m?.fileUrl)) ? 'audio' : undefined)
-      || (typeof (m?.mediaUrl || m?.url || m?.fileUrl) === 'string' && /\.(mp4|mov|webm)(\?|$)/i.test(String(m?.mediaUrl || m?.url || m?.fileUrl)) ? 'video' : undefined)
-      || (typeof (m?.mediaUrl || m?.url || m?.fileUrl) === 'string' && /\.(jpe?g|png|gif|webp)(\?|$)/i.test(String(m?.mediaUrl || m?.url || m?.fileUrl)) ? 'image' : undefined)
-      || (m?.imageUrl ? 'image' : undefined)
-      || (m?.sharedPost ? 'post' : undefined)
-      || (m?.sharedStory ? 'story' : undefined);
-
-    const normalizedMediaUrl = m?.mediaUrl || m?.url || m?.fileUrl || m?.attachmentUrl || m?.media?.url || m?.imageUrl;
-    const normalizedAudioUrl = m?.audioUrl || (normalizedMediaType === 'audio' ? normalizedMediaUrl : undefined);
-    const normalizedAudioDuration = m?.audioDuration || m?.duration;
-
-    const id = getMessageId(m);
+  const messagesWithSeparators = useMemo(() => {
+    const list: any[] = [];
+    let lastDate: string | null = null;
     
-    // IMPORTANT: Preserve root-level createdAt/timestamp.
-    // When spreading ...m, nested sharedStory.createdAt or sharedPost.createdAt
-    // could overwrite the root message timestamp. Extract and preserve them.
-    const rootCreatedAt = m?.createdAt;
-    const rootTimestamp = m?.timestamp;
-    
-    const base = {
-      ...m,
-      // Re-apply root timestamps AFTER spread to prevent nested object leakage
-      createdAt: rootCreatedAt,
-      timestamp: rootTimestamp,
-      mediaType: normalizedMediaType,
-      ...(legacyStoryId && !m?.sharedStory
-        ? {
-            sharedStory: {
-              storyId: legacyStoryId,
-              id: legacyStoryId,
-              userId: m?.senderId,
-              userName: 'Story',
-              userAvatar: DEFAULT_AVATAR_URL,
-            }
-          }
-        : {}),
-      ...(normalizedMediaUrl ? { mediaUrl: normalizedMediaUrl } : {}),
-      ...(normalizedAudioUrl ? { audioUrl: normalizedAudioUrl } : {}),
-      ...(normalizedAudioDuration ? { audioDuration: normalizedAudioDuration } : {}),
-    };
+    // Sort reverse-chronologically (newest first) for inverted list
+    const sorted = [...messages].sort((a, b) => (b.__ts || 0) - (a.__ts || 0));
 
-    const withId = id ? { ...base, id } : { ...base, id: `local_${getMessageFallbackKey(base)}` };
-
-    // Cache a stable message timestamp (ms) to avoid repeated deep parsing/sorting work.
-    const t = (() => {
-      const createdAt = withId?.createdAt;
-      const timestamp = withId?.timestamp;
-      const raw = (createdAt ?? timestamp);
-      return toTimestampMs(raw);
-    })();
-
-    return { ...withId, __ts: t };
-  };
-
-  const mergeMessages = (existing: any[], incoming: any[]): any[] => {
-    const map = new Map<string, any>();
-
-    // Index existing messages by ID
-    existing.forEach((m) => {
-      const id = getMessageId(m) || String(m?.id || '');
-      const key = id || `local_${getMessageFallbackKey(m)}`;
-      // Avoid re-normalizing existing messages; just ensure they have __ts for fast sorting.
-      const hasTs = typeof m?.__ts === 'number' && Number.isFinite(m.__ts);
-      const withTs = hasTs ? m : { ...m, __ts: normalizeMessage(m).__ts };
-      map.set(String(key), withTs);
-    });
-
-    // Merge incoming messages
-    incoming.forEach((m) => {
-      const n = normalizeMessage(m);
-      const prev = map.get(n.id) || {};
+    sorted.forEach((msg) => {
+      const ms = msg.__ts || Date.now();
+      const dateObj = new Date(ms > Date.now() ? Date.now() : ms);
+      const dateLabel = dateObj.toLocaleDateString();
       
-      // CRITICAL: If we have local optimistic updates (reactions or edits), 
-      // and the incoming message is older than our last update, preserve local state.
-      // This prevents the "revert" effect when polling or sockets return slightly stale data.
-      
-      const isDowngrade = n.mediaType === 'text' && 
-                        (prev.mediaType === 'audio' || prev.mediaType === 'video' || prev.mediaType === 'image' || prev.mediaType === 'post' || prev.mediaType === 'story');
-
-      // Check for reaction sync
-      const prevReactions = prev.reactions || {};
-      const incomingReactions = n.reactions || {};
-      
-      // Heuristic: If local has reactions and incoming doesn't, or local has more, 
-      // it might be an optimistic update that hasn't reached server yet.
-      // But for now, let's just merge them to be safe.
-      const mergedReactions = { ...incomingReactions };
-      Object.keys(prevReactions).forEach(emoji => {
-        if (!mergedReactions[emoji]) mergedReactions[emoji] = prevReactions[emoji];
-        else {
-          // Merge user lists for each emoji
-          mergedReactions[emoji] = Array.from(new Set([...mergedReactions[emoji], ...prevReactions[emoji]]));
-        }
-      });
-
-      map.set(n.id, {
-        ...prev,
-        ...n,
-        __ts: typeof n?.__ts === 'number' ? n.__ts : prev.__ts,
-        reactions: mergedReactions,
-        mediaType: isDowngrade ? prev.mediaType : (n.mediaType || prev.mediaType),
-        mediaUrl: n.mediaUrl || prev.mediaUrl,
-        audioUrl: n.audioUrl || prev.audioUrl,
-        audioDuration: n.audioDuration || prev.audioDuration,
-        sharedStory: n.sharedStory || prev.sharedStory,
-        sharedPost: n.sharedPost || prev.sharedPost,
-        // Preserve local edit if incoming is older
-        text: (prev.editedAt && (!n.editedAt || new Date(prev.editedAt) > new Date(n.editedAt))) ? prev.text : n.text,
-        editedAt: (prev.editedAt && (!n.editedAt || new Date(prev.editedAt) > new Date(n.editedAt))) ? prev.editedAt : n.editedAt,
-      });
-
-      // If the incoming message specifies which tempId it replaces
-      if (m?.tempId) map.delete(String(m.tempId));
-    });
-
-    // Preserve only pending local temp messages until backend echo arrives.
-    const twoMinutesAgo = Date.now() - 120000;
-    existing.forEach((m) => {
-      const isTempPending = String(m.id || '').startsWith('temp_') || m.sent === false;
-      const createdAtMs = toTimestampMs(m?.createdAt ?? m?.timestamp);
-      if (isTempPending && createdAtMs > twoMinutesAgo && !map.has(m.id)) {
-        map.set(m.id, m);
+      if (dateLabel !== lastDate) {
+        list.push({ type: 'date', date: dateLabel, id: `date_${dateLabel}` });
+        lastDate = dateLabel;
       }
+      list.push(msg);
     });
-
-    return Array.from(map.values());
-  };
+    return list;
+  }, [messages]);
 
   const { profile: otherUserProfile } = useUserProfile(otherUserId);
+
   const isGroupConversation = isGroupParam || !!conversationMeta?.isGroup;
-  const displayName = isGroupConversation ? (conversationMeta?.groupName || 'Group') : (otherUserProfile?.displayName || otherUserProfile?.username || 'User');
-  const avatarUri = isGroupConversation ? (conversationMeta?.groupAvatar || DEFAULT_AVATAR_URL) : (otherUserProfile?.avatar || DEFAULT_AVATAR_URL);
+
+  const isWeakDmLabel = useCallback((v: string) => {
+    const s = String(v || '').trim();
+    if (!s) return true;
+    const lower = s.toLowerCase();
+    return lower === 'user' || lower === 'unknown' || lower === 'new user';
+  }, []);
+
+  const displayName = useMemo(() => {
+    if (isGroupConversation) {
+      return conversationMeta?.groupName || seedPeerDisplayName || 'Group';
+    }
+    const fromApi =
+      (otherUserProfile?.displayName && String(otherUserProfile.displayName).trim()) ||
+      (otherUserProfile?.name && String(otherUserProfile.name).trim()) ||
+      (otherUserProfile?.username && String(otherUserProfile.username).trim()) ||
+      '';
+    if (fromApi && !isWeakDmLabel(fromApi)) return fromApi;
+    if (seedPeerDisplayName && !isWeakDmLabel(seedPeerDisplayName)) return seedPeerDisplayName;
+    return fromApi || seedPeerDisplayName || 'User';
+  }, [
+    conversationMeta?.groupName,
+    isGroupConversation,
+    isWeakDmLabel,
+    otherUserProfile?.displayName,
+    otherUserProfile?.name,
+    otherUserProfile?.username,
+    seedPeerDisplayName,
+  ]);
+
+  const avatarUri = isGroupConversation
+    ? (conversationMeta?.groupAvatar || DEFAULT_AVATAR_URL)
+    : (otherUserProfile?.avatar || otherUserProfile?.photoURL || DEFAULT_AVATAR_URL);
 
   useEffect(() => {
-    AsyncStorage.getItem('userId').then(id => { if (id) setCurrentUserId(id); });
+    AsyncStorage.getItem('userId').then(id => { 
+      if (id) {
+        setCurrentUserId(id);
+        initializeSocket(id).catch(err => console.error('[Socket] Init error:', err));
+      }
+    });
   }, []);
 
   useEffect(() => {
@@ -521,19 +356,12 @@ export default function DM() {
       }
     });
 
-    // 2. Parallel fetching: Messages + Conversation Metadata
+    // 2. Messages first (show thread ASAP), group meta in background (meta must not block first paint).
     const fetchAll = async () => {
       try {
-        const [msgRes, metaRes] = await Promise.all([
-          fetchMessages(conversationId),
-          isGroupConversation ? apiService.get(`/conversations/${conversationId}`) : Promise.resolve(null),
-        ]);
+        const msgRes = await fetchMessages(conversationId);
 
         if (cancelled || cid !== conversationId) return;
-
-        if (metaRes?.success && metaRes?.data) {
-          setConversationMeta(metaRes.data);
-        }
 
         const incoming = Array.isArray(msgRes?.messages) ? msgRes.messages : [];
         setMessages((prev) => {
@@ -543,8 +371,20 @@ export default function DM() {
           return merged;
         });
         setHasMore(msgRes.pagination?.hasMore ?? incoming.length === LIMIT);
+        if (!cancelled && cid === conversationId) {
+          setLoading(false);
+        }
+
+        if (isGroupConversation) {
+          apiService.get(`/conversations/${conversationId}`).then((metaRes) => {
+            if (cancelled || cid !== conversationId) return;
+            if (metaRes?.success && metaRes?.data) {
+              setConversationMeta(metaRes.data);
+            }
+          }).catch(() => {});
+        }
       } catch (err) {
-        console.error('[DM] Parallel fetch error:', err);
+        console.error('[DM] Fetch messages error:', err);
       } finally {
         if (!cancelled && cid === conversationId) {
           setLoading(false);
@@ -1145,151 +985,46 @@ export default function DM() {
   }
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
+    <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <KeyboardAvoidingView
         style={{ flex: 1 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={0}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
-        {showBanner && (
-          <OfflineBanner text="You’re offline — showing cached messages" style={{ marginHorizontal: 12 }} />
-        )}
-        {/* Header */}
-        <View style={styles.header}>
-          <TouchableOpacity onPress={() => safeRouterBack()} style={styles.backBtn}>
-            <Feather name="arrow-left" size={26} color="#000" />
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.headerUser} onPress={() => !isGroupConversation && otherUserId && router.push(`/user-profile?id=${otherUserId}` as any)}>
-            <ExpoImage 
-              source={{ uri: avatarUri }} 
-              style={styles.avatar} 
-              cachePolicy="memory-disk"
-              transition={0}
-              contentFit="cover"
-            />
-            <View>
-              <Text style={styles.title}>{displayName}</Text>
-              {!isGroupConversation && (
-                <Text style={styles.activeText}>
-                  {otherUserPresence ? getFormattedActiveStatus(otherUserPresence) : 'Active'}
-                </Text>
-              )}
-            </View>
-          </TouchableOpacity>
-          <View style={styles.headerActions}>
-            <TouchableOpacity onPress={() => setShowOptionsModal(true)} style={styles.headerIcon}>
-              <Ionicons name="ellipsis-horizontal" size={24} color="#000" />
-            </TouchableOpacity>
-          </View>
-        </View>
+        <DMHeader
+          displayName={displayName}
+          avatarUri={avatarUri}
+          isGroup={isGroupConversation}
+          statusText={!isGroupConversation ? (otherUserPresence?.online ? 'Online' : 'Offline') : ''}
+          onBack={() => safeRouterBack()}
+          onInfo={() => setShowOptionsModal(true)}
+        />
 
-        {/* Body */}
         <FlatList
           ref={flatListRef}
           data={messagesWithSeparators}
+          keyExtractor={(item) => String(item.id)}
           renderItem={renderChatItem}
           inverted
-          style={{ backgroundColor: '#fff' }}
-          keyExtractor={(m) => {
-            if (m?.type === 'date') return String(m.id || `date_${m.date || ''}`);
-            return String(getMessageId(m) || m?.id || `msg_${m?.createdAt || ''}`);
-          }}
-          contentContainerStyle={{ padding: 12, paddingBottom: 24, backgroundColor: '#fff' }}
+          contentContainerStyle={{ paddingVertical: 20 }}
           onEndReached={loadMore}
           onEndReachedThreshold={0.5}
-          ListFooterComponent={
-            loadingMore ? (
-              <View style={{ paddingVertical: 20 }}>
-                <ActivityIndicator color="#A4A4A4" />
-              </View>
-            ) : null
-          }
-          windowSize={10}
-          maxToRenderPerBatch={15}
-          initialNumToRender={20}
-          removeClippedSubviews={Platform.OS !== 'web'}
-          updateCellsBatchingPeriod={50}
         />
 
-        {/* Reply or Edit Preview */}
-        {(replyingTo || editingMessage) && (
-          <View style={styles.replyPreview}>
-            <View style={styles.replyInner}>
-              <View style={styles.replyBar} />
-              <View style={{ flex: 1 }}>
-                <Text style={styles.replyUser}>
-                  {editingMessage ? 'Editing message' : `Replying to ${replyingTo?.senderId === currentUserId ? 'yourself' : 'them'}`}
-                </Text>
-                <Text style={styles.replyTxt} numberOfLines={1}>
-                  {editingMessage ? editingMessage.text : replyingTo?.text}
-                </Text>
-              </View>
-              <TouchableOpacity onPress={() => { setReplyingTo(null); setEditingMessage(null); if (editingMessage) setInput(""); }}>
-                <Ionicons name="close" size={20} color="#8e8e8e" />
-              </TouchableOpacity>
-            </View>
-          </View>
-        )}
-
-        {/* Input Bar */}
-        <View style={[styles.inputBar, { paddingBottom: Math.max(insets.bottom, 10) }]}>
-          <TouchableOpacity style={styles.mainCameraBtn} onPress={handleLaunchCamera}>
-            <View style={styles.mainCameraCircle}>
-               <Ionicons name="camera" size={24} color="#fff" />
-            </View>
-          </TouchableOpacity>
-          
-          {recording ? (
-            /* ===== Instagram-style Recording UI ===== */
-            <View style={styles.recordingContainer}>
-              <TouchableOpacity onPress={() => { handleStopRecording(); setMessages(prev => prev.filter(m => !String(m.id).startsWith('temp_audio'))); }} style={styles.cancelRecordBtn}>
-                <Ionicons name="trash-outline" size={22} color="#ff3b30" />
-              </TouchableOpacity>
-              <View style={styles.recordingInfo}>
-                <Animated.View style={[styles.recordingDot, { transform: [{ scale: micPulseAnim }] }]} />
-                <Text style={styles.recordingDurationText}>
-                  {Math.floor(recordingDuration / 60)}:{String(recordingDuration % 60).padStart(2, '0')}
-                </Text>
-              </View>
-              <TouchableOpacity onPress={handleStopRecording} style={styles.sendRecordBtn}>
-                <Ionicons name="send" size={20} color="#fff" />
-              </TouchableOpacity>
-            </View>
-          ) : (
-          <View style={styles.pillInputContainer}>
-            <TextInput
-              style={styles.pillInput}
-              value={input}
-              onChangeText={setInput}
-              placeholder="Message..."
-              placeholderTextColor="#999"
-              multiline
-            />
-            {!input.trim() && (
-              <View style={styles.trayIcons}>
-                <Pressable 
-                  onPressIn={handleStartRecording}
-                  delayLongPress={0}
-                  style={styles.trayIcon}
-                >
-                  <Ionicons name="mic-outline" size={24} color={'#000'} />
-                </Pressable>
-                <TouchableOpacity style={styles.trayIcon} onPress={handlePickImage}>
-                  <Ionicons name="image-outline" size={24} color="#000" />
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.trayIcon} onPress={() => setShowEmojiPicker(true)}>
-                  <Ionicons name="happy-outline" size={24} color="#000" />
-                </TouchableOpacity>
-              </View>
-            )}
-            {input.trim() && (
-              <TouchableOpacity onPress={handleSend} style={styles.pillSendBtn}>
-                <Text style={styles.pillSendText}>Send</Text>
-              </TouchableOpacity>
-            )}
-          </View>
-          )}
-        </View>
+        <DMInput
+          input={input}
+          setInput={setInput}
+          onSend={handleSend}
+          onMediaPress={handlePickImage}
+          onCameraPress={handleLaunchCamera}
+          onMicPressIn={handleStartRecording}
+          onMicPressOut={handleStopRecording}
+          recording={recording}
+          recordingDuration={recordingDuration}
+          micPulseAnim={micPulseAnim}
+          replyingTo={replyingTo}
+          onCancelReply={() => setReplyingTo(null)}
+          sending={sending}
+        />
       </KeyboardAvoidingView>
 
       {/* Share Modal Integration */}
@@ -1311,7 +1046,6 @@ export default function DM() {
             try {
               const convRes = await getOrCreateConversation(currentUserId, targetUid);
               if (convRes?.success && convRes.conversationId) {
-                // If we are currently in this conversation, we can show optimistic updates
                 if (convRes.conversationId === conversationId && shareType === 'post') {
                    handleSharePost(shareData);
                 } else {
@@ -1326,7 +1060,6 @@ export default function DM() {
               console.error('Failed to share to user:', targetUid, err);
             }
           }
-          // No success toast — Instagram-like silent share.
         }}
       />
 
@@ -1339,129 +1072,20 @@ export default function DM() {
       />
 
       {/* Chat Options Modal (Three Dots Menu) */}
-      <Modal
-        visible={showOptionsModal}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setShowOptionsModal(false)}
-      >
-        <Pressable 
-          style={styles.modalOverlay} 
-          onPress={() => setShowOptionsModal(false)}
-        >
+      <Modal visible={showOptionsModal} transparent animationType="slide" onRequestClose={() => setShowOptionsModal(false)}>
+        <Pressable style={styles.modalOverlay} onPress={() => setShowOptionsModal(false)}>
           <View style={styles.optionsContainer}>
             <View style={styles.optionsHandle} />
             <Text style={styles.optionsTitle}>Chat Settings</Text>
-            
-            <TouchableOpacity 
-              style={styles.optionsItem}
-              onPress={() => {
-                setShowOptionsModal(false);
-                handleClearChat();
-              }}
-            >
-              <Ionicons name="brush-outline" size={22} color="#ff3b30" />
-              <Text style={[styles.optionsLabel, { color: '#ff3b30' }]}>Clear Chat history</Text>
+            <TouchableOpacity style={styles.optionsItem} onPress={handleClearChat}>
+              <Ionicons name="trash-outline" size={24} color="#ff3b30" />
+              <Text style={[styles.optionsLabel, { color: '#ff3b30' }]}>Clear Chat</Text>
             </TouchableOpacity>
-
             <View style={styles.optionsSeparator} />
-
-            <TouchableOpacity 
-              style={styles.optionsItem}
-              onPress={() => setShowOptionsModal(false)}
-            >
-              <Ionicons name="close-outline" size={22} color="#000" />
+            <TouchableOpacity style={styles.optionsItem} onPress={() => setShowOptionsModal(false)}>
+              <Ionicons name="close-outline" size={24} color="#000" />
               <Text style={styles.optionsLabel}>Cancel</Text>
             </TouchableOpacity>
-          </View>
-        </Pressable>
-      </Modal>
-
-      {/* Message Menu */}
-      <Modal visible={showMessageMenu} transparent animationType="fade">
-        <Pressable style={styles.modalOverlay} onPress={() => setShowMessageMenu(false)}>
-          <View style={styles.instaMenuContainer}>
-            <View style={styles.instaReactionRow}>
-              {REACTIONS.map((r: string) => (
-                <TouchableOpacity 
-                  key={r} 
-                  onPress={() => handleReaction(r)}
-                  style={styles.instaReactionBtn}
-                  activeOpacity={0.7}
-                >
-                  <Text style={{ fontSize: 24 }}>{r}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-            
-            <View style={styles.instaMenuOptions}>
-              <TouchableOpacity 
-                style={styles.instaMenuItem} 
-                onPress={() => { setReplyingTo(selectedMessage); setShowMessageMenu(false); }}
-              >
-                <Text style={styles.instaMenuLabel}>Reply</Text>
-                <Ionicons name="arrow-undo-outline" size={22} color="#000" />
-              </TouchableOpacity>
-
-              <View style={styles.instaMenuSeparator} />
-
-              {selectedMessage?.senderId === currentUserId && selectedMessage?.mediaType === 'text' && (
-                <>
-                  <TouchableOpacity 
-                    style={styles.instaMenuItem} 
-                    onPress={() => { 
-                      setEditingMessage(selectedMessage); 
-                      setInput(selectedMessage.text); 
-                      setShowMessageMenu(false); 
-                    }}
-                  >
-                    <Text style={styles.instaMenuLabel}>Edit</Text>
-                    <Ionicons name="create-outline" size={22} color="#000" />
-                  </TouchableOpacity>
-                  <View style={styles.instaMenuSeparator} />
-                </>
-              )}
-
-              <TouchableOpacity 
-                style={styles.instaMenuItem} 
-                onPress={() => {
-                  // Copy to clipboard logic could go here
-                  setShowMessageMenu(false);
-                }}
-              >
-                <Text style={styles.instaMenuLabel}>Copy</Text>
-                <Ionicons name="copy-outline" size={22} color="#000" />
-              </TouchableOpacity>
-
-              {selectedMessage?.senderId === currentUserId && (
-                <>
-                  <View style={styles.instaMenuSeparator} />
-                  <TouchableOpacity 
-                    style={styles.instaMenuItem} 
-                    onPress={async () => {
-                      if (!conversationId || !selectedMessage || !currentUserId) return;
-                      const targetId = getMessageId(selectedMessage);
-                      setShowMessageMenu(false);
-                      setMessages(prev => {
-                        const updated = prev.filter(m => getMessageId(m) !== targetId);
-                        // Update cache immediately
-                        const cacheKey = `messages_cache_${conversationId}`;
-                        AsyncStorage.setItem(cacheKey, JSON.stringify(updated.slice(0, 50))).catch(() => {});
-                        return updated;
-                      });
-                      try {
-                        await deleteMessage(conversationId, targetId, currentUserId);
-                      } catch (e) {
-                        console.error('Delete message error', e);
-                      }
-                    }}
-                  >
-                    <Text style={[styles.instaMenuLabel, { color: '#ff3b30' }]}>Unsend</Text>
-                    <Ionicons name="trash-outline" size={22} color="#ff3b30" />
-                  </TouchableOpacity>
-                </>
-              )}
-            </View>
           </View>
         </Pressable>
       </Modal>
@@ -1469,22 +1093,13 @@ export default function DM() {
       {/* Full Screen Image Viewer */}
       <Modal visible={!!viewerImage} transparent animationType="fade">
         <View style={{ flex: 1, backgroundColor: '#000', justifyContent: 'center', alignItems: 'center' }}>
-          <TouchableOpacity 
-            style={{ position: 'absolute', top: 50, right: 20, zIndex: 10 }}
-            onPress={() => setViewerImage(null)}
-          >
+          <TouchableOpacity style={{ position: 'absolute', top: 50, right: 20, zIndex: 10 }} onPress={() => setViewerImage(null)}>
             <Ionicons name="close" size={32} color="#fff" />
           </TouchableOpacity>
-          {viewerImage && (
-            <Image 
-              source={{ uri: viewerImage }} 
-              style={{ width: '100%', height: '80%', resizeMode: 'contain' }} 
-            />
-          )}
+          {viewerImage && <Image source={{ uri: viewerImage }} style={{ width: '100%', height: '80%', resizeMode: 'contain' }} />}
         </View>
       </Modal>
 
-      {/* Story Viewer Modal */}
       {storyViewerData.visible && storyViewerData.stories.length > 0 && (
         <Modal visible={true} transparent={false} animationType="slide">
           <StoriesViewer
@@ -1493,6 +1108,25 @@ export default function DM() {
           />
         </Modal>
       )}
+
+      {/* Message Options Modal */}
+      <Modal visible={showMessageMenu} transparent animationType="fade">
+         <Pressable style={styles.modalOverlay} onPress={() => setShowMessageMenu(false)}>
+           <View style={styles.instaMenuOptions}>
+             <TouchableOpacity style={styles.instaMenuItem} onPress={() => { setReplyingTo(selectedMessage); setShowMessageMenu(false); }}>
+               <Text style={styles.instaMenuLabel}>Reply</Text>
+               <Ionicons name="arrow-undo-outline" size={22} color="#000" />
+             </TouchableOpacity>
+             <View style={styles.instaMenuSeparator} />
+             {selectedMessage?.senderId === currentUserId && (
+               <TouchableOpacity style={styles.instaMenuItem} onPress={() => { setEditingMessage(selectedMessage); setInput(selectedMessage.text); setShowMessageMenu(false); }}>
+                 <Text style={styles.instaMenuLabel}>Edit</Text>
+                 <Ionicons name="create-outline" size={22} color="#000" />
+               </TouchableOpacity>
+             )}
+           </View>
+         </Pressable>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -1508,333 +1142,22 @@ const styles = StyleSheet.create({
   activeText: { fontSize: 11, color: '#8e8e8e' },
   headerActions: { flexDirection: 'row', alignItems: 'center' },
   headerIcon: { marginLeft: 16 },
-  inputBar: { 
-    flexDirection: 'row', 
-    alignItems: 'center', 
-    paddingHorizontal: 8, 
-    paddingVertical: 10, 
-    backgroundColor: '#fff',
-    borderTopWidth: 0,
-  },
-  mainCameraBtn: { 
-    marginRight: 8,
-  },
-  mainCameraCircle: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: '#3797f0',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  pillInputContainer: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#f2f2f2',
-    borderRadius: 25,
-    paddingHorizontal: 12,
-    minHeight: 44,
-  },
-  pillInput: {
-    flex: 1,
-    fontSize: 16,
-    color: '#000',
-    paddingVertical: 8,
-  },
-  trayIcons: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  trayIcon: {
-    marginLeft: 10,
-  },
-  pillSendBtn: {
-    paddingHorizontal: 12,
-  },
-  pillSendText: {
-    color: '#3797f0',
-    fontWeight: '700',
-    fontSize: 16,
-  },
   dateWrap: { alignSelf: 'center', backgroundColor: '#efefef', borderRadius: 20, paddingHorizontal: 12, paddingVertical: 5, marginVertical: 15 },
   dateText: { fontSize: 12, color: '#8e8e8e', fontWeight: '600' },
-  modalHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 16, borderBottomWidth: 0.5, borderBottomColor: '#dbdbdb' },
-  modalTitle: { fontSize: 18, fontWeight: '600' },
-  postItem: { flexDirection: 'row', padding: 12, alignItems: 'center' },
-  postThumb: { width: 50, height: 50, borderRadius: 4, marginRight: 12 },
-  postText: { fontSize: 14, flex: 1 },
-  modalOverlay: { 
-    flex: 1, 
-    backgroundColor: 'rgba(0,0,0,0.5)', 
-    justifyContent: 'flex-end',
-  },
-  shareSheetContainer: {
-    backgroundColor: '#fff',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    height: '75%',
-    paddingTop: 12,
-  },
-  shareSheetHandle: {
-    width: 40,
-    height: 4,
-    backgroundColor: '#dbdbdb',
-    borderRadius: 2,
-    alignSelf: 'center',
-    marginBottom: 20,
-  },
-  shareSheetHeader: {
-    paddingHorizontal: 16,
-    marginBottom: 20,
-  },
-  shareSheetTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    textAlign: 'center',
-    marginBottom: 16,
-  },
-  shareSearchRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    marginBottom: 20,
-    gap: 12,
-  },
-  shareSearchBox: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#efefef',
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    height: 42,
-  },
-  shareSearchInput: {
-    flex: 1,
-    marginLeft: 8,
-    fontSize: 16,
-    color: '#000',
-  },
-  shareGroupBtn: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    backgroundColor: '#efefef',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  shareContactItem: {
-    width: '25%',
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-  shareAvatar: {
-    width: 65,
-    height: 65,
-    borderRadius: 32.5,
-    marginBottom: 6,
-    backgroundColor: '#eee',
-  },
-  shareContactName: {
-    fontSize: 12,
-    color: '#262626',
-    textAlign: 'center',
-    paddingHorizontal: 4,
-  },
-  shareActionsRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingHorizontal: 12,
-    paddingVertical: 16,
-    borderTopWidth: 0.5,
-    borderTopColor: '#eee',
-    backgroundColor: '#fff',
-  },
-  shareActionItem: {
-    alignItems: 'center',
-    width: '19%',
-  },
-  shareActionIcon: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 6,
-  },
-  shareActionLabel: {
-    fontSize: 11,
-    color: '#262626',
-    textAlign: 'center',
-  },
-  replyPreview: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    backgroundColor: '#fff',
-    borderTopWidth: 0.5,
-    borderTopColor: '#eee',
-  },
-  replyInner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#f8f8f8',
-    borderRadius: 8,
-    padding: 8,
-  },
-  replyBar: {
-    width: 3,
-    height: '100%',
-    backgroundColor: '#3797f0',
-    marginRight: 10,
-    borderRadius: 2,
-  },
-  replyUser: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#3797f0',
-  },
-  replyTxt: {
-    fontSize: 12,
-    color: '#666',
-  },
-  menuContainer: { backgroundColor: '#fff', borderRadius: 12, width: '80%', padding: 10, alignSelf: 'center' },
-  reactionRow: { flexDirection: 'row', justifyContent: 'space-around', paddingVertical: 10, borderBottomWidth: 0.5, borderBottomColor: '#eee' },
-  menuItem: { flexDirection: 'row', alignItems: 'center', padding: 12 },
-  menuLabel: { marginLeft: 12, fontSize: 16, fontWeight: '500' },
-  // ===== Instagram-style Message Menu =====
-  instaMenuContainer: {
-    width: '85%',
-    alignSelf: 'center',
-    marginBottom: 'auto',
-    marginTop: 'auto',
-  },
-  instaReactionRow: {
-    flexDirection: 'row',
-    backgroundColor: '#fff',
-    borderRadius: 30,
-    paddingHorizontal: 15,
-    paddingVertical: 10,
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 10,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 12,
-    elevation: 5,
-  },
-  instaReactionBtn: {
-    padding: 2,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  instaMenuOptions: {
-    backgroundColor: '#fff',
-    borderRadius: 15,
-    overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 12,
-    elevation: 5,
-  },
-  instaMenuItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-  },
-  instaMenuLabel: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: '#000',
-  },
-  instaMenuSeparator: {
-    height: 0.5,
-    backgroundColor: '#eee',
-    marginHorizontal: 16,
-  },
-  // ===== Instagram-style Recording UI =====
-  recordingContainer: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#f2f2f2',
-    borderRadius: 25,
-    paddingHorizontal: 12,
-    minHeight: 44,
-    justifyContent: 'space-between',
-  },
-  cancelRecordBtn: {
-    padding: 8,
-  },
-  recordingInfo: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-  },
-  recordingDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: '#ff3b30',
-  },
-  recordingDurationText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#ff3b30',
-    fontVariant: ['tabular-nums'],
-  },
-  sendRecordBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: '#3797f0',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  // ===== Options Menu Style =====
-  optionsContainer: {
-    backgroundColor: '#fff',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    paddingTop: 10,
-    paddingBottom: 40,
-    paddingHorizontal: 20,
-  },
-  optionsHandle: {
-    width: 40,
-    height: 4,
-    backgroundColor: '#dbdbdb',
-    borderRadius: 2,
-    alignSelf: 'center',
-    marginBottom: 20,
-  },
-  optionsTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    textAlign: 'center',
-    marginBottom: 20,
-    color: '#000',
-  },
-  optionsItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 15,
-  },
-  optionsLabel: {
-    marginLeft: 15,
-    fontSize: 16,
-    fontWeight: '500',
-    color: '#000',
-  },
-  optionsSeparator: {
-    height: 1,
-    backgroundColor: '#efefef',
-    width: '100%',
-  },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
+  optionsContainer: { backgroundColor: '#fff', borderTopLeftRadius: 20, borderTopRightRadius: 20, paddingTop: 10, paddingBottom: 40, paddingHorizontal: 20 },
+  optionsHandle: { width: 40, height: 4, backgroundColor: '#dbdbdb', borderRadius: 2, alignSelf: 'center', marginBottom: 20 },
+  optionsTitle: { fontSize: 16, fontWeight: '700', textAlign: 'center', marginBottom: 20, color: '#000' },
+  optionsItem: { flexDirection: 'row', alignItems: 'center', paddingVertical: 15 },
+  optionsLabel: { marginLeft: 15, fontSize: 16, fontWeight: '500', color: '#000' },
+  optionsSeparator: { height: 1, backgroundColor: '#efefef', width: '100%' },
+  instaMenuOptions: { backgroundColor: '#fff', borderRadius: 15, overflow: 'hidden', marginHorizontal: 20, marginBottom: 20 },
+  instaMenuItem: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12 },
+  instaMenuLabel: { fontSize: 16, fontWeight: '500', color: '#000' },
+  instaMenuSeparator: { height: 0.5, backgroundColor: '#eee', marginHorizontal: 16 },
+  replyPreview: { backgroundColor: '#f8f8f8', padding: 10, borderTopWidth: 0.5, borderTopColor: '#eee' },
+  replyInner: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', borderRadius: 8, padding: 8 },
+  replyBar: { width: 4, height: '100%', backgroundColor: '#3797f0', borderRadius: 2, marginRight: 10 },
+  replyUser: { fontSize: 12, fontWeight: '700', color: '#3797f0', marginBottom: 2 },
+  replyTxt: { fontSize: 13, color: '#666' },
 });

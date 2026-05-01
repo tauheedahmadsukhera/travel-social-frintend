@@ -1,7 +1,9 @@
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import React, { useEffect, useRef } from 'react';
-import { FlatList, Modal, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Dimensions, FlatList, Modal, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+
+const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import PostCard from './PostCard';
 
@@ -76,20 +78,30 @@ export default function PostViewerModal({
       return;
     }
     // Only run the initial positioning when the modal transitions from hidden -> visible.
-    if (wasVisible) return;
+    if (wasVisible || !visible) return;
     if (!flatListRef.current) return;
     if (!Array.isArray(posts) || posts.length === 0) return;
     if (selectedPostIndex < 0 || selectedPostIndex >= posts.length) return;
 
     targetIndexRef.current = selectedPostIndex;
-    didInitialScrollRef.current = true;
-    // Let layout settle, then jump without fighting user scroll.
-    requestAnimationFrame(() => {
+    
+    // Smooth initial scroll handling - slightly longer delay to ensure layout is ready
+    const timer = setTimeout(() => {
+      if (!flatListRef.current || didInitialScrollRef.current) return;
       try {
-        flatListRef.current?.scrollToIndex({ index: selectedPostIndex, animated: false });
-      } catch {}
-    });
-  }, [visible, selectedPostIndex, posts?.length]);
+        flatListRef.current.scrollToIndex({ 
+          index: selectedPostIndex, 
+          animated: false,
+          viewPosition: 0 
+        });
+        didInitialScrollRef.current = true;
+      } catch (e) {
+        // Fallback handled by onScrollToIndexFailed
+      }
+    }, 150);
+
+    return () => clearTimeout(timer);
+  }, [visible, selectedPostIndex]); // Removed posts.length dependency to avoid jumping during data updates
 
   return (
     <Modal
@@ -121,45 +133,34 @@ export default function PostViewerModal({
           data={posts}
           keyExtractor={(item, index) => String(item?.id || item?._id || index)}
           showsVerticalScrollIndicator={false}
-          // Instagram-like: don't auto-reset scroll after initial open.
           onScrollBeginDrag={() => {
             didInitialScrollRef.current = true;
           }}
-          // Best-effort: start close to target as early as possible.
-          initialScrollIndex={Math.max(0, Math.min(posts.length - 1, selectedPostIndex))}
-          initialNumToRender={3}
-          maxToRenderPerBatch={4}
+          // Continuous scrolling feels better for variable height posts
+          snapToAlignment="start"
+          decelerationRate="fast"
+          initialNumToRender={Math.min(posts.length, 5)}
+          maxToRenderPerBatch={3}
           windowSize={5}
-          updateCellsBatchingPeriod={40}
-          // iOS: keep offscreen cards mounted to avoid "reload" when scrolling back
           removeClippedSubviews={Platform.OS === 'android'}
           onScrollToIndexFailed={(info) => {
             if (!Array.isArray(posts) || posts.length === 0) return;
             const safeIndex = Math.max(0, Math.min(posts.length - 1, info.index));
+            // For variable height, we jump to an estimate and then try again.
             flatListRef.current?.scrollToOffset({
               offset: info.averageItemLength * safeIndex,
               animated: false,
             });
-            // Retry a couple of times; variable-height cards can fail on first layout.
             setTimeout(() => {
               try {
                 flatListRef.current?.scrollToIndex({ index: safeIndex, animated: false });
               } catch {}
-            }, 120);
-            setTimeout(() => {
-              try {
-                flatListRef.current?.scrollToIndex({
-                  index: targetIndexRef.current ?? safeIndex,
-                  animated: false,
-                });
-              } catch {}
-            }, 260);
+            }, 100);
           }}
           renderItem={({ item }) => (
             <PostCard
               post={item}
               currentUser={authUser}
-              // Let PostCard decide owner-ness (handles Mongo _id vs firebase uid)
               showMenu={true}
               inPostViewer
               onCommentPress={(pid, avatar) => {
@@ -169,7 +170,7 @@ export default function PostViewerModal({
               }}
             />
           )}
-          contentContainerStyle={{ paddingBottom: 40 + insets.bottom }}
+          contentContainerStyle={{ paddingBottom: insets.bottom }}
         />
       </View>
     </Modal>

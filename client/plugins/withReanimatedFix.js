@@ -1,4 +1,4 @@
-const { withMainActivity } = require('@expo/config-plugins');
+const { withMainActivity } = require('expo/config-plugins');
 
 /**
  * Config plugin to ensure Reanimated and GestureHandler are properly initialized

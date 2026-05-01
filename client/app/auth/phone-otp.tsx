@@ -1,10 +1,11 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
-import { Alert, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Alert, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { logAnalyticsEvent } from '../../lib/analytics';
 import { AuthBrandHeader } from '@/src/_components/auth/AuthBrandHeader';
+import { AuthKeyboardScroll } from '@/src/_components/auth/AuthKeyboardScroll';
 import CustomButton from '@/src/_components/auth/CustomButton';
 import { safeRouterBack } from '@/lib/safeRouterBack';
 
@@ -102,16 +103,8 @@ export default function PhoneOTPScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
-      <KeyboardAvoidingView 
-        style={{ flex: 1 }} 
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      >
-        <ScrollView 
-          contentContainerStyle={styles.scrollContent}
-          showsVerticalScrollIndicator={false}
-          keyboardShouldPersistTaps="handled"
-        >
+    <SafeAreaView style={styles.container} edges={['top']}>
+      <AuthKeyboardScroll contentContainerStyle={styles.scrollContent}>
           
           <View style={styles.content}>
             {/* Header */}
@@ -159,6 +152,7 @@ export default function PhoneOTPScreen() {
                     keyboardType="number-pad"
                     maxLength={index === 0 ? 6 : 1}
                     selectTextOnFocus
+                    autoCorrect={false}
                   />
                 ))}
               </View>
@@ -180,8 +174,7 @@ export default function PhoneOTPScreen() {
               <Text style={styles.resendLink}>Resend</Text>
             </TouchableOpacity>
           </View>
-        </ScrollView>
-      </KeyboardAvoidingView>
+      </AuthKeyboardScroll>
     </SafeAreaView>
   );
 }

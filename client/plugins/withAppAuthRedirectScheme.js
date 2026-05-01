@@ -1,4 +1,4 @@
-const { withAppBuildGradle } = require('@expo/config-plugins');
+const { withAppBuildGradle } = require('expo/config-plugins');
 
 const REDIRECT_SCHEME = 'trave-social';
 

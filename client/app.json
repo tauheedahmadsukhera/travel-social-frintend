@@ -2,21 +2,19 @@
   "expo": {
     "name": "Trips",
     "slug": "trave-social",
-    "version": "1.0.9",
+    "version": "1.1.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "trave-social",
     "userInterfaceStyle": "light",
     "android": {
-      "versionCode": 109,
-      "versionName": "1.0.9",
+      "versionCode": 112,
       "adaptiveIcon": {
         "backgroundColor": "#FFFFFF",
         "foregroundImage": "./assets/images/icon.png",
         "monochromeImage": "./assets/images/icon.png"
       },
-      "softwareKeyboardLayoutMode": "pan",
-      "predictiveBackGestureEnabled": false,
+      "softwareKeyboardLayoutMode": "resize",
       "package": "com.tauhee56.travesocial",
       "googleServicesFile": "./google-services.json",
       "permissions": [
@@ -24,9 +22,7 @@
         "android.permission.RECORD_AUDIO",
         "android.permission.ACCESS_FINE_LOCATION",
         "android.permission.ACCESS_COARSE_LOCATION",
-        "android.permission.ACCESS_BACKGROUND_LOCATION",
         "android.permission.FOREGROUND_SERVICE",
-        "android.permission.FOREGROUND_SERVICE_LOCATION",
         "android.permission.POST_NOTIFICATIONS",
         "android.permission.INTERNET",
         "android.permission.WAKE_LOCK"
@@ -40,7 +36,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.tauhee56.travesocial",
-      "buildNumber": "1.0.20",
+      "buildNumber": "20",
       "googleServicesFile": "./GoogleService-Info.plist",
       "config": {
         "googleMapsApiKey": "AIzaSyCQ1Fe55xOwt9fFfAiGIDVoEt01i2hL-zs"
@@ -49,13 +45,11 @@
         "ITSAppUsesNonExemptEncryption": false,
         "NSCameraUsageDescription": "Allow Trips to access your camera for posting photos and live streaming.",
         "NSMicrophoneUsageDescription": "Allow Trips to access your microphone for live streaming.",
-        "NSPhotoLibraryUsageDescription": "Allow Trips to access your photos for posting.",
-        "NSLocationWhenInUseUsageDescription": "Allow Trips to use your location for map features and location tagging.",
-        "NSLocationAlwaysAndWhenInUseUsageDescription": "Allow Trips to track your travels to create passport stamps.",
-        "NSLocationAlwaysUsageDescription": "Allow Trips to track your travels even when the app is closed to create passport stamps.",
+        "NSPhotoLibraryUsageDescription": "Allow Trips to access your photo library so you can select and upload photos to share in your travel posts, stories, and profile picture.",
+        "NSLocationWhenInUseUsageDescription": "Allow Trips to use your location for maps, location tagging, and passport suggestions while you use the app.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "Allow Trips to use your location while you are using the app for maps, tagging, and passport suggestions.",
+        "NSLocationAlwaysUsageDescription": "Trips uses your location only while you are using the app for maps and passport suggestions.",
         "UIBackgroundModes": [
-          "audio",
-          "location",
           "remote-notification"
         ]
       },
@@ -124,11 +118,12 @@
       [
         "expo-location",
         {
-          "locationAlwaysAndWhenInUsePermission": "Allow $(PRODUCT_NAME) to track your travels to create passport stamps.",
-          "locationAlwaysPermission": "Allow $(PRODUCT_NAME) to track your travels even when the app is closed to create passport stamps.",
-          "locationWhenInUsePermission": "Allow $(PRODUCT_NAME) to use your location for map features and location tagging.",
-          "isAndroidBackgroundLocationEnabled": true,
-          "isAndroidForegroundServiceEnabled": true
+          "locationAlwaysAndWhenInUsePermission": "Allow $(PRODUCT_NAME) to use your location while you use the app for maps, tagging, and passport suggestions.",
+          "locationAlwaysPermission": "$(PRODUCT_NAME) uses your location only while you are using the app.",
+          "locationWhenInUsePermission": "Allow $(PRODUCT_NAME) to use your location for maps, tagging, and passport suggestions while you use the app.",
+          "isIosBackgroundLocationEnabled": false,
+          "isAndroidBackgroundLocationEnabled": false,
+          "isAndroidForegroundServiceEnabled": false
         }
       ],
       [
@@ -152,9 +147,9 @@
       "analyticsEnabled": true,
       "dailyCounterSampleRate": 0.05,
       "eas": {
-        "projectId": "acd24cff-c209-4589-86fa-508a00859191"
+        "projectId": "3ab87f13-3f1d-487a-8ff7-0374f04f7aa3"
       }
     },
-    "owner": "tauheeddev56"
+    "owner": "tauhee56"
   }
 }

@@ -1,5 +1,5 @@
 // Expo config plugin to enable Android Picture-in-Picture
-const { withAndroidManifest } = require('@expo/config-plugins');
+const { withAndroidManifest } = require('expo/config-plugins');
 
 module.exports = function withAndroidPip(config) {
   return withAndroidManifest(config, (config) => {

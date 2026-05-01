@@ -16,6 +16,8 @@ import { UserProvider } from "@/src/_components/UserContext";
 import { Audio } from 'expo-av';
 import { disconnectSocket, getSocket, initializeSocket } from '@/src/_services/socketService';
 import { AppDialogProvider } from '@/src/_components/AppDialogProvider';
+// Load location service (foreground passport checks + optional TaskManager shim)
+import '../services/locationService';
 
 let setupNotificationListeners: any = () => {};
 let initializeBackend: any = () => Promise.resolve();

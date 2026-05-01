@@ -71,20 +71,23 @@ interface Props {
 export default function SaveToCollectionModal({ visible, onClose, postId, postImageUrl, currentUserId, onSaveChange, initialGloballySaved = true, onCollectionCreated }: Props) {
     const insets = useSafeAreaInsets();
     const sheetTranslateY = useRef(new Animated.Value(0)).current;
+    // Ref so PanResponder (created once) always calls the latest close handler
+    const handleModalCloseRef = useRef<() => void>(() => {});
     const sheetPanResponder = useRef(
         PanResponder.create({
-            onStartShouldSetPanResponder: () => false,
+            onStartShouldSetPanResponder: () => true,
             onMoveShouldSetPanResponder: (_evt, gesture) => {
-                return gesture.dy > 10 && Math.abs(gesture.dy) > Math.abs(gesture.dx);
+                return gesture.dy > 8 && Math.abs(gesture.dy) > Math.abs(gesture.dx);
             },
             onPanResponderMove: (_evt, gesture) => {
                 if (gesture.dy > 0) sheetTranslateY.setValue(gesture.dy);
             },
             onPanResponderRelease: (_evt, gesture) => {
-                const shouldClose = gesture.dy > 120;
+                const shouldClose = gesture.dy > 100 || gesture.vy > 0.5;
                 if (shouldClose) {
-                    Animated.timing(sheetTranslateY, { toValue: 0, duration: 120, useNativeDriver: true }).start(() => {
-                        onClose();
+                    Animated.timing(sheetTranslateY, { toValue: SCREEN_H, duration: 200, useNativeDriver: true }).start(() => {
+                        sheetTranslateY.setValue(0);
+                        handleModalCloseRef.current();
                     });
                 } else {
                     Animated.spring(sheetTranslateY, { toValue: 0, useNativeDriver: true, damping: 22, stiffness: 220 }).start();
@@ -140,6 +143,23 @@ export default function SaveToCollectionModal({ visible, onClose, postId, postIm
             Animated.timing(toastAnim, { toValue: 0, duration: 300, useNativeDriver: true }),
         ]).start(() => setToast({ visible: false, message: '' }));
     };
+
+    // Close handler that syncs the final save state before dismissing
+    const handleModalClose = useCallback(() => {
+        const inAnyCollection = collections.some(c => c.postIds?.includes(postId));
+        const finalSaved = isGloballySaved || inAnyCollection;
+        onSaveChange?.(finalSaved);
+        // Smooth slide-down before closing
+        Animated.timing(sheetTranslateY, { toValue: SCREEN_H, duration: 250, useNativeDriver: true }).start(() => {
+            sheetTranslateY.setValue(0);
+            onClose();
+        });
+    }, [collections, postId, isGloballySaved, onSaveChange, onClose, sheetTranslateY]);
+
+    // Keep ref updated so PanResponder always calls the latest version
+    useEffect(() => {
+        handleModalCloseRef.current = handleModalClose;
+    }, [handleModalClose]);
 
     // Load canonical userId once on mount
     useEffect(() => {
@@ -248,28 +268,35 @@ export default function SaveToCollectionModal({ visible, onClose, postId, postIm
             setAllowedUsers([]);
             setTempSelectedCollaborators([]);
             setTempSelectedGroups([]);
+            // Only sync initialGloballySaved on fresh open, not when it changes mid-session
             setIsGloballySaved(initialGloballySaved);
             didAutoGlobalSaveRef.current = false;
             loadCollections();
             loadGroups();
         }
-    }, [visible, initialGloballySaved, loadCollections, loadGroups]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [visible, loadCollections, loadGroups]);
 
-    // Auto-save to "All" ONLY if post is not in any collection.
-    // This matches expected behavior:
-    // - If user already added it to another collection, opening modal should NOT re-save to All.
+    // Auto-save to "All" ONLY once when modal opens and post is not saved anywhere.
+    // Uses a ref to read isGloballySaved so changes to it don't re-trigger this effect.
+    const isGloballySavedRef = useRef(isGloballySaved);
+    isGloballySavedRef.current = isGloballySaved;
+
     useEffect(() => {
         if (!visible) return;
         if (!currentUid) return;
         if (!postId) return;
         if (didAutoGlobalSaveRef.current) return;
-        if (isGloballySaved) return;
         if (loadingCollections) return;
 
+        // Mark as handled FIRST so this never runs again during this session
+        didAutoGlobalSaveRef.current = true;
+
+        // If already saved globally or in any collection, skip
+        if (isGloballySavedRef.current) return;
         const inAnyCollection = collections.some(c => c.postIds?.includes(postId));
         if (inAnyCollection) return;
 
-        didAutoGlobalSaveRef.current = true;
         (async () => {
             try {
                 await apiService.post(`/users/${currentUid}/saved`, { postId });
@@ -277,11 +304,11 @@ export default function SaveToCollectionModal({ visible, onClose, postId, postIm
                 showToast('Saved to All');
                 syncGlobalState(true, collections);
             } catch (e) {
-                // If it fails, don't spam retries in same open session
                 console.error('[SaveToCollectionModal] auto global save error', e);
             }
         })();
-    }, [visible, currentUid, postId, isGloballySaved, loadingCollections, collections]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [visible, currentUid, postId, loadingCollections, collections]);
 
     // ── Actions ───────────────────────────────────────────────────────────────
 
@@ -451,7 +478,7 @@ export default function SaveToCollectionModal({ visible, onClose, postId, postIm
         Keyboard.dismiss();
         if (screen === 'new') setScreen('list');
         else if (screen === 'visibility' || screen === 'invite') setScreen('new');
-        else onClose();
+        else handleModalClose();
     };
 
     // ── Render helpers ────────────────────────────────────────────────────────
@@ -542,7 +569,7 @@ export default function SaveToCollectionModal({ visible, onClose, postId, postIm
                 title="Collection"
                 leftLabel="Cancel"
                 rightLabel="New collection"
-                onLeft={onClose}
+                onLeft={handleModalClose}
                 onRight={goToNew}
             />
 
@@ -817,7 +844,7 @@ export default function SaveToCollectionModal({ visible, onClose, postId, postIm
         <Modal
             visible={visible}
             transparent
-            animationType="slide"
+            animationType="fade"
             onRequestClose={goBack}
             statusBarTranslucent
             presentationStyle="overFullScreen"
@@ -825,7 +852,7 @@ export default function SaveToCollectionModal({ visible, onClose, postId, postIm
             <TouchableWithoutFeedback
                 onPress={() => {
                     Keyboard.dismiss();
-                    onClose();
+                    handleModalClose();
                 }}
             >
                 <View style={styles.backdrop} />
@@ -843,11 +870,12 @@ export default function SaveToCollectionModal({ visible, onClose, postId, postIm
                         { paddingBottom: insets.bottom + 8 },
                         { transform: [{ translateY: sheetTranslateY }] },
                     ]}
-                    {...sheetPanResponder.panHandlers}
                 >
                     <KeyboardBackground />
-                    {/* Drag handle */}
-                    <View style={styles.dragHandle} />
+                    {/* Drag handle area – swipe down to close */}
+                    <View {...sheetPanResponder.panHandlers} style={styles.dragHandleArea}>
+                        <View style={styles.dragHandle} />
+                    </View>
 
                     <View style={{ flex: 1 }}>
                         {screen === 'list' && renderList()}
@@ -890,14 +918,18 @@ const styles = StyleSheet.create({
         minHeight: 450,
         overflow: 'hidden',
     },
+    dragHandleArea: {
+        width: '100%',
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingTop: 8,
+        paddingBottom: 8,
+    },
     dragHandle: {
         width: 36,
         height: 4,
         borderRadius: 2,
         backgroundColor: '#ddd',
-        alignSelf: 'center',
-        marginTop: 10,
-        marginBottom: 2,
     },
 
     // Header

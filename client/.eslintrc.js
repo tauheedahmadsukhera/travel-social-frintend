@@ -13,5 +13,20 @@ module.exports = {
     'admin/**',
     'functions/**',
     '**/*.generated.ts',
+    'android/**',
+    'ios/**',
+  ],
+  overrides: [
+    {
+      files: ['scripts/**/*.js', '*.js', '__tests__/**/*.js', 'jest.setup.js'],
+      env: {
+        node: true,
+        jest: true,
+      },
+      rules: {
+        'no-undef': 'off',
+        'expo/no-dynamic-env-var': 'off',
+      },
+    },
   ],
 };

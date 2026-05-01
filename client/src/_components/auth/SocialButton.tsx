@@ -20,9 +20,9 @@ const providerConfig = {
 	apple: {
 		icon: 'logo-apple' as keyof typeof Ionicons.glyphMap,
 		label: 'Continue with Apple',
-		bgColor: '#fff',
-		textColor: '#000',
-		iconColor: '#000',
+		bgColor: '#000',
+		textColor: '#fff',
+		iconColor: '#fff',
 	},
 	tiktok: {
 		icon: 'logo-tiktok' as keyof typeof Ionicons.glyphMap,

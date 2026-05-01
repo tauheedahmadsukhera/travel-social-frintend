@@ -93,6 +93,13 @@ export default function SignUpOptionsScreen() {
             />
           </View>
 
+          {/* EULA Text */}
+          <Text style={{ fontSize: 12, color: '#666', textAlign: 'center', marginBottom: 12, marginTop: -5 }}>
+            By signing up, you agree to our{' '}
+            <Text style={{ fontWeight: '600' }} onPress={() => router.push('/legal/terms' as any)}>Terms of Service</Text> and{' '}
+            <Text style={{ fontWeight: '600' }} onPress={() => router.push('/legal/privacy' as any)}>Privacy Policy</Text>.
+          </Text>
+
           {/* Social Login Options */}
           <View style={styles.socialContainer}>
             <SocialButton

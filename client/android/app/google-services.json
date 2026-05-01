@@ -38,11 +38,27 @@
           }
         },
         {
+          "client_id": "709095117662-8ocptpcqnjs79lghd2v7vns0g5k36496.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.tauhee56.travesocial",
+            "certificate_hash": "b867d629a8d732c5c1a3d87385da2e7e12765c97"
+          }
+        },
+        {
           "client_id": "709095117662-cj4grphit49l58bsvmain83hfilj61ue.apps.googleusercontent.com",
           "client_type": 1,
           "android_info": {
             "package_name": "com.tauhee56.travesocial",
             "certificate_hash": "6e7cdb2b1cb12267d7660e053f60e5934ff64ba2"
+          }
+        },
+        {
+          "client_id": "709095117662-desc1jf4gfnb1gd9ppdlerf18vsek0n0.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.tauhee56.travesocial",
+            "certificate_hash": "714df1214d169f82ade8a427a21eb7d1f6df5071"
           }
         },
         {

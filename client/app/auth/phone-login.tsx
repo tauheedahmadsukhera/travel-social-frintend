@@ -1,9 +1,10 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
-import { Alert, FlatList, KeyboardAvoidingView, Modal, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Alert, FlatList, Modal, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { AuthBrandHeader } from '@/src/_components/auth/AuthBrandHeader';
+import { AuthKeyboardScroll } from '@/src/_components/auth/AuthKeyboardScroll';
 import CustomButton from '@/src/_components/auth/CustomButton';
 import SocialButton from '@/src/_components/auth/SocialButton';
 import { safeRouterBack } from '@/lib/safeRouterBack';
@@ -164,16 +165,8 @@ export default function PhoneLoginScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      >
-        <ScrollView
-          contentContainerStyle={styles.scrollContent}
-          showsVerticalScrollIndicator={false}
-          keyboardShouldPersistTaps="handled"
-        >
+    <SafeAreaView style={styles.container} edges={['top']}>
+      <AuthKeyboardScroll contentContainerStyle={styles.scrollContent}>
           <View style={styles.content}>
             {/* Header */}
             <View style={styles.header}>
@@ -209,6 +202,8 @@ export default function PhoneLoginScreen() {
                   value={phoneNumber}
                   onChangeText={setPhoneNumber}
                   keyboardType="phone-pad"
+                  autoCorrect={false}
+                  spellCheck={false}
                 />
               </View>
             </View>
@@ -230,6 +225,8 @@ export default function PhoneLoginScreen() {
                   onChangeText={setPassword}
                   secureTextEntry={!showPassword}
                   autoCapitalize="none"
+                  autoCorrect={false}
+                  spellCheck={false}
                 />
                 <TouchableOpacity
                   style={styles.eyeIcon}
@@ -325,8 +322,7 @@ export default function PhoneLoginScreen() {
               </Text>
             </View>
           </View>
-        </ScrollView>
-      </KeyboardAvoidingView>
+      </AuthKeyboardScroll>
     </SafeAreaView>
   );
 }

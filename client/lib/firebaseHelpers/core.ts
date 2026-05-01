@@ -905,7 +905,9 @@ export async function createPost(
   mentions?: string[],
   visibility: string = 'Everyone',
   allowedFollowers: string[] = [],
-  postType: string = 'post'
+  postType: string = 'post',
+  thumbnailUrlRaw?: string,
+  aspectRatio?: number
 ) {
   try {
     const normalizeLocationKey = (val: any) => String(val || '').trim().toLowerCase();
@@ -960,7 +962,17 @@ export async function createPost(
 
     const locationKeys = buildLocationKeys();
 
-    const payload = {
+    let uploadedThumbnailUrl = '';
+    if (thumbnailUrlRaw) {
+      try {
+        const thumbUpload = await uploadMedia(thumbnailUrlRaw, 'image');
+        uploadedThumbnailUrl = thumbUpload?.url || '';
+      } catch (e) {
+        console.warn('Failed to upload thumbnail:', e);
+      }
+    }
+
+    const payload: any = {
       userId,
       content: caption || ' ',  // Backend expects 'content' field (use space if empty)
       caption: caption || ' ',  // Also send caption for compatibility
@@ -977,7 +989,11 @@ export async function createPost(
       type: postType,
       allowedFollowers: allowedFollowers.length > 0 ? allowedFollowers : undefined,
       isPrivate: allowedFollowers.length > 0,  // mark as private when group is selected
+      aspectRatio,
     };
+    if (uploadedThumbnailUrl) {
+      payload.thumbnailUrl = uploadedThumbnailUrl;
+    }
 
     console.log('[createPost] Posting to /posts with payload:', payload);
     const res = await apiService.post('/posts', payload);
@@ -1297,10 +1313,12 @@ export default {
 // ============= SEARCH & REGIONS =============
 export async function getRegions() {
   try {
-    // Return static regions with local names that will be mapped to assets
-    // Keep in sync with client/app/search-modal.tsx defaultRegions + country/region/city asset maps.
-    // section: 'country' | 'region' | 'city' — controls which row the card appears in.
-    // regionKey: REST Countries region slug for big regions: americas | europe | africa | asia | oceania
+    const response = await apiService.get('/public/regions');
+    if (response && response.success && Array.isArray(response.data) && response.data.length > 0) {
+      return { success: true, data: response.data };
+    }
+    
+    // Static fallback list for offline / first-run
     const regions = [
       // COUNTRIES
       { id: 'united-states', name: 'United States', image: 'United States', section: 'country' },

@@ -1,6 +1,7 @@
 import { Dimensions, Platform, StatusBar } from 'react-native';
 
-const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const { height: SCREEN_HEIGHT } = Dimensions.get('screen');
 
 /**
  * Get safe screen dimensions accounting for notches, status bar, etc.

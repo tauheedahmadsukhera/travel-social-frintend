@@ -3,9 +3,6 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import {
   Alert,
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -15,6 +12,7 @@ import {
 import { safeRouterBack } from '@/lib/safeRouterBack';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { AuthBrandHeader } from '@/src/_components/auth/AuthBrandHeader';
+import { AuthKeyboardScroll } from '@/src/_components/auth/AuthKeyboardScroll';
 import CustomButton from '@/src/_components/auth/CustomButton';
 import { API_BASE_URL } from '../../lib/api';
 
@@ -74,15 +72,8 @@ export default function ResetPasswordScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      >
-        <ScrollView
-          contentContainerStyle={styles.scrollContent}
-          keyboardShouldPersistTaps="handled"
-        >
+    <SafeAreaView style={styles.container} edges={['top']}>
+      <AuthKeyboardScroll contentContainerStyle={styles.scrollContent}>
           <View style={styles.content}>
             <TouchableOpacity onPress={() => safeRouterBack()} style={styles.backButton}>
               <Ionicons name="arrow-back" size={24} color="#000" />
@@ -106,6 +97,8 @@ export default function ResetPasswordScreen() {
                   onChangeText={setCode}
                   keyboardType="number-pad"
                   maxLength={6}
+                  autoCorrect={false}
+                  spellCheck={false}
                 />
               </View>
             </View>
@@ -120,6 +113,8 @@ export default function ResetPasswordScreen() {
                   value={password}
                   onChangeText={setPassword}
                   secureTextEntry
+                  autoCorrect={false}
+                  spellCheck={false}
                 />
               </View>
             </View>
@@ -134,6 +129,8 @@ export default function ResetPasswordScreen() {
                   value={confirmPassword}
                   onChangeText={setConfirmPassword}
                   secureTextEntry
+                  autoCorrect={false}
+                  spellCheck={false}
                 />
               </View>
             </View>
@@ -146,8 +143,7 @@ export default function ResetPasswordScreen() {
               style={{ marginTop: 20 }}
             />
           </View>
-        </ScrollView>
-      </KeyboardAvoidingView>
+      </AuthKeyboardScroll>
     </SafeAreaView>
   );
 }

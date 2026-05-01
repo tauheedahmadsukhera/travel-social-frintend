@@ -1,11 +1,12 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
-import { ActivityIndicator, Alert, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { handleSocialAuthResult, signInWithApple, signInWithGoogle, signInWithSnapchat, signInWithTikTok } from '../../services/socialAuthService';
 import { loginWithUsername } from '../../services/usernameAuthService';
 import { AuthBrandHeader } from '@/src/_components/auth/AuthBrandHeader';
+import { AuthKeyboardScroll } from '@/src/_components/auth/AuthKeyboardScroll';
 import CustomButton from '@/src/_components/auth/CustomButton';
 import SocialButton from '@/src/_components/auth/SocialButton';
 import { safeRouterBack } from '@/lib/safeRouterBack';
@@ -47,17 +48,9 @@ export default function UsernameLoginScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      >
-        <ScrollView
-          contentContainerStyle={styles.scrollContent}
-          showsVerticalScrollIndicator={false}
-          keyboardShouldPersistTaps="handled"
-        >
-          <View style={styles.content}>
+    <SafeAreaView style={styles.container} edges={['top']}>
+      <AuthKeyboardScroll contentContainerStyle={styles.scrollContent}>
+        <View style={styles.content}>
             {/* Header */}
             <View style={styles.header}>
               <TouchableOpacity
@@ -83,6 +76,8 @@ export default function UsernameLoginScreen() {
                 value={username}
                 onChangeText={setUsername}
                 autoCapitalize="none"
+                autoCorrect={false}
+                spellCheck={false}
               />
             </View>
 
@@ -138,8 +133,7 @@ export default function UsernameLoginScreen() {
               </Text>
             </View>
           </View>
-        </ScrollView>
-      </KeyboardAvoidingView>
+      </AuthKeyboardScroll>
     </SafeAreaView>
   );
 }

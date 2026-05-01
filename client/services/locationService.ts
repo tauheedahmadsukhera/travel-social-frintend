@@ -3,9 +3,9 @@ import * as Notifications from 'expo-notifications';
 import * as TaskManager from 'expo-task-manager';
 import apiService from '@/src/_services/apiService';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { AppState, NativeEventSubscription } from 'react-native';
 
 const LOCATION_TASK_NAME = 'background-location-task';
-const MAJOR_CITIES_THRESHOLD = 100000; // Population threshold for major cities
 
 // Configure notifications
 Notifications.setNotificationHandler({
@@ -13,6 +13,8 @@ Notifications.setNotificationHandler({
     shouldShowAlert: true,
     shouldPlaySound: true,
     shouldSetBadge: true,
+    shouldShowBanner: true,
+    shouldShowList: true,
   } as any),
 });
 
@@ -24,29 +26,17 @@ interface LocationData {
   timestamp: number;
 }
 
-interface PassportTicket {
-  id: string;
-  city: string;
-  country: string;
-  countryCode: string;
-  latitude: number;
-  longitude: number;
-  visitDate: number;
-  imageUrl?: string;
-  notes?: string;
-}
-
-// Store last known location to avoid duplicate notifications
-let lastKnownCity: string | null = null;
-let lastKnownCountry: string | null = null;
-
-// Dedupe "passport suggestion" notifications (same place/city/country)
-// across frequent location updates and task re-runs.
+// Dedupe "passport suggestion" notifications
 let lastPassportNotifKey: string | null = null;
 let lastPassportNotifAt = 0;
 
 const PASSPORT_NOTIF_COOLDOWN_MS = 6 * 60 * 60 * 1000; // 6 hours
 const PASSPORT_NOTIF_STORAGE_KEY = 'passport_last_suggestion_notif_v1';
+const FG_GEO_MIN_MS = 120_000; // throttle while app foreground (2 min)
+
+let lastForegroundGeoAt = 0;
+let appStateSubscription: NativeEventSubscription | null = null;
+let foregroundTrackingUserId: string | null = null;
 
 function buildPassportNotifKey(userId: string, suggestion: any, city: string, country: string): string {
   const t = String(suggestion?.type || 'unknown');
@@ -91,7 +81,7 @@ function getBestLocationLabel(mainSuggestion?: any, city?: string, country?: str
 }
 
 /**
- * Request location permissions
+ * When-in-use / foreground-only location (no Always / no background plist).
  */
 export async function requestLocationPermissions(): Promise<boolean> {
   try {
@@ -102,14 +92,7 @@ export async function requestLocationPermissions(): Promise<boolean> {
       return false;
     }
 
-    const { status: backgroundStatus } = await Location.requestBackgroundPermissionsAsync();
-
-    if (backgroundStatus !== 'granted') {
-      console.log('⚠️ Background location permission denied');
-      return false;
-    }
-
-    console.log('✅ Location permissions granted');
+    console.log('✅ Location permission granted (while using app)');
     return true;
   } catch (error) {
     console.error('❌ Error requesting location permissions:', error);
@@ -117,9 +100,35 @@ export async function requestLocationPermissions(): Promise<boolean> {
   }
 }
 
-/**
- * Request notification permissions
- */
+// Legacy background task keeps TaskManager wiring safe on older installs; not started anymore.
+TaskManager.defineTask(LOCATION_TASK_NAME, async ({ data, error }: any) => {
+  if (error) {
+    console.error('❌ Background location error:', error);
+    return;
+  }
+
+  if (data) {
+    const locations = Array.isArray((data as any)?.locations) ? (data as any).locations : [];
+    const location = locations[0];
+
+    if (location && location.coords) {
+      try {
+        const AsyncStorageSync = require('@react-native-async-storage/async-storage').default;
+        const userId = await AsyncStorageSync.getItem('userId');
+        if (userId) {
+          await processLocationUpdate(
+            userId,
+            location.coords.latitude,
+            location.coords.longitude
+          );
+        }
+      } catch (err) {
+        console.error('❌ Background task processing error:', err);
+      }
+    }
+  }
+});
+
 export async function requestNotificationPermissions(): Promise<boolean> {
   try {
     const { status } = await Notifications.requestPermissionsAsync();
@@ -137,9 +146,6 @@ export async function requestNotificationPermissions(): Promise<boolean> {
   }
 }
 
-/**
- * Reverse geocode coordinates to get city, country, and specific place (POI)
- */
 export async function reverseGeocode(latitude: number, longitude: number): Promise<{
   city: string;
   country: string;
@@ -151,12 +157,12 @@ export async function reverseGeocode(latitude: number, longitude: number): Promi
     const results = await Location.reverseGeocodeAsync({ latitude, longitude });
 
     if (results && results.length > 0) {
-      const location = results[0];
-      const city = location.city || location.subregion || location.region || 'Unknown City';
-      const country = location.country || 'Unknown Country';
-      const countryCode = location.isoCountryCode || 'XX';
-      const placeFromName = isReadableLocationLabel(location.name) ? String(location.name).trim() : undefined;
-      const placeFromStreet = isReadableLocationLabel(location.street) ? String(location.street).trim() : undefined;
+      const loc = results[0];
+      const city = loc.city || loc.subregion || loc.region || 'Unknown City';
+      const country = loc.country || 'Unknown Country';
+      const countryCode = loc.isoCountryCode || 'XX';
+      const placeFromName = isReadableLocationLabel(loc.name) ? String(loc.name).trim() : undefined;
+      const placeFromStreet = isReadableLocationLabel(loc.street) ? String(loc.street).trim() : undefined;
       const place = placeFromName || placeFromStreet || undefined;
       const street = placeFromStreet;
 
@@ -170,73 +176,6 @@ export async function reverseGeocode(latitude: number, longitude: number): Promi
   }
 }
 
-/**
- * Check if city is a major city (simplified - you can enhance this)
- */
-function isMajorCity(city: string, country: string): boolean {
-  // List of major cities (you can expand this)
-  const majorCities = [
-    'London', 'Paris', 'New York', 'Tokyo', 'Dubai', 'Singapore',
-    'Hong Kong', 'Los Angeles', 'Chicago', 'San Francisco', 'Seattle',
-    'Boston', 'Miami', 'Las Vegas', 'Sydney', 'Melbourne', 'Toronto',
-    'Vancouver', 'Montreal', 'Berlin', 'Munich', 'Rome', 'Milan',
-    'Barcelona', 'Madrid', 'Amsterdam', 'Brussels', 'Vienna', 'Prague',
-    'Budapest', 'Warsaw', 'Moscow', 'Istanbul', 'Athens', 'Lisbon',
-    'Copenhagen', 'Stockholm', 'Oslo', 'Helsinki', 'Dublin', 'Edinburgh',
-    'Manchester', 'Birmingham', 'Glasgow', 'Liverpool', 'Leeds',
-    'Shanghai', 'Beijing', 'Shenzhen', 'Guangzhou', 'Seoul', 'Bangkok',
-    'Kuala Lumpur', 'Jakarta', 'Manila', 'Ho Chi Minh City', 'Hanoi',
-    'Delhi', 'Mumbai', 'Bangalore', 'Kolkata', 'Chennai', 'Hyderabad',
-    'Karachi', 'Lahore', 'Islamabad', 'Dhaka', 'Cairo', 'Johannesburg',
-    'Cape Town', 'Nairobi', 'Lagos', 'Casablanca', 'Marrakech',
-    'São Paulo', 'Rio de Janeiro', 'Buenos Aires', 'Lima', 'Bogotá',
-    'Santiago', 'Mexico City', 'Guadalajara', 'Monterrey'
-  ];
-
-  return majorCities.some(majorCity =>
-    city.toLowerCase().includes(majorCity.toLowerCase()) ||
-    majorCity.toLowerCase().includes(city.toLowerCase())
-  );
-}
-
-/**
- * Send notification for new location
- */
-async function sendLocationNotification(city: string, country: string, type: 'city' | 'country'): Promise<void> {
-  try {
-    const title = type === 'city'
-      ? `🌆 New City Visited!`
-      : `🌍 New Country Explored!`;
-
-    const body = type === 'city'
-      ? `Welcome to ${city}, ${country}! 🎉`
-      : `Welcome to ${country}! Your adventure begins! 🗺️`;
-
-    await Notifications.scheduleNotificationAsync({
-      content: {
-        title,
-        body,
-        data: {
-          type: 'passport',
-          city,
-          country,
-          screen: 'passport'
-        },
-        sound: true,
-      },
-      trigger: null, // Send immediately
-    });
-
-    console.log(`✅ Notification sent: ${title} - ${body}`);
-  } catch (error) {
-    console.error('❌ Error sending notification:', error);
-  }
-}
-
-
-/**
- * Process location update and prepare suggestions
- */
 export async function processLocationUpdate(userId: string, latitude: number, longitude: number): Promise<void> {
   try {
     console.log(`📍 Processing location: ${latitude}, ${longitude}`);
@@ -245,9 +184,7 @@ export async function processLocationUpdate(userId: string, latitude: number, lo
     if (!locationInfo) return;
 
     const { city, country, countryCode, place } = locationInfo;
-    console.log(`📍 Location Detected: ${place || 'No Place'}, ${city}, ${country}`);
 
-    // Update last known location in DB via API
     await apiService.updateUser(userId, {
       lastKnownLocation: {
         city,
@@ -260,9 +197,6 @@ export async function processLocationUpdate(userId: string, latitude: number, lo
       }
     });
 
-    // Passport notification rule:
-    // - Notify ONLY when the user enters a country they don't have yet.
-    // - Do NOT notify for city/place discovery.
     const { getPassportData } = await import('../lib/firebaseHelpers/passport');
     const passportData = await getPassportData(userId);
     const existingStamps = passportData?.stamps || [];
@@ -270,32 +204,26 @@ export async function processLocationUpdate(userId: string, latitude: number, lo
     const hasCountry = existingStamps.some((s: any) => s.type === 'country' && s.name === country);
     if (!hasCountry) {
       const suggestions = [{ type: 'country', name: country, countryCode, lat: latitude, lon: longitude }];
-      // Save suggestions locally for the Passport screen banner
-      const AsyncStorage = (await import('@react-native-async-storage/async-storage')).default;
+      const AsyncStorageMod = (await import('@react-native-async-storage/async-storage')).default;
       const main = suggestions[0];
-      await AsyncStorage.setItem('passport_suggestion', JSON.stringify({
+      await AsyncStorageMod.setItem('passport_suggestion', JSON.stringify({
         userId,
         suggestions,
         mainSuggestion: main,
         timestamp: Date.now()
       }));
 
-      // Send push notification
       const welcomeLabel = getBestLocationLabel(main, city, country);
-
-      // Dedupe: do not spam the same notification multiple times
       const now = Date.now();
       const key = buildPassportNotifKey(userId, main, city, country);
 
-      // First: fast in-memory dedupe (same JS runtime)
       if (lastPassportNotifKey === key && now - lastPassportNotifAt < PASSPORT_NOTIF_COOLDOWN_MS) {
         if (__DEV__) console.log('[locationService] Skipping duplicate passport notification (memory cooldown).');
         return;
       }
 
-      // Second: persistent dedupe (across restarts/task relaunch)
       try {
-        const storedRaw = await AsyncStorage.getItem(PASSPORT_NOTIF_STORAGE_KEY);
+        const storedRaw = await AsyncStorageMod.getItem(PASSPORT_NOTIF_STORAGE_KEY);
         if (storedRaw) {
           const stored = JSON.parse(storedRaw);
           const storedKey = String(stored?.key || '');
@@ -308,24 +236,27 @@ export async function processLocationUpdate(userId: string, latitude: number, lo
           }
         }
       } catch {
-        // best-effort only
+        // best-effort
       }
 
-      await Notifications.scheduleNotificationAsync({
-        content: {
-          title: `🎫 New Country Detected!`,
-          body: `Welcome to ${welcomeLabel}! Tap to add your country stamp.`,
-          data: { type: 'passport_suggestion', screen: 'passport' }
-        },
-        trigger: null,
-      });
+      const { status: notifStatus } = await Notifications.getPermissionsAsync();
+      if (notifStatus === 'granted') {
+        await Notifications.scheduleNotificationAsync({
+          content: {
+            title: `🎫 New Country Detected!`,
+            body: `Welcome to ${welcomeLabel}! Tap to add your country stamp.`,
+            data: { type: 'passport_suggestion', screen: 'passport' }
+          },
+          trigger: null,
+        });
+      }
 
       lastPassportNotifKey = key;
       lastPassportNotifAt = now;
       try {
-        await AsyncStorage.setItem(PASSPORT_NOTIF_STORAGE_KEY, JSON.stringify({ key, at: now }));
+        await AsyncStorageMod.setItem(PASSPORT_NOTIF_STORAGE_KEY, JSON.stringify({ key, at: now }));
       } catch {
-        // best-effort only
+        // best-effort
       }
     }
 
@@ -334,127 +265,112 @@ export async function processLocationUpdate(userId: string, latitude: number, lo
   }
 }
 
+async function maybeRunForegroundPassportCheck(activeUserId: string): Promise<void> {
+  try {
+    if (AppState.currentState !== 'active') return;
+    const now = Date.now();
+    if (now - lastForegroundGeoAt < FG_GEO_MIN_MS) return;
+
+    const { status } = await Location.getForegroundPermissionsAsync();
+    if (status !== 'granted') return;
+
+    lastForegroundGeoAt = now;
+
+    const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+    await processLocationUpdate(activeUserId, pos.coords.latitude, pos.coords.longitude);
+  } catch {
+    /* timeout / gps skip */
+  }
+}
+
+function ensureForegroundPassportHooks(userId: string): void {
+  if (foregroundTrackingUserId === userId && appStateSubscription) return;
+
+  teardownForegroundPassportHooks();
+  foregroundTrackingUserId = userId;
+
+  appStateSubscription = AppState.addEventListener('change', (next) => {
+    if (next === 'active' && foregroundTrackingUserId) {
+      void maybeRunForegroundPassportCheck(foregroundTrackingUserId);
+    }
+  });
+
+  void maybeRunForegroundPassportCheck(userId);
+}
+
+function teardownForegroundPassportHooks(): void {
+  if (appStateSubscription) {
+    appStateSubscription.remove();
+    appStateSubscription = null;
+  }
+  foregroundTrackingUserId = null;
+}
+
 /**
- * Start background location tracking
+ * Foreground passport checks only (opens Home while app visible). No background tracking.
  */
 export async function startLocationTracking(userId: string): Promise<boolean> {
   try {
-    // Check permissions
-    const hasLocationPermission = await requestLocationPermissions();
-    const hasNotificationPermission = await requestNotificationPermissions();
-
-    if (!hasLocationPermission || !hasNotificationPermission) {
-      console.log('❌ Missing permissions for location tracking');
+    const hasLoc = await requestLocationPermissions();
+    if (!hasLoc) {
+      if (__DEV__) console.log('❌ [Location] Foreground permission denied');
       return false;
     }
 
-    // Define background task
-    TaskManager.defineTask(LOCATION_TASK_NAME, async ({ data, error }: any) => {
-      if (error) {
-        console.error('❌ Background location error:', error);
-        return;
-      }
+    // Best-effort notifications (passport alerts when granted)
+    void requestNotificationPermissions();
 
-      if (data) {
-        const { locations } = data;
-        const location = locations[0];
-
-        if (location) {
-          await processLocationUpdate(
-            userId,
-            location.coords.latitude,
-            location.coords.longitude
-          );
-        }
-      }
-    });
-
-    // Start location updates
-    await Location.startLocationUpdatesAsync(LOCATION_TASK_NAME, {
-      accuracy: Location.Accuracy.Balanced,
-      timeInterval: 300000, // 5 minutes
-      distanceInterval: 1000, // 1 km
-      foregroundService: {
-        notificationTitle: 'Travel Tracker',
-        notificationBody: 'Tracking your adventures 🌍',
-        notificationColor: '#0A3D62',
-      },
-    });
-
-    console.log('✅ Background location tracking started');
+    ensureForegroundPassportHooks(userId);
+    console.log('✅ Foreground passport location checks enabled');
     return true;
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ Error starting location tracking:', error);
     return false;
   }
 }
 
-/**
- * Stop background location tracking
- */
 export async function stopLocationTracking(): Promise<void> {
-  try {
-    const isTracking = await Location.hasStartedLocationUpdatesAsync(LOCATION_TASK_NAME);
+  teardownForegroundPassportHooks();
 
-    if (isTracking) {
+  try {
+    const running = await Location.hasStartedLocationUpdatesAsync(LOCATION_TASK_NAME);
+    if (running) {
       await Location.stopLocationUpdatesAsync(LOCATION_TASK_NAME);
-      console.log('✅ Background location tracking stopped');
     }
-  } catch (error) {
-    console.error('❌ Error stopping location tracking:', error);
+  } catch {
+    // ignore
   }
 }
 
-/**
- * Get current location
- */
 export async function getCurrentLocation(): Promise<LocationData | null> {
   try {
-    console.log('📍 Starting location detection...');
-
-    // Check if we have permission first
     const { status } = await Location.getForegroundPermissionsAsync();
-    console.log('📍 Current permission status:', status);
 
     if (status !== 'granted') {
-      console.log('⚠️ Location permission not granted, requesting...');
       const { status: newStatus } = await Location.requestForegroundPermissionsAsync();
-      console.log('📍 New permission status:', newStatus);
 
       if (newStatus !== 'granted') {
-        console.log('❌ Location permission denied by user');
         throw new Error('Location permission denied. Please go to Settings > Apps > Trips > Permissions and enable Location.');
       }
     }
 
-    // Check if location services are enabled
     const isEnabled = await Location.hasServicesEnabledAsync();
-    console.log('📍 Location services enabled:', isEnabled);
-
     if (!isEnabled) {
-      console.log('❌ Location services are disabled');
       throw new Error('Location services are disabled. Please enable GPS in your device settings.');
     }
 
-    // @ts-ignore
     const location = await Location.getCurrentPositionAsync({
       accuracy: Location.Accuracy.Balanced,
     });
 
-    console.log('📍 Got coordinates:', location.coords.latitude, location.coords.longitude);
-
-    console.log('📍 Reverse geocoding...');
     const locationInfo = await reverseGeocode(
       location.coords.latitude,
       location.coords.longitude
     );
 
     if (!locationInfo || !locationInfo.city) {
-      console.log('⚠️ Could not determine city from coordinates');
       throw new Error('Could not determine your city. Please make sure you have a good GPS signal.');
     }
-
-    console.log('✅ Location detected:', locationInfo.city, locationInfo.country);
 
     return {
       latitude: location.coords.latitude,
@@ -466,7 +382,6 @@ export async function getCurrentLocation(): Promise<LocationData | null> {
   } catch (error: any) {
     console.error('❌ Error getting current location:', error);
 
-    // Provide user-friendly error messages
     if (error.message?.includes('permission') || error.code === 'E_LOCATION_UNAUTHORIZED') {
       throw new Error('Location permission denied. Please go to Settings > Apps > Trips > Permissions and enable Location.');
     } else if (error.message?.includes('disabled') || error.code === 'E_LOCATION_SERVICES_DISABLED') {
@@ -481,9 +396,6 @@ export async function getCurrentLocation(): Promise<LocationData | null> {
   }
 }
 
-/**
- * Check if user has a passport stamp for this location
- */
 export async function hasPassportStamp(userId: string, name: string, type: 'country' | 'city' | 'place'): Promise<boolean> {
   try {
     const { getPassportData } = await import('../lib/firebaseHelpers/passport');
@@ -500,9 +412,6 @@ export async function hasPassportStamp(userId: string, name: string, type: 'coun
   }
 }
 
-/**
- * Send smart notification for new passport location
- */
 export async function sendPassportNotification(userId: string, mainSuggestion: any): Promise<void> {
   try {
     const welcomeLabel = getBestLocationLabel(mainSuggestion);

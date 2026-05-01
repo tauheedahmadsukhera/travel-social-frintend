@@ -1,10 +1,14 @@
-﻿import { Feather } from '@expo/vector-icons';
+import { Feather } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React from 'react';
 import { Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { hapticLight } from '@/lib/haptics';
 import { safeRouterBack } from '@/lib/safeRouterBack';
+import { permanentlyDeleteAccount } from '@/lib/gdprCompliance';
+import { resolveCanonicalUserId } from '@/lib/currentUser';
+import { auth } from '@/config/firebase';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export default function SettingsScreen() {
   const router = useRouter();
@@ -50,22 +54,6 @@ export default function SettingsScreen() {
         >
           <Feather name="message-circle" size={18} color="#0A3D62" />
           <Text style={styles.feedbackText}>Send Feedback / Report Issue</Text>
-        </TouchableOpacity>
-
-        {/* Story Settings Section */}
-        <TouchableOpacity
-          style={styles.settingsItem}
-          onPress={() => {
-            hapticLight();
-            router.push('/story-settings' as any);
-          }}
-        >
-          <Feather name="camera" size={20} color="#FFB800" style={{ marginRight: 12 }} />
-          <View style={{ flex: 1 }}>
-            <Text style={styles.settingsTitle}>Story Settings</Text>
-            <Text style={styles.settingsSubtitle}>Privacy, replies & more</Text>
-          </View>
-          <Feather name="chevron-right" size={18} color="#ccc" />
         </TouchableOpacity>
 
         {/* Blocked Users Section */}
@@ -116,6 +104,46 @@ export default function SettingsScreen() {
             <Feather name="file-text" size={18} color="#667eea" style={{ marginRight: 10 }} />
             <Text style={styles.legalText}>Terms of Service</Text>
             <Feather name="chevron-right" size={18} color="#ccc" style={{ marginLeft: 'auto' }} />
+          </TouchableOpacity>
+        </View>
+
+        {/* Danger Zone */}
+        <View style={[styles.legalBox, { marginTop: 20, borderColor: '#ffcfcf' }]}>
+          <Text style={[styles.legalTitle, { color: '#e74c3c' }]}>Danger Zone</Text>
+          <TouchableOpacity
+            style={styles.legalItem}
+            onPress={() => {
+              hapticLight();
+              Alert.alert(
+                'Delete Account',
+                'Are you sure you want to delete your account? This action is permanent and cannot be undone.',
+                [
+                  { text: 'Cancel', style: 'cancel' },
+                  {
+                    text: 'Delete',
+                    style: 'destructive',
+                    onPress: async () => {
+                      try {
+                        const userId = await resolveCanonicalUserId();
+                        if (userId) {
+                          await permanentlyDeleteAccount(userId);
+                        }
+                        // Logout locally regardless of API success to ensure they are logged out
+                        await auth.signOut();
+                        await AsyncStorage.clear();
+                        router.replace('/auth/welcome' as any);
+                      } catch (err) {
+                        console.error('Failed to delete account:', err);
+                        Alert.alert('Error', 'Failed to delete account. Please try again or contact support.');
+                      }
+                    }
+                  }
+                ]
+              );
+            }}
+          >
+            <Feather name="trash-2" size={18} color="#e74c3c" style={{ marginRight: 10 }} />
+            <Text style={[styles.legalText, { color: '#e74c3c' }]}>Delete Account</Text>
           </TouchableOpacity>
         </View>
       </ScrollView>

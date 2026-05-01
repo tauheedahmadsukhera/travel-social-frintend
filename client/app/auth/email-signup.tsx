@@ -1,10 +1,11 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import React, { useEffect, useRef, useState } from 'react';
-import { Alert, Animated, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import React, { useState } from 'react';
+import { StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { signUpUser } from '../../lib/firebaseHelpers';
 import { AuthBrandHeader } from '@/src/_components/auth/AuthBrandHeader';
+import { AuthKeyboardScroll } from '@/src/_components/auth/AuthKeyboardScroll';
 import CustomButton from '@/src/_components/auth/CustomButton';
 import SocialButton from '@/src/_components/auth/SocialButton';
 import { safeRouterBack } from '@/lib/safeRouterBack';
@@ -15,25 +16,6 @@ export default function EmailSignUpScreen() {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-
-  // Animation values
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-  const slideAnim = useRef(new Animated.Value(30)).current;
-
-  useEffect(() => {
-    Animated.parallel([
-      Animated.timing(fadeAnim, {
-        toValue: 1,
-        duration: 600,
-        useNativeDriver: true,
-      }),
-      Animated.timing(slideAnim, {
-        toValue: 0,
-        duration: 600,
-        useNativeDriver: true,
-      }),
-    ]).start();
-  }, []);
 
   const handleNext = async () => {
     setError('');
@@ -59,17 +41,7 @@ export default function EmailSignUpScreen() {
       const result = await signUpUser(email, password, username);
 
       if (result.success) {
-        // Account created - email verification sent (but not required to login)
-        Alert.alert(
-          'Account Created! ðŸŽ‰',
-          'Your account has been created successfully. A verification email has been sent (optional). You can start using the app now!',
-          [
-            {
-              text: 'Get Started',
-              onPress: () => router.replace('/(tabs)/home')
-            }
-          ]
-        );
+        router.replace('/(tabs)/home');
       } else {
         setError(result.error || 'Sign up failed');
       }
@@ -81,25 +53,9 @@ export default function EmailSignUpScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      >
-        <ScrollView
-          contentContainerStyle={styles.scrollContent}
-          showsVerticalScrollIndicator={false}
-          keyboardShouldPersistTaps="handled"
-        >
-          <Animated.View
-            style={[
-              styles.content,
-              {
-                opacity: fadeAnim,
-                transform: [{ translateY: slideAnim }],
-              },
-            ]}
-          >
+    <SafeAreaView style={styles.container} edges={['top']}>
+      <AuthKeyboardScroll contentContainerStyle={styles.scrollContent}>
+        <View style={styles.content}>
             {/* Header */}
             <View style={styles.header}>
               <TouchableOpacity
@@ -126,6 +82,8 @@ export default function EmailSignUpScreen() {
                 onChangeText={setEmail}
                 keyboardType="email-address"
                 autoCapitalize="none"
+                autoCorrect={false}
+                spellCheck={false}
               />
             </View>
 
@@ -139,6 +97,8 @@ export default function EmailSignUpScreen() {
                 value={password}
                 onChangeText={setPassword}
                 secureTextEntry
+                autoCorrect={false}
+                spellCheck={false}
               />
             </View>
 
@@ -146,6 +106,13 @@ export default function EmailSignUpScreen() {
             {error ? (
               <Text style={styles.errorText}>{error}</Text>
             ) : null}
+
+            {/* EULA Text */}
+            <Text style={{ fontSize: 12, color: '#666', textAlign: 'center', marginBottom: 12 }}>
+              By signing up, you agree to our{' '}
+              <Text style={{ fontWeight: '600' }} onPress={() => router.push('/legal/terms' as any)}>Terms of Service</Text> and{' '}
+              <Text style={{ fontWeight: '600' }} onPress={() => router.push('/legal/privacy' as any)}>Privacy Policy</Text>.
+            </Text>
 
             {/* Next Button */}
             <CustomButton
@@ -193,9 +160,8 @@ export default function EmailSignUpScreen() {
                 </Text>
               </Text>
             </View>
-          </Animated.View>
-        </ScrollView>
-      </KeyboardAvoidingView>
+        </View>
+      </AuthKeyboardScroll>
     </SafeAreaView>
   );
 }

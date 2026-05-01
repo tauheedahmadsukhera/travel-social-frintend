@@ -270,8 +270,7 @@ export default function UserPostsScreen() {
           if (!ids.includes(String(event.postId))) return p;
           return {
             ...p,
-            ...(patch.caption !== undefined ? { caption: patch.caption } : null),
-            ...(patch.content !== undefined ? { content: patch.content } : null),
+            ...patch,
             updatedAt: new Date().toISOString(),
           };
         };

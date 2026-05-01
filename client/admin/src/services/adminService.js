@@ -22,7 +22,31 @@ export const adminAPI = {
 
   // Analytics
   getDashboardAnalytics: () =>
-    apiClient.get('/admin/analytics/dashboard'),
+    apiClient.get('/admin/stats'),
+
+  // Activity
+  getRecentActivity: () =>
+    apiClient.get('/admin/activity'),
+
+  // Categories
+  getCategories: () =>
+    apiClient.get('/admin/categories'),
+  
+  addCategory: (data) =>
+    apiClient.post('/admin/categories', data),
+  
+  deleteCategory: (id) =>
+    apiClient.delete(`/admin/categories/${id}`),
+
+  // Regions
+  getRegions: () =>
+    apiClient.get('/admin/regions'),
+  
+  addRegion: (data) =>
+    apiClient.post('/admin/regions', data),
+  
+  deleteRegion: (id) =>
+    apiClient.delete(`/admin/regions/${id}`),
 
   // Logs
   getAdminLogs: (page = 1, limit = 50, adminId = '', action = '') =>

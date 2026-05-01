@@ -101,11 +101,14 @@ export default function Home() {
   const avatarHydrateReqIdRef = useRef(0);
   const avatarHydrateTaskRef = useRef<any>(null);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const currentUserIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    currentUserIdRef.current = currentUserId;
+  }, [currentUserId]);
   const [currentUserData, setCurrentUserData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
-  const [privacyFiltered, setPrivacyFiltered] = useState<any[]>([]);
   const [paginationOffset, setPaginationOffset] = useState(20);
   const POSTS_PER_PAGE = 10;
   const [storyMedia, setStoryMedia] = useState<{ uri: string; type: string } | null>(null);
@@ -123,11 +126,15 @@ export default function Home() {
 
   const HOME_CACHE_KEY = useMemo(() => `home_feed_v1_${String(currentUserId || 'anon')}`, [currentUserId]);
 
-  // Always show TopMenu when Home tab gains focus
+  // Always show TopMenu when Home tab gains focus; refresh foreground passport geo when returning to Home.
   useFocusEffect(
     useCallback(() => {
       showHeader();
       headerHiddenRef.current = false;
+      const uid = currentUserIdRef.current;
+      if (uid) {
+        void startLocationTracking(uid);
+      }
     }, [showHeader])
   );
 
@@ -173,7 +180,7 @@ export default function Home() {
               if (__DEV__) console.log('[Home] User data loaded:', response.data?.displayName || response.data?.name);
             }
 
-            // Start background location tracking for passport stamps
+            // Foreground passport location checks (when app is open / active)
             await startLocationTracking(userId);
           } catch (error) {
             console.error('[Home] Initialization error:', error);
@@ -195,6 +202,7 @@ export default function Home() {
         setAllLoadedPosts(prev => prev.filter(p => (p.id || p._id) !== event.postId));
       }
       if (event.type === 'POST_UPDATED' && event.postId) {
+        if (__DEV__) console.log('[Home] Post updated event received:', event.postId, event.data);
         const patch = event.data && typeof event.data === 'object' ? event.data : {};
         const apply = (p: any) => {
           if (!p) return p;
@@ -204,10 +212,11 @@ export default function Home() {
             String((p as any).postId || ''),
           ].filter(Boolean);
           if (!ids.includes(String(event.postId))) return p;
+          
+          if (__DEV__) console.log('[Home] Applying patch to post:', p.id || p._id);
           return {
             ...p,
-            ...(patch.caption !== undefined ? { caption: patch.caption } : null),
-            ...(patch.content !== undefined ? { content: patch.content } : null),
+            ...patch,
             updatedAt: new Date().toISOString(),
           };
         };
@@ -224,10 +233,35 @@ export default function Home() {
     // @ts-ignore - fbemitter untyped
     const sub = feedEventEmitter.addListener('feedUpdated', () => {
       if (!isOnline) return;
-      loadInitialFeed(0, { silent: true }).catch(() => {});
+      const t = Date.now();
+      if (__DEV__) console.log('[Home] Refreshing feed due to update signal, t=' + t);
+      // Force a fresh fetch by passing a cache-busting parameter
+      loadInitialFeed(0, { silent: true, _t: t }).catch((err) => {
+        if (__DEV__) console.error('[Home] Refresh failed:', err);
+      });
     });
     return () => sub.remove();
   }, [isOnline]);
+
+  // Forced refresh: edit/create flows can navigate with ?refreshTs=<ts> to
+  // bypass cache and force a fresh feed fetch (Instagram-style post-edit).
+  const lastRefreshTsRef = useRef<string>('');
+  useEffect(() => {
+    const ts = String((params as any)?.refreshTs || '');
+    if (!ts || ts === lastRefreshTsRef.current) return;
+    lastRefreshTsRef.current = ts;
+    if (__DEV__) console.log('[Home] refreshTs param changed, forcing fresh feed fetch:', ts);
+    (async () => {
+      try {
+        await setCachedData(HOME_CACHE_KEY, [], { ttl: 1 });
+      } catch { }
+      try {
+        await loadInitialFeed(0, { silent: true, _t: Number(ts) || Date.now() });
+      } catch (err) {
+        if (__DEV__) console.error('[Home] Forced refresh failed:', err);
+      }
+    })();
+  }, [(params as any)?.refreshTs, HOME_CACHE_KEY]);
 
 
   useEffect(() => {
@@ -332,7 +366,7 @@ export default function Home() {
     return '';
   }, []);
 
-  const loadInitialFeed = async (pageNum = 0, options?: { silent?: boolean }) => {
+  const loadInitialFeed = async (pageNum = 0, options?: { silent?: boolean, [key: string]: any }) => {
     if (pageNum === 0 && !options?.silent) setLoading(true);
     try {
       // OPTIMIZED: Use standard API service method
@@ -342,7 +376,8 @@ export default function Home() {
       const response = await apiService.getPosts({ 
         skip, 
         limit, 
-        requesterUserId: currentUserId || undefined 
+        requesterUserId: currentUserId || undefined,
+        ...options
       });
 
       // CLEAN RESPONSE HANDLING
@@ -537,7 +572,7 @@ export default function Home() {
     });
   }, [categories.length]);
 
-  async function filterPostsByPrivacy(posts: any[], userId: string | undefined) {
+  function filterPostsByPrivacy(posts: any[], userId: string | undefined) {
     if (!userId) return posts.filter(post => !post.isPrivate);
 
     const viewerId = String(userId);
@@ -602,16 +637,9 @@ export default function Home() {
     return posts;
   }, [posts, filter, params.location, params.postId]);
 
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      const filtered = await filterPostsByPrivacy(filteredRaw, currentUserId || undefined);
-      if (cancelled) return;
-      setPrivacyFiltered(filtered.slice(0, paginationOffset));
-    })();
-    return () => {
-      cancelled = true;
-    };
+  const privacyFiltered = React.useMemo(() => {
+    const filtered = filterPostsByPrivacy(filteredRaw, currentUserId || undefined);
+    return filtered.slice(0, paginationOffset);
   }, [filteredRaw, currentUserId, paginationOffset]);
 
   const loadMorePosts = useCallback(() => {
@@ -700,52 +728,13 @@ export default function Home() {
   const searchText = (!filter && !params.location) ? 'Search' : (params.location || filter);
 
   const renderPostItem = useCallback(
-    ({ item }: { item: any }) => {
-      const uniq = (values: any[]) => {
-        const out: string[] = [];
-        const seen = new Set<string>();
-        for (const v of values) {
-          const s = typeof v === 'string' ? v.trim() : (v != null ? String(v).trim() : '');
-          if (!s || seen.has(s)) continue;
-          seen.add(s);
-          out.push(s);
-        }
-        return out;
-      };
-
-      const viewerIds = uniq([
-        (currentUserData as any)?.firebaseUid,
-        (currentUserData as any)?.uid,
-        (currentUserData as any)?._id,
-        (currentUserData as any)?.id,
-        currentUserId,
-      ]);
-
-      const ownerIds = (() => {
-        const rawUserId = item?.userId;
-        const obj = rawUserId && typeof rawUserId === 'object' ? rawUserId : null;
-        return uniq([
-          typeof rawUserId === 'string' ? rawUserId : null,
-          obj?._id,
-          obj?.id,
-          obj?.uid,
-          obj?.firebaseUid,
-          item?.uid,
-          item?.userUid,
-        ]);
-      })();
-
-      const viewerSet = new Set(viewerIds);
-      const isOwner = ownerIds.some((id) => viewerSet.has(id));
-      return (
-        <PostCard
-          post={item}
-          currentUser={currentUserData || currentUserId}
-          showMenu={isOwner}
-          mirror={MIRROR_HOME}
-        />
-      );
-    },
+    ({ item }: { item: any }) => (
+      <PostCard
+        post={item}
+        currentUser={currentUserData || currentUserId}
+        mirror={MIRROR_HOME}
+      />
+    ),
     [currentUserData, currentUserId]
   );
 
@@ -839,20 +828,19 @@ export default function Home() {
         showsHorizontalScrollIndicator={false}
         persistentScrollbar={false}
         scrollEventThrottle={16}
-        // PERF: keep JS work per frame minimal for smooth 60fps scroll
-        initialNumToRender={3}
-        maxToRenderPerBatch={2}
-        windowSize={5}
-        removeClippedSubviews={Platform.OS === 'android'}
-        updateCellsBatchingPeriod={80}
+        // PERF: Instagram-like smooth scrolling without white gaps
+        initialNumToRender={6}
+        maxToRenderPerBatch={4}
+        windowSize={21}
+        removeClippedSubviews={false}
+        updateCellsBatchingPeriod={50}
 
         contentContainerStyle={contentContainerStyle}
         ListHeaderComponent={listHeader}
         renderItem={showInitialSkeleton ? (renderSkeletonItem as any) : renderPostItem}
         ListFooterComponent={listFooter}
         onEndReached={loadMorePosts}
-        // Instagram-like: prefetch earlier so loader doesn’t appear inside a big blank gap.
-        onEndReachedThreshold={0.85}
+        onEndReachedThreshold={1.5}
       />
 
     </View>

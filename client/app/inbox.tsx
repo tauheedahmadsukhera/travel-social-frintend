@@ -1,9 +1,9 @@
 import { Feather } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ActivityIndicator, FlatList, InteractionManager, Modal, Pressable, RefreshControl, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { ActivityIndicator, FlatList, KeyboardAvoidingView, Modal, Platform, Pressable, RefreshControl, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Image } from 'react-native';
 // import { useAuthLoading, useUser } from '@/src/_components/UserContext';
 // import {} from '../lib/firebaseHelpers';
@@ -14,176 +14,15 @@ import { apiService } from '@/src/_services/apiService';
 import { DEFAULT_AVATAR_URL } from '@/lib/api';
 import { hapticLight } from '@/lib/haptics';
 import { safeRouterBack } from '@/lib/safeRouterBack';
+import ConversationItem from '../src/_components/inbox/ConversationItem';
+
 
 const INBOX_BUILD_TAG = 'inbox-group-fix-2026-03-28-2';
 
-// Helper component to show conversation with user profile
-function ConversationItem({ item, userId, router, formatTime, profilesById, setConversations, setOptimisticReadByOtherId, onOpenActions }: any) {
-  const isLikelyOpaqueId = (value: any) => {
-    const s = String(value || '').trim();
-    if (!s) return false;
-    // Phone-like or numeric ids
-    if (/^\+?\d{6,}$/.test(s)) return true;
-    // Mongo-like ObjectId
-    if (/^[a-f0-9]{24}$/i.test(s)) return true;
-    return false;
-  };
-
-  const isPlaceholderName = (value: any) => {
-    const s = String(value || '').trim();
-    if (!s) return true;
-    const lower = s.toLowerCase();
-    return lower === 'user' || lower === 'unknown';
-  };
-
-  const emailToNiceName = (emailLike: any) => {
-    const s = typeof emailLike === 'string' ? emailLike.trim() : '';
-    if (!s) return '';
-    if (!s.includes('@')) return s;
-    const local = s.split('@')[0] || '';
-    return local.trim();
-  };
-
-  const pickDisplayName = (profileAny: any, otherUserId: any) => {
-    // Prefer server-provided conversation enrichment if present
-    const convoCandidates = [
-      item?.otherUser?.displayName,
-      item?.otherUser?.name,
-      item?.otherUser?.username,
-      item?.otherUserName,
-      item?.username,
-    ].map((v) => (typeof v === 'string' ? v.trim() : ''));
-    for (const c of convoCandidates) {
-      if (!c) continue;
-      if (isLikelyOpaqueId(c)) continue;
-      if (isPlaceholderName(c)) continue;
-      return c;
-    }
-
-    const candidates = [
-      profileAny?.displayName,
-      profileAny?.name,
-      profileAny?.username,
-    ].map((v) => (typeof v === 'string' ? v.trim() : ''));
-
-    for (const c of candidates) {
-      if (!c) continue;
-      if (isLikelyOpaqueId(c)) continue;
-      if (isPlaceholderName(c)) continue;
-      return c;
-    }
-
-    const emailFallback = emailToNiceName(profileAny?.email);
-    if (emailFallback && !isLikelyOpaqueId(emailFallback) && !isPlaceholderName(emailFallback)) {
-      return emailFallback;
-    }
-
-    // Never show raw IDs in UI as a name
-    const fallback = String(otherUserId || '').trim();
-    if (fallback && !isLikelyOpaqueId(fallback)) return fallback.substring(0, 16);
-    return 'User';
-  };
-
-  const isGroup = !!item?.isGroup;
-  const groupName = String(item?.group?.name || item?.groupName || 'Group chat');
-  const participants = Array.isArray(item?.participants) ? item.participants.map(String) : [];
-  const otherUserId = item?.otherUserId || item.participants?.find((uid: string) => uid !== userId);
-  const profileAny = otherUserId ? profilesById?.[String(otherUserId)] : null;
-  const username = isGroup
-    ? groupName
-    : pickDisplayName(profileAny, otherUserId);
-  const avatar = profileAny?.avatar || profileAny?.photoURL;
-  const groupAvatar = item?.group?.avatar || item?.groupAvatar || '';
-  const lastMsgPreview = item.lastMessage?.substring(0, 40) || 'No messages yet';
-
-  const displayAvatar = isGroup
-    ? ((typeof groupAvatar === 'string' && groupAvatar.trim()) ? groupAvatar : DEFAULT_AVATAR_URL)
-    : ((typeof avatar === 'string' && avatar.trim()) ? avatar : DEFAULT_AVATAR_URL);
-
-  const hasUnread = typeof item?.unreadCount === 'number' && item.unreadCount > 0;
-  const previewLine = hasUnread
-    ? `${item.unreadCount > 4 ? '4+' : item.unreadCount} new message${item.unreadCount !== 1 ? 's' : ''} · ${formatTime(item.lastMessageAt)}`
-    : (lastMsgPreview && lastMsgPreview !== 'No messages yet'
-        ? `${lastMsgPreview} · ${formatTime(item.lastMessageAt)}`
-        : `Active ${formatTime(item.lastMessageAt)}`);
-
-  return (
-    <TouchableOpacity
-      style={styles.chatRow}
-      activeOpacity={0.75}
-      onLongPress={() => {
-        if (typeof onOpenActions === 'function') onOpenActions(item, otherUserId, username);
-      }}
-      delayLongPress={350}
-      onPress={() => {
-        hapticLight();
-        const conversationId = String(item.conversationId || item.id || item._id);
-        if (!conversationId) return;
-        apiService.patch(`/conversations/${conversationId}/read`, { userId: String(userId) }).catch(() => {});
-        if (typeof setConversations === 'function') {
-          setConversations((prev: any[]) => {
-            if (!Array.isArray(prev)) return prev;
-            return prev.map((c: any) => {
-              const parts = Array.isArray(c?.participants) ? c.participants.map(String) : [];
-              const otherId = parts.find((p: string) => p !== String(userId));
-              if (isGroup && String(c?.conversationId || c?.id || c?._id) === conversationId) return { ...c, unreadCount: 0 };
-              if (otherId && otherId === String(otherUserId)) return { ...c, unreadCount: 0 };
-              return c;
-            });
-          });
-        }
-        if (typeof setOptimisticReadByOtherId === 'function') {
-          setOptimisticReadByOtherId((prev: any) => ({
-            ...(prev || {}),
-            ...(otherUserId ? { [String(otherUserId)]: Date.now() } : {})
-          }));
-        }
-        router.push({
-          pathname: '/dm',
-          params: {
-            conversationId,
-            ...(isGroup
-              ? { isGroup: '1', groupName: username, groupAvatar: displayAvatar, user: username }
-              : { otherUserId, user: username })
-          }
-        });
-      }}
-    >
-      {/* Avatar with story ring */}
-      <View style={styles.igAvatarContainer}>
-        <View style={[styles.igAvatarRing, hasUnread && styles.igAvatarRingUnread]}>
-          <Image source={{ uri: displayAvatar }} style={styles.igAvatar} />
-        </View>
-      </View>
-
-      {/* Text content */}
-      <View style={styles.chatContent}>
-        <Text style={[styles.igUsername, hasUnread && styles.igUsernameBold]} numberOfLines={1}>
-          {username}
-        </Text>
-        {isGroup ? (
-          <Text style={styles.igGroupMeta} numberOfLines={1}>
-            {Math.max(2, participants.length)} members · {formatTime(item.lastMessageAt)}
-          </Text>
-        ) : null}
-        <Text style={[styles.igPreview, hasUnread && styles.igPreviewBold]} numberOfLines={1}>
-          {previewLine}
-        </Text>
-      </View>
-
-      {/* Right: dot + camera */}
-      <View style={styles.igChatRight}>
-        {hasUnread
-          ? <View style={styles.igBlueDot} />
-          : <View style={{ width: 10 }} />}
-        <Feather name="camera" size={22} color={hasUnread ? '#262626' : '#c7c7c7'} />
-      </View>
-    </TouchableOpacity>
-  );
-}
 
 function Inbox() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
 
   const [profilesById, setProfilesById] = useState<Record<string, any>>({});
   const profilesByIdRef = useRef<Record<string, any>>({});
@@ -265,7 +104,7 @@ function Inbox() {
 
   // Use optimized polling instead of real-time listeners (saves 70-80% on costs)
   const { conversations: polledConversations, loading: polledLoading, ready: polledReady } = useInboxPolling(userId || null, {
-    pollingInterval: 12000,
+    pollingInterval: 8000,
     // PERF: poll only while Inbox is focused.
     autoStart: inFocus
   });
@@ -277,6 +116,75 @@ function Inbox() {
   useEffect(() => {
     conversationsRef.current = conversations;
   }, [conversations]);
+
+  // Merge embedded peer profiles from conversation rows so DM names/avatars appear without waiting on /users/:id.
+  useEffect(() => {
+    if (!Array.isArray(conversations) || conversations.length === 0) return;
+
+    const isPlaceholderName = (value: any) => {
+      const s = String(value || '').trim();
+      if (!s) return true;
+      const lower = s.toLowerCase();
+      const placeholderRegex = /^(user|unknown|guest|null|undefined|nan)(\s*[_-\d]*)?$/i;
+      return placeholderRegex.test(lower);
+    };
+
+    const emailToNiceName = (emailLike: any) => {
+      const s = typeof emailLike === 'string' ? emailLike.trim() : '';
+      if (!s) return '';
+      if (!s.includes('@')) return s;
+      const local = s.split('@')[0] || '';
+      return local.trim();
+    };
+
+    const needsEnrichment = (profileAny: any) => {
+      if (!profileAny) return true;
+      const dn = profileAny?.displayName;
+      const n = profileAny?.name;
+      const un = profileAny?.username;
+      const emailFallback = emailToNiceName(profileAny?.email);
+      const hasAnyGoodName =
+        (!isPlaceholderName(dn) && String(dn || '').trim()) ||
+        (!isPlaceholderName(n) && String(n || '').trim()) ||
+        (!isPlaceholderName(un) && String(un || '').trim()) ||
+        (!isPlaceholderName(emailFallback) && String(emailFallback || '').trim());
+      return !hasAnyGoodName;
+    };
+
+    const patches: Record<string, any> = {};
+    for (const c of conversations) {
+      if (c?.isGroup) continue;
+      const oid = c?.otherUserId;
+      if (!oid) continue;
+      const id = String(oid);
+      const ou = c?.otherUser ?? c?.otherUserProfile;
+      if (!ou || typeof ou !== 'object') continue;
+      const cur = profilesByIdRef.current[id];
+      if (!needsEnrichment(cur)) continue;
+      patches[id] = {
+        ...(cur || {}),
+        ...ou,
+        id: ou.id ?? ou._id ?? id,
+        displayName: ou.displayName ?? ou.name ?? cur?.displayName,
+        name: ou.name ?? ou.displayName ?? cur?.name,
+        username: ou.username ?? cur?.username,
+        email: ou.email ?? cur?.email,
+        avatar: ou.avatar ?? ou.photoURL ?? cur?.avatar,
+        photoURL: ou.photoURL ?? ou.avatar ?? cur?.photoURL,
+      };
+    }
+
+    if (Object.keys(patches).length === 0) return;
+
+    setProfilesById((prev) => {
+      const next = { ...(prev || {}) };
+      for (const [id, patch] of Object.entries(patches)) {
+        next[id] = patch;
+      }
+      return next;
+    });
+  }, [conversations]);
+
   const [loading, setLoading] = useState(true);
   const [forceLoadTimeout, setForceLoadTimeout] = useState(false);
   const [optimisticReadByOtherId, setOptimisticReadByOtherId] = useState<Record<string, number>>({});
@@ -356,7 +264,7 @@ function Inbox() {
   // Global warm cache so Inbox can render instantly even before userId is loaded.
   useEffect(() => {
     let mounted = true;
-    const task = InteractionManager.runAfterInteractions(() => {
+    const raf = requestAnimationFrame(() => {
       (async () => {
         try {
           const raw = await AsyncStorage.getItem('inboxConversationsCache_last_v1');
@@ -374,8 +282,7 @@ function Inbox() {
 
     return () => {
       mounted = false;
-      // @ts-ignore - RN types vary by version
-      task?.cancel?.();
+      cancelAnimationFrame(raf);
     };
   }, [normalizeConversations]);
   
@@ -455,14 +362,14 @@ function Inbox() {
       .filter((id) => shouldRefetchProfile(profilesByIdRef.current?.[id]))
       .filter((id) => !requestedProfileIdsRef.current.has(id));
     // Fetch a bit more aggressively so names appear quickly (still bounded).
-    const missing = missingAll.slice(0, 24);
+    const missing = missingAll.slice(0, 48);
     if (missing.length === 0) return;
 
     // Mark as requested immediately to avoid duplicate fanout during rapid re-renders.
     missing.forEach((id) => requestedProfileIdsRef.current.add(String(id)));
 
     let mounted = true;
-    const task = InteractionManager.runAfterInteractions(() => {
+    const task = requestAnimationFrame(() => {
       (async () => {
         try {
           // 1) Try AsyncStorage cache first
@@ -490,7 +397,7 @@ function Inbox() {
 
           // 2) Fetch remaining (cap concurrency by chunking)
           const results: Array<readonly [string, any]> = [];
-          const chunkSize = 4;
+          const chunkSize = 12;
           for (let i = 0; i < stillMissing.length; i += chunkSize) {
             const chunk = stillMissing.slice(i, i + chunkSize);
             const settled = await Promise.allSettled(
@@ -534,8 +441,7 @@ function Inbox() {
 
     return () => {
       mounted = false;
-      // @ts-ignore - RN types vary by version
-      task?.cancel?.();
+      cancelAnimationFrame(task);
     };
   }, [conversations]);
 
@@ -755,8 +661,10 @@ function Inbox() {
       }
       setConversations(normalizedConvos);
     };
+    // Prefer a short defer over runAfterInteractions — the latter can wait on unrelated
+    // animations and makes inbox / handoff to DM feel sluggish.
     if (shouldDefer) {
-      InteractionManager.runAfterInteractions(apply);
+      requestAnimationFrame(() => apply());
     } else {
       apply();
     }
@@ -919,12 +827,21 @@ function Inbox() {
           <ConversationItem
             item={item}
             userId={userId}
-            router={router}
             formatTime={formatTime}
             profilesById={profilesById}
-            setConversations={setConversations}
-            setOptimisticReadByOtherId={setOptimisticReadByOtherId}
-            onOpenActions={openActions}
+            onLongPress={(it) => openActions(it, it.otherUserId, it.displayName)}
+            onPress={(it) => {
+              setOptimisticReadByOtherId(it.otherUserId || it.id);
+              router.push({
+                pathname: '/dm',
+                params: {
+                  conversationId: it._id || it.id,
+                  otherUserId: it.otherUserId || it.id,
+                  user: it.displayName || 'User',
+                  isGroup: it.isGroup ? '1' : '0'
+                }
+              });
+            }}
           />
         )}
         ListEmptyComponent={
@@ -950,9 +867,15 @@ function Inbox() {
         animationType="slide"
         onRequestClose={() => setCreateGroupVisible(false)}
       >
-        <Pressable style={styles.groupSheetBackdrop} onPress={() => setCreateGroupVisible(false)}>
-          <Pressable style={styles.groupSheet} onPress={() => {}}>
-            <>
+        <KeyboardAvoidingView
+          style={{ flex: 1 }}
+          enabled={Platform.OS === 'ios'}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          keyboardVerticalOffset={0}
+        >
+          <View style={styles.groupSheetBackdrop}>
+            <Pressable style={StyleSheet.absoluteFillObject} onPress={() => setCreateGroupVisible(false)} />
+            <Pressable style={[styles.groupSheet, { paddingBottom: Math.max(insets.bottom, 20) }]} onPress={() => {}}>
               <View style={styles.groupHandle} />
               <Text style={styles.groupTitle}>New Group</Text>
               <TextInput
@@ -991,8 +914,9 @@ function Inbox() {
                   const id = String(u?._id || u?.id || u?.firebaseUid || u?.uid || '');
                   return id ? `user_${id}` : `user_idx_${index}`;
                 }}
-                style={{ maxHeight: 230 }}
+                style={{ maxHeight: 230, flexGrow: 0 }}
                 keyboardShouldPersistTaps="handled"
+                keyboardDismissMode="on-drag"
                 renderItem={({ item: u }: { item: any }) => {
                   const id = String(u?._id || u?.id || u?.firebaseUid || u?.uid || '');
                   const selected = selectedGroupMembers.some((m: any) => String(m?._id || m?.id || m?.firebaseUid || m?.uid || '') === id);
@@ -1024,9 +948,9 @@ function Inbox() {
               >
                 <Text style={styles.createGroupBtnText}>{groupSaving ? 'Creating...' : 'Create Group'}</Text>
               </TouchableOpacity>
-            </>
-          </Pressable>
-        </Pressable>
+            </Pressable>
+          </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       <Modal

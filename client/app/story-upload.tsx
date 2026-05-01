@@ -8,6 +8,7 @@ import { safeRouterBack } from '@/lib/safeRouterBack';
 
 import { Feather } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
+import { ResizeMode, Video } from 'expo-av';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { compressVideoSafe, compressImageSafe } from '../lib/mediaUtils';
 
@@ -99,6 +100,7 @@ export default function StoryUploadScreen() {
     const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
     const [userGroups, setUserGroups] = useState<{ _id: string; name: string; type: string; members: string[] }[]>([]);
     const [showVisibilityModal, setShowVisibilityModal] = useState(false);
+    const [scrollEnabled, setScrollEnabled] = useState(true);
 
 
     // Load current user
@@ -212,93 +214,106 @@ export default function StoryUploadScreen() {
         setShowTextEditor(true);
     }, []);
 
-    const DraggableOverlay = ({ overlay }: { overlay: TextOverlay }) => {
-        const fs = FONT_STYLES[overlay.fontStyle || 'classic'];
-        const pos = overlayPositionsRef.current[overlay.id] || new Animated.ValueXY({ x: overlay.x * SCREEN_W, y: overlay.y * PREVIEW_H });
+// ─────────────────────────────────────────────
+// Draggable text overlay component (Moved outside to prevent re-creation lag)
+// ─────────────────────────────────────────────
+const DraggableOverlay = ({ 
+    overlay, 
+    isSelected, 
+    pos, 
+    onSelect, 
+    onDelete, 
+    onUpdatePosition,
+    setScrollEnabled 
+}: { 
+    overlay: TextOverlay; 
+    isSelected: boolean;
+    pos: Animated.ValueXY;
+    onSelect: (overlay: TextOverlay) => void;
+    onDelete: (id: string) => void;
+    onUpdatePosition: (id: string, x: number, y: number) => void;
+    setScrollEnabled: (enabled: boolean) => void;
+}) => {
+    const fs = FONT_STYLES[overlay.fontStyle || 'classic'];
+    
+    const panResponder = useRef(
+        PanResponder.create({
+            onStartShouldSetPanResponder: () => true,
+            onMoveShouldSetPanResponder: (_evt, gesture) =>
+                Math.abs(gesture.dx) > 2 || Math.abs(gesture.dy) > 2,
+            onPanResponderGrant: () => {
+                setScrollEnabled(false);
+                onSelect(overlay);
+                // @ts-ignore
+                pos.extractOffset();
+            },
+            onPanResponderMove: Animated.event([null, { dx: pos.x, dy: pos.y }], { useNativeDriver: false }),
+            onPanResponderRelease: (_evt, gesture) => {
+                setScrollEnabled(true);
+                pos.flattenOffset();
+                // @ts-ignore
+                const rawX = (pos.x as any)._value || 0;
+                // @ts-ignore
+                const rawY = (pos.y as any)._value || 0;
 
-        const pan = useRef(
-            PanResponder.create({
-                // Let taps reach TouchableOpacity; only claim move for drag
-                onStartShouldSetPanResponder: () => false,
-                onMoveShouldSetPanResponder: (_evt, gesture) =>
-                    Math.abs(gesture.dx) > 6 || Math.abs(gesture.dy) > 6,
-                onPanResponderGrant: () => {
-                    setSelectedOverlayId(overlay.id);
-                    // @ts-ignore
-                    pos.setOffset({ x: (pos.x as any)._value || 0, y: (pos.y as any)._value || 0 });
-                    pos.setValue({ x: 0, y: 0 });
+                const nextX = Math.max(10, Math.min(SCREEN_W - 10, rawX));
+                const nextY = Math.max(10, Math.min(PREVIEW_H - 10, rawY));
+                pos.setValue({ x: nextX, y: nextY });
+
+                onUpdatePosition(overlay.id, nextX / SCREEN_W, nextY / PREVIEW_H);
+            },
+            onPanResponderTerminate: () => {
+                setScrollEnabled(true);
+                pos.flattenOffset();
+            }
+        })
+    ).current;
+
+    return (
+        <Animated.View
+            {...panResponder.panHandlers}
+            style={[
+                styles.overlayDragWrap,
+                {
+                    transform: [
+                        { translateX: pos.x },
+                        { translateY: pos.y },
+                    ],
                 },
-                onPanResponderMove: Animated.event([null, { dx: pos.x, dy: pos.y }], { useNativeDriver: false }),
-                onPanResponderRelease: (_evt, gesture) => {
-                    pos.flattenOffset();
-                    // @ts-ignore
-                    const rawX = (pos.x as any)._value || 0;
-                    // @ts-ignore
-                    const rawY = (pos.y as any)._value || 0;
-
-                    // Keep within bounds
-                    const nextX = clamp(rawX, 10, SCREEN_W - 10);
-                    const nextY = clamp(rawY, 10, PREVIEW_H - 10);
-                    pos.setValue({ x: nextX, y: nextY });
-
-                    setTextOverlays((prev) =>
-                        prev.map((o) =>
-                            o.id === overlay.id
-                                ? { ...o, x: nextX / SCREEN_W, y: nextY / PREVIEW_H }
-                                : o
-                        )
-                    );
-                },
-            })
-        ).current;
-
-        const isSelected = selectedOverlayId === overlay.id;
-
-        return (
-            <Animated.View
-                {...pan.panHandlers}
-                style={[
-                    styles.overlayDragWrap,
-                    {
-                        transform: [
-                            { translateX: Animated.subtract(pos.x, 40) },
-                            { translateY: pos.y },
-                        ],
-                    },
-                    isSelected && styles.overlayDragWrapSelected,
-                ]}
+                isSelected && styles.overlayDragWrapSelected,
+            ]}
+        >
+            <TouchableOpacity
+                activeOpacity={1}
+                onPress={() => onSelect(overlay)}
             >
-                <TouchableOpacity
-                    activeOpacity={1}
-                    onPress={() => openTextEditorForOverlay(overlay)}
+                <Text
+                    style={[
+                        styles.overlayText,
+                        {
+                            color: overlay.color,
+                            fontFamily: fs.fontFamily,
+                            letterSpacing: fs.letterSpacing,
+                            textTransform: fs.textTransform as any,
+                        },
+                    ]}
                 >
-                    <Text
-                        style={[
-                            styles.overlayText,
-                            {
-                                color: overlay.color,
-                                fontFamily: fs.fontFamily,
-                                letterSpacing: fs.letterSpacing,
-                                textTransform: fs.textTransform,
-                            },
-                        ]}
-                    >
-                        {overlay.text}
-                    </Text>
-                </TouchableOpacity>
+                    {overlay.text}
+                </Text>
+            </TouchableOpacity>
 
-                {isSelected && (
-                    <TouchableOpacity
-                        style={styles.overlayDeleteBtn}
-                        onPress={() => deleteOverlay(overlay.id)}
-                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                    >
-                        <Feather name="x" size={16} color="#fff" />
-                    </TouchableOpacity>
-                )}
-            </Animated.View>
-        );
-    };
+            {isSelected && (
+                <TouchableOpacity
+                    style={styles.overlayDeleteBtn}
+                    onPress={() => onDelete(overlay.id)}
+                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                >
+                    <Feather name="x" size={16} color="#fff" />
+                </TouchableOpacity>
+            )}
+        </Animated.View>
+    );
+};
 
     const commitText = () => {
         const trimmed = editingText.trim();
@@ -434,15 +449,39 @@ export default function StoryUploadScreen() {
                 <ScrollView
                     keyboardShouldPersistTaps="handled"
                     showsVerticalScrollIndicator={false}
+                    scrollEnabled={scrollEnabled}
                     contentContainerStyle={{ paddingBottom: insets.bottom + 20 }}
                 >
                     {/* ── Preview ── */}
                     <View style={styles.preview}>
-                        <Image source={{ uri }} style={styles.previewImg} resizeMode="cover" />
+                        {type === 'video' ? (
+                            <Video
+                                source={{ uri }}
+                                style={styles.previewImg}
+                                resizeMode={ResizeMode.COVER}
+                                shouldPlay
+                                isMuted
+                                isLooping
+                                useNativeControls={false}
+                            />
+                        ) : (
+                            <Image source={{ uri }} style={styles.previewImg} resizeMode="cover" />
+                        )}
 
                         {/* Text overlays preview */}
                         {textOverlays.map((o) => (
-                            <DraggableOverlay key={o.id} overlay={o} />
+                            <DraggableOverlay 
+                                key={o.id} 
+                                overlay={o} 
+                                isSelected={selectedOverlayId === o.id}
+                                pos={overlayPositionsRef.current[o.id] || new Animated.ValueXY({ x: o.x * SCREEN_W, y: o.y * PREVIEW_H })}
+                                onSelect={openTextEditorForOverlay}
+                                onDelete={deleteOverlay}
+                                onUpdatePosition={(id, x, y) => {
+                                    setTextOverlays(prev => prev.map(item => item.id === id ? { ...item, x, y } : item));
+                                }}
+                                setScrollEnabled={setScrollEnabled}
+                            />
                         ))}
                     </View>
 
@@ -658,7 +697,16 @@ export default function StoryUploadScreen() {
                         <View style={styles.textEditorBg}>
                         <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
                             <View style={styles.textEditorPreview}>
-                                <Image source={{ uri }} style={styles.textEditorPreviewImage} resizeMode="cover" />
+                                {type === 'video' ? (
+                                    <Video
+                                        source={{ uri }}
+                                        style={styles.textEditorPreviewImage}
+                                        resizeMode={ResizeMode.COVER}
+                                        shouldPlay={false}
+                                    />
+                                ) : (
+                                    <Image source={{ uri }} style={styles.textEditorPreviewImage} resizeMode="cover" />
+                                )}
                                 {Platform.OS === 'ios' ? (
                                     <BlurView intensity={55} tint="dark" style={StyleSheet.absoluteFillObject} />
                                 ) : (
@@ -747,6 +795,8 @@ const styles = StyleSheet.create({
     overlayTextWrap: { position: 'absolute', maxWidth: SCREEN_W - 20 },
     overlayDragWrap: {
         position: 'absolute',
+        left: -40, // Offset to center the touch point better
+        top: 0,
         maxWidth: SCREEN_W - 20,
         padding: 2,
     },

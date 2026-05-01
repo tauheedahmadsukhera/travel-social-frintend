@@ -9,12 +9,14 @@ import {
   ActivityIndicator,
   Alert,
   Dimensions,
+  FlatList,
   Image,
   Keyboard,
   KeyboardAvoidingView,
   Linking,
   Modal,
   Platform,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -56,6 +58,10 @@ import { ResizeMode, Video } from 'expo-av';
 import { resolveCanonicalUserId } from '../../lib/currentUser';
 import { hapticLight, hapticMedium } from '../../lib/haptics';
 import { getCachedData, setCachedData, useNetworkStatus, useOfflineBanner } from '../../hooks/useOffline';
+import ProfileHeader from '@/src/_components/profile/ProfileHeader';
+import ProfileStats from '@/src/_components/profile/ProfileStats';
+import ProfileActions from '@/src/_components/profile/ProfileActions';
+import ProfileTabs from '@/src/_components/profile/ProfileTabs';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const isSmallDevice = SCREEN_HEIGHT < 700;
@@ -182,6 +188,25 @@ function parseCoord(val: any): number | null {
   return null;
 }
 
+function isVideoUrl(url: any): boolean {
+  if (typeof url !== 'string' || !url) return false;
+  const lower = url.toLowerCase();
+
+  // If it has a clear image extension, it's NOT a video
+  if (/\.(jpg|jpeg|png|heic|heif|webp|gif)(\?|$)/i.test(lower)) {
+    return false;
+  }
+
+  // Standard extensions
+  const videoExtensions = ['.mp4', '.mov', '.avi', '.mkv', '.webm', '.m4v', '.quicktime'];
+  // Check for extension, 'video' in path, or signed cloud URLs that often contain 'video'
+  return videoExtensions.some(ext => lower.includes(ext)) || 
+         lower.startsWith('content://media/external/video/') ||
+         lower.includes('/video/') ||
+         lower.includes('ext-video') ||
+         (lower.startsWith('http') && (lower.includes('video') || lower.includes('mp4') || lower.includes('m4v')));
+}
+
 // Types
 type Highlight = {
   id: string;
@@ -266,6 +291,7 @@ type ProfileData = {
   following?: string[];
   isPrivate?: boolean;
   approvedFollowers?: string[];
+  isApprovedFollower?: boolean;
   followRequestPending?: boolean;
   firebaseUid?: string;  // Backend field
 };
@@ -284,6 +310,8 @@ export default function Profile({ userIdProp }: any) {
   // State and context
   const [storiesViewerVisible, setStoriesViewerVisible] = useState(false);
   const [userStories, setUserStories] = useState<any[]>([]);
+  /** Instagram-style: tap profile photo to view full-screen (when not opening stories). */
+  const [avatarPreviewUri, setAvatarPreviewUri] = useState<string | null>(null);
   const [settingsModalVisible, setSettingsModalVisible] = useState(false);
   const [userMenuVisible, setUserMenuVisible] = useState(false);
   const [highlightViewerVisible, setHighlightViewerVisible] = useState(false);
@@ -391,6 +419,14 @@ export default function Profile({ userIdProp }: any) {
   const MIN_PROFILE_RELOAD_MS = 2500;
   const MIN_REFRESH_EVENT_GAP_MS = 1200;
   const { hideHeader, showHeader } = useHeaderVisibility();
+  const [refreshing, setRefreshing] = useState(false);
+  
+  const onRefresh = useCallback(() => {
+    setRefreshing(true);
+    setRefreshTrigger(prev => prev + 1);
+    setTimeout(() => setRefreshing(false), 1000);
+  }, []);
+
   // Header padding is handled by Tabs sceneStyle (see (tabs)/_layout.tsx)
   const headerHeight = 0;
 
@@ -699,350 +735,194 @@ export default function Profile({ userIdProp }: any) {
           return;
         }
 
-        // Cache-first bootstrap: hydrate UI instantly if we have cached profile data.
-        try {
-          const cached = await getCachedData<any>(PROFILE_CACHE_KEY);
-          if (cached) {
-            if (cached.profile) setProfile(cached.profile);
-            if (typeof cached.isPrivate === 'boolean') setIsPrivate(cached.isPrivate);
-            if (typeof cached.approvedFollower === 'boolean') setApprovedFollower(cached.approvedFollower);
-            if (typeof cached.followRequestPending === 'boolean') setFollowRequestPending(cached.followRequestPending);
-            if (typeof cached.passportLocationsCount === 'number') setPassportLocationsCount(cached.passportLocationsCount);
-            if (Array.isArray(cached.posts)) setPosts(cached.posts);
-            if (Array.isArray(cached.sections)) setSections(cached.sections);
-            if (Array.isArray(cached.highlights)) setHighlights(cached.highlights);
-            if (Array.isArray(cached.userStories)) setUserStories(cached.userStories);
-            if (Array.isArray(cached.taggedPosts)) setTaggedPosts(cached.taggedPosts);
-            if (Array.isArray(cached.savedSectionPosts)) setSavedSectionPosts(cached.savedSectionPosts);
-            setLoading(false);
-          }
-        } catch { }
-
-        // Offline: keep cached UI; don’t block with full-screen loaders.
-        if (!isOnline && hasLoadedOnceRef.current) {
-          setLoading(false);
-          return;
-        }
+        if (isProfileLoadingRef.current) return;
 
         const shouldThrottle =
           !forceReload &&
           hasLoadedOnceRef.current &&
           Date.now() - lastProfileLoadAtRef.current < MIN_PROFILE_RELOAD_MS;
 
-        if (shouldThrottle || isProfileLoadingRef.current) {
+        if (shouldThrottle) {
           return;
         }
 
         isProfileLoadingRef.current = true;
 
-        const isColdStart = !hasLoadedOnceRef.current;
-        if (isColdStart) setLoading(true);
-        try {
-          // Fetch profile with requester ID for privacy check
-          const profileRes = await getUserProfileAPI(viewedUserId, currentUserId || undefined);
-          if (__DEV__) {
-            console.log('[Profile] Profile response:', profileRes);
-            console.log('[Profile] Full response structure:', {
-              hasSuccess: isObjectLike(profileRes) && 'success' in profileRes,
-              hasData: isObjectLike(profileRes) && 'data' in profileRes,
-              successValue: profileRes?.success,
-              dataType: typeof profileRes?.data,
-              dataKeys: profileRes?.data ? Object.keys(profileRes.data) : 'N/A',
-              platform: Platform.OS
-            });
+        let cacheHydratedNow = false;
+        if (!forceReload && !hasLoadedOnceRef.current) {
+          try {
+            const snap = await getCachedData<any>(PROFILE_CACHE_KEY);
+            if (snap?.profile) {
+              cacheHydratedNow = true;
+              setProfile(snap.profile);
+              setIsPrivate(!!snap.isPrivate);
+              setApprovedFollower(!!snap.approvedFollower);
+              setFollowRequestPending(!!(snap.profile as any)?.followRequestPending);
+              if (Array.isArray(snap.posts)) setPosts(snap.posts);
+              if (Array.isArray(snap.sections)) setSections(snap.sections);
+              if (Array.isArray(snap.highlights)) setHighlights(snap.highlights);
+              if (Array.isArray(snap.userStories)) setUserStories(snap.userStories);
+              if (Array.isArray(snap.taggedPosts)) setTaggedPosts(snap.taggedPosts);
+              if (Array.isArray(snap.savedSectionPosts)) setSavedSectionPosts(snap.savedSectionPosts);
+              setLoading(false);
+            }
+          } catch {
+            // ignore cache hydrate errors
           }
+        }
 
-          if (profileRes.success) {
-            let profileData: ProfileData | null = null;
-            if (isObjectLike(profileRes) && 'data' in profileRes && profileRes.data && typeof profileRes.data === 'object') {
-              profileData = profileRes.data as ProfileData;
-              if (__DEV__) {
-                console.log('[Profile] Extracted from profileRes.data:', {
-                  name: profileData?.name,
-                  displayName: profileData?.displayName,
-                  avatar: profileData?.avatar,
-                  photoURL: profileData?.photoURL,
-                  email: profileData?.email,
-                  uid: profileData?.uid,
-                  _id: (profileData as any)?._id
-                });
-              }
-            } else if (isObjectLike(profileRes) && 'profile' in profileRes && profileRes.profile && typeof profileRes.profile === 'object') {
-              profileData = profileRes.profile as ProfileData;
-              if (__DEV__) {
-                console.log('[Profile] Extracted from profileRes.profile:', {
-                  name: profileData?.name,
-                  displayName: profileData?.displayName,
-                  avatar: profileData?.avatar,
-                  photoURL: profileData?.photoURL
-                });
-              }
-            }
-            if (__DEV__) {
-              console.log('[Profile] Final profileData being set:', profileData);
-              console.log('[Profile] Profile state update - isOwnProfile:', isOwnProfile, 'viewedUserId:', viewedUserId);
-            }
-            
-            // If profile avatar is missing OR backend still returns default, use cached avatar for own profile.
-            const currentAvatar = normalizeAvatarUri(profileData?.avatar) || normalizeAvatarUri((profileData as any)?.photoURL) || normalizeAvatarUri((profileData as any)?.profilePicture);
-            const isDefaultAvatar = currentAvatar === DEFAULT_AVATAR_URL;
-            if (profileData && isOwnProfile && (!currentAvatar || isDefaultAvatar)) {
-              try {
-                const cachedAvatar = await AsyncStorage.getItem('userAvatar');
-                const normalizedCached = normalizeAvatarUri(cachedAvatar);
-                if (normalizedCached && normalizedCached !== DEFAULT_AVATAR_URL) {
-                  profileData.avatar = normalizedCached;
-                  (profileData as any).photoURL = normalizedCached;
-                  (profileData as any).profilePicture = normalizedCached;
-                  if (__DEV__) console.log('[Profile] Merged cached avatar into profile:', normalizedCached.substring(0, 50));
-                }
-              } catch (e) {
-                if (__DEV__) console.log('[Profile] Could not get cached avatar:', e);
-              }
-            }
-            
-            setProfile(profileData);
-            const derivedIsPrivate = !!profileData?.isPrivate;
-            const derivedApprovedFollower = !!profileData?.approvedFollowers?.includes(currentUserId || '');
-            const canViewPrivateProfile = !derivedIsPrivate || isOwnProfile || derivedApprovedFollower;
+        if (!hasLoadedOnceRef.current && !cacheHydratedNow) {
+          setLoading(true);
+        }
 
-            setIsPrivate(derivedIsPrivate);
-            setApprovedFollower(derivedApprovedFollower);
-            setFollowRequestPending(profileData?.followRequestPending || false);
-
-            // Performance: don't block the whole profile screen on every endpoint.
-            // Fetch the blocker set first (needed for filtering), then progressively
-            // hydrate posts/sections/highlights/stories/tagged/saved.
-            const blockedSet = await (currentUserId ? fetchBlockedUserIds(currentUserId) : Promise.resolve(new Set<string>()));
-
-            // Start requests in parallel (but apply results progressively)
-            const postsPromise = getUserPostsAPI(viewedUserId, currentUserId || undefined).catch(() => null);
-            const sectionsPromise = getUserSectionsAPI(viewedUserId, currentUserId || undefined).catch(() => null);
-            const highlightsPromise = getUserHighlightsAPI(viewedUserId, currentUserId || undefined).catch(() => null);
-            const storiesPromise = getUserStories(viewedUserId).catch(() => null);
-            const taggedPostsPromise = getTaggedPosts(viewedUserId, currentUserId || undefined).catch(() => null);
-            const savedPostsPromise = apiService.get(`/users/${viewedUserId}/saved`, {
-              viewerId: currentUserId || undefined,
-              requesterId: currentUserId || undefined,
-              requesterUserId: currentUserId || undefined,
-            }).catch(() => ({ success: false, data: [] }));
-
-            const passportPromise = (viewedUserId && canViewPrivateProfile)
-              ? getPassportData(viewedUserId).catch(() => null)
-              : Promise.resolve(null);
-            const followStatusPromise = (!isOwnProfile && currentUserId && viewedUserId)
-              ? import('../../lib/firebaseHelpers/follow').then(({ checkFollowStatus }) => checkFollowStatus(currentUserId!, viewedUserId!)).catch(() => null)
-              : Promise.resolve(null);
-
-            // Let UI render header ASAP (lists can hydrate after)
-            setLoading(false);
-
-            const passportRes = await passportPromise;
-            const followStatusRes = await followStatusPromise;
-
-            // Passport count
-            let passportCount = 0;
-            if (passportRes) {
-              const stamps = Array.isArray((passportRes as any)?.stamps) ? (passportRes as any).stamps : [];
-              passportCount = typeof (passportRes as any)?.ticketCount === 'number' ? (passportRes as any).ticketCount : stamps.length;
-              setPassportLocationsCount(passportCount);
-            } else {
-              setPassportLocationsCount(0);
-            }
-
-            // Follow status
-            if (followStatusRes && (followStatusRes as any).success) {
-              setIsFollowing((followStatusRes as any).isFollowing || false);
-            }
-
-            // Posts (hydrate progressively)
-            const postsRes: any = await postsPromise;
-            let postsData: any[] = [];
-            if (postsRes?.success) {
-              if (isObjectLike(postsRes) && 'data' in postsRes && Array.isArray(postsRes.data)) postsData = postsRes.data;
-              else if (isObjectLike(postsRes) && 'posts' in postsRes && Array.isArray(postsRes.posts)) postsData = postsRes.posts;
-            }
-            // Reduce initial render cost; full list is still available via refresh/pagination later
-            const filteredPosts = filterOutBlocked(postsData, blockedSet);
-            setPosts(filteredPosts.slice(0, 36));
-
-            // Sections
-            const sectionsRes: any = await sectionsPromise;
-            let sectionsData: any[] = [];
-            if (sectionsRes?.success) {
-              if (isObjectLike(sectionsRes) && 'data' in sectionsRes && Array.isArray(sectionsRes.data)) sectionsData = sectionsRes.data;
-              else if (isObjectLike(sectionsRes) && 'sections' in sectionsRes && Array.isArray(sectionsRes.sections)) sectionsData = sectionsRes.sections;
-            }
-
-            if (isOwnProfile && sectionsData.length === 0) {
-              const sectionsById = new Map<string, any>();
-              sectionsData.forEach((s: any) => {
-                const k = String(s?._id || s?.id || `${s?.userId || 'u'}:${s?.name || 'section'}`);
-                if (k && !sectionsById.has(k)) sectionsById.set(k, s);
-              });
-
-              const aliases = [currentUserUidAlias, currentUserFirebaseAlias].filter(Boolean).map((v) => String(v));
-              if (__DEV__) {
-                console.log('[Profile] sections fallback aliases:', aliases);
-              }
-              for (const alias of aliases) {
-                const aliasSectionsRes = await getUserSectionsAPI(alias, currentUserId || undefined);
-                const aliasSections = aliasSectionsRes?.success
-                  ? (Array.isArray((aliasSectionsRes as any)?.data) ? (aliasSectionsRes as any).data : (Array.isArray((aliasSectionsRes as any)?.sections) ? (aliasSectionsRes as any).sections : []))
-                  : [];
-                if (__DEV__) {
-                  console.log('[Profile] sections fallback result:', { alias, count: aliasSections.length, success: !!aliasSectionsRes?.success });
-                }
-
-                aliasSections.forEach((s: any) => {
-                  const k = String(s?._id || s?.id || `${s?.userId || 'u'}:${s?.name || 'section'}`);
-                  if (k && !sectionsById.has(k)) sectionsById.set(k, s);
-                });
-              }
-
-              sectionsData = Array.from(sectionsById.values());
-            }
-            setSections(sectionsData);
-
-            // Highlights
-            const highlightsRes: any = await highlightsPromise;
-            let highlightsData: any[] = [];
-            if (highlightsRes?.success) {
-              if (isObjectLike(highlightsRes) && 'data' in highlightsRes && Array.isArray(highlightsRes.data)) highlightsData = highlightsRes.data;
-              else if (isObjectLike(highlightsRes) && 'highlights' in highlightsRes && Array.isArray(highlightsRes.highlights)) highlightsData = highlightsRes.highlights;
-            }
-            const normalizedHighlights = (Array.isArray(highlightsData) ? highlightsData : [])
-              .map((h: any) => ({
-                ...h,
-                id: String(h?.id || h?._id || ''),
-                title: h?.title || h?.name || 'Highlight',
-                coverImage: h?.coverImage || h?.image || h?.cover || '',
-              }))
-              .filter((h: any) => !!h.id);
-            setHighlights(normalizedHighlights);
-
-            // Stories (keep a local copy for offline cache — `transformedStories` is block-scoped)
-            let userStoriesForCache: any[] = [];
-            const storiesRes: any = await storiesPromise;
-            if (storiesRes?.success && Array.isArray(storiesRes?.stories)) {
-              const now = Date.now();
-              const transformedStories = storiesRes.stories
-                .filter((s: any) => {
-                  const expiryTime = s.expiresAt ? new Date(s.expiresAt).getTime() : 0;
-                  return expiryTime === 0 || expiryTime > now;
-                })
-                .map((story: any) => ({
-                  ...story,
-                  id: story._id || story.id,
-                  userId: viewedUserId,
-                  userName: profileData?.username || profileData?.name || (profileData as any)?.displayName || 'User',
-                  userAvatar: normalizeAvatarUri(profileData?.avatar) || normalizeAvatarUri(profileData?.photoURL) || normalizeAvatarUri((profileData as any)?.profilePicture) || '',  // iOS Fix: Check all avatar fields
-                  imageUrl: story.image || story.imageUrl || story.mediaUrl,
-                  videoUrl: story.video || story.videoUrl,
-                  mediaType: story.video ? 'video' : 'image',
-                  createdAt: story.createdAt || Date.now()
-                }));
-              // Oldest first (sequence wise)
-              transformedStories.sort((a: any, b: any) => {
-                const ta = Date.parse(String(a?.createdAt || 0)) || 0;
-                const tb = Date.parse(String(b?.createdAt || 0)) || 0;
-                return ta - tb;
-              });
-              userStoriesForCache = transformedStories.slice(0, 60);
-              setUserStories(userStoriesForCache);
-            } else {
-              userStoriesForCache = [];
-              setUserStories([]);
-            }
-
-            // Tagged posts
-            const taggedPostsRes: any = await taggedPostsPromise;
-            let taggedData: any[] = [];
-            if (taggedPostsRes?.success) {
-              if (isObjectLike(taggedPostsRes) && 'data' in taggedPostsRes && Array.isArray(taggedPostsRes.data)) taggedData = taggedPostsRes.data;
-              else if (isObjectLike(taggedPostsRes) && 'posts' in taggedPostsRes && Array.isArray(taggedPostsRes.posts)) taggedData = taggedPostsRes.posts;
-            }
-            setTaggedPosts(filterOutBlocked(taggedData, blockedSet));
-
-            // Saved posts used for section composition (e.g., saved external posts in user's collections)
-            const savedPostsRes: any = await savedPostsPromise;
-            let savedData: any[] = [];
-            if ((savedPostsRes as any)?.success) {
-              const rawSaved = (savedPostsRes as any)?.data || (savedPostsRes as any);
-              if (Array.isArray(rawSaved)) savedData = rawSaved;
-            }
-
-            if (isOwnProfile && savedData.length === 0) {
-              const savedById = new Map<string, any>();
-              savedData.forEach((p: any) => {
-                const k = String(p?._id || p?.id || '');
-                if (k && !savedById.has(k)) savedById.set(k, p);
-              });
-
-              const aliases = [currentUserUidAlias, currentUserFirebaseAlias].filter(Boolean).map((v) => String(v));
-              if (__DEV__) {
-                console.log('[Profile] saved fallback aliases:', aliases);
-              }
-              for (const alias of aliases) {
-                const aliasSavedRes: any = await apiService.get(`/users/${alias}/saved`, {
-                  viewerId: currentUserId || undefined,
-                  requesterId: currentUserId || undefined,
-                  requesterUserId: currentUserId || undefined,
-                }).catch(() => ({ success: false, data: [] }));
-                const aliasSaved = Array.isArray(aliasSavedRes?.data) ? aliasSavedRes.data : (Array.isArray(aliasSavedRes) ? aliasSavedRes : []);
-                if (__DEV__) {
-                  console.log('[Profile] saved fallback result:', { alias, count: aliasSaved.length, success: !!aliasSavedRes?.success });
-                }
-                aliasSaved.forEach((p: any) => {
-                  const k = String(p?._id || p?.id || '');
-                  if (k && !savedById.has(k)) savedById.set(k, p);
-                });
-              }
-
-              savedData = Array.from(savedById.values());
-            }
-            setSavedSectionPosts(filterOutBlocked(savedData, blockedSet));
-
-            // Persist cache snapshot for offline mode (best-effort, do not block UI)
-            try {
-              await setCachedData(PROFILE_CACHE_KEY, {
-                profile: profileData,
-                isPrivate: derivedIsPrivate,
-                approvedFollower: derivedApprovedFollower,
-                followRequestPending: !!profileData?.followRequestPending,
-                passportLocationsCount: passportCount,
-                posts: filteredPosts.slice(0, 36),
-                sections: sectionsData,
-                highlights: normalizedHighlights,
-                userStories: userStoriesForCache,
-                taggedPosts: filterOutBlocked(taggedData, blockedSet),
-                savedSectionPosts: filterOutBlocked(savedData, blockedSet),
-              }, { ttl: 24 * 60 * 60 * 1000 });
-            } catch { }
-
-            if (__DEV__) {
-              console.log('[Profile] final data counts:', {
-                posts: postsData.length,
-                sections: sectionsData.length,
-                savedSectionPosts: savedData.length,
-                isOwnProfile,
-                viewedUserId,
-                currentUserId,
-                currentUserUidAlias,
-                currentUserFirebaseAlias,
-              });
-            }
-          } else {
+        try {
+          const timestamp = Date.now();
+          const [blockedSet, profileRes] = await Promise.all([
+            currentUserId ? fetchBlockedUserIds(currentUserId) : Promise.resolve(new Set<string>()),
+            getUserProfileAPI(viewedUserId, currentUserId || undefined),
+          ]);
+          if (!profileRes.success || !profileRes.data) {
             console.warn('[Profile] Profile fetch failed:', profileRes.error);
             setProfile(null);
-            setPassportLocationsCount(0);
-            setPosts([]);
-            setSavedSectionPosts([]);
-            setSections([]);
-            setHighlights([]);
-            setUserStories([]);
-            setTaggedPosts([]);
+            return;
           }
+
+          const profileData = profileRes.data as ProfileData;
+          setProfile(profileData);
+          
+          const derivedIsPrivate = !!profileData?.isPrivate;
+          const derivedApprovedFollower = !!profileData?.isApprovedFollower;
+          const canViewPrivateProfile = !derivedIsPrivate || isOwnProfile || derivedApprovedFollower;
+
+          setIsPrivate(derivedIsPrivate);
+          setApprovedFollower(derivedApprovedFollower);
+          setFollowRequestPending(!!profileData?.followRequestPending);
+
+          setLoading(false);
+
+          // Fetch other data in parallel (UI already shows profile header)
+          const postsPromise = apiService.getUserPosts(viewedUserId, { _t: timestamp }).catch(() => null);
+          const sectionsPromise = apiService.get(`/users/${viewedUserId}/sections`, { _t: timestamp }).catch(() => null);
+          const highlightsPromise = getUserHighlights(viewedUserId, currentUserId || undefined).catch(() => null);
+          const storiesPromise = getUserStories(viewedUserId).catch(() => null);
+          const taggedPostsPromise = getTaggedPosts(viewedUserId, currentUserId || undefined).catch(() => null);
+          const savedPostsPromise = apiService.get(`/users/${viewedUserId}/saved`, {
+            viewerId: currentUserId || undefined,
+            requesterId: currentUserId || undefined,
+            requesterUserId: currentUserId || undefined,
+            _t: timestamp
+          }).catch(() => ({ success: false, data: [] }));
+
+          const passportPromise = (viewedUserId && canViewPrivateProfile)
+            ? getPassportData(viewedUserId).catch(() => null)
+            : Promise.resolve(null);
+          
+          const followStatusPromise = (!isOwnProfile && currentUserId && viewedUserId)
+            ? import('../../lib/firebaseHelpers/follow').then(({ checkFollowStatus }) => checkFollowStatus(currentUserId!, viewedUserId!)).catch(() => null)
+            : Promise.resolve(null);
+
+          const [
+            passportRes,
+            followStatusRes,
+            postsRes,
+            sectionsRes,
+            highlightsRes,
+            storiesRes,
+            taggedPostsRes,
+            savedPostsRes
+          ] = await Promise.all([
+            passportPromise,
+            followStatusPromise,
+            postsPromise,
+            sectionsPromise,
+            highlightsPromise,
+            storiesPromise,
+            taggedPostsPromise,
+            savedPostsPromise
+          ]);
+
+          // Hydrate state
+          if (passportRes) {
+            const stamps = Array.isArray((passportRes as any)?.stamps) ? (passportRes as any).stamps : [];
+            setPassportLocationsCount(typeof (passportRes as any)?.ticketCount === 'number' ? (passportRes as any).ticketCount : stamps.length);
+          }
+
+          if (followStatusRes && (followStatusRes as any).success) {
+            setIsFollowing((followStatusRes as any).isFollowing || false);
+          }
+
+          let postsData: any[] = [];
+          if ((postsRes as any)?.success) {
+            postsData = Array.isArray((postsRes as any).data) ? (postsRes as any).data : ((postsRes as any).posts || []);
+          }
+          const filteredPosts = filterOutBlocked(postsData, blockedSet);
+          setPosts(filteredPosts.slice(0, 36));
+
+          let sectionsData: any[] = [];
+          if ((sectionsRes as any)?.success) {
+            sectionsData = Array.isArray((sectionsRes as any).data) ? (sectionsRes as any).data : ((sectionsRes as any).sections || []);
+          }
+          setSections(sectionsData);
+
+          let highlightsData: any[] = [];
+          if ((highlightsRes as any)?.success) {
+            highlightsData = Array.isArray((highlightsRes as any).data) ? (highlightsRes as any).data : ((highlightsRes as any).highlights || []);
+          }
+          const normalizedHighlights = highlightsData
+            .map((h: any) => ({
+              ...h,
+              id: String(h?.id || h?._id || ''),
+              title: h?.title || h?.name || 'Highlight',
+              coverImage: h?.coverImage || h?.image || h?.cover || '',
+            }))
+            .filter((h: any) => !!h.id);
+          setHighlights(normalizedHighlights);
+
+          let userStoriesForCache: any[] = [];
+          if ((storiesRes as any)?.success && Array.isArray((storiesRes as any)?.stories)) {
+            const now = Date.now();
+            userStoriesForCache = (storiesRes as any).stories
+              .filter((s: any) => !s.expiresAt || new Date(s.expiresAt).getTime() > now)
+              .map((story: any) => ({
+                ...story,
+                id: story._id || story.id,
+                userId: viewedUserId,
+                userName: profileData?.username || profileData?.name || 'User',
+                userAvatar: normalizeAvatarUri(profileData?.avatar) || '',
+                imageUrl: story.image || story.imageUrl || story.mediaUrl,
+                videoUrl: story.video || story.videoUrl,
+                mediaType: story.video ? 'video' : 'image',
+                createdAt: story.createdAt || Date.now()
+              }));
+            userStoriesForCache.sort((a, b) => (Date.parse(String(a.createdAt)) || 0) - (Date.parse(String(b.createdAt)) || 0));
+            setUserStories(userStoriesForCache);
+          }
+
+          let taggedData: any[] = [];
+          if ((taggedPostsRes as any)?.success) {
+            taggedData = Array.isArray((taggedPostsRes as any).data) ? (taggedPostsRes as any).data : ((taggedPostsRes as any).posts || []);
+          }
+          setTaggedPosts(filterOutBlocked(taggedData, blockedSet));
+
+          let savedData: any[] = [];
+          const rawSaved = (savedPostsRes as any)?.data || (savedPostsRes as any);
+          if (Array.isArray(rawSaved)) savedData = rawSaved;
+          setSavedSectionPosts(filterOutBlocked(savedData, blockedSet));
+
+          // Cache snapshot
+          try {
+            await setCachedData(PROFILE_CACHE_KEY, {
+              profile: profileData,
+              isPrivate: derivedIsPrivate,
+              approvedFollower: derivedApprovedFollower,
+              posts: filteredPosts.slice(0, 36),
+              sections: sectionsData,
+              highlights: normalizedHighlights,
+              userStories: userStoriesForCache,
+              taggedPosts: filterOutBlocked(taggedData, blockedSet),
+              savedSectionPosts: filterOutBlocked(savedData, blockedSet),
+            }, { ttl: 24 * 60 * 60 * 1000 });
+          } catch {}
 
           if (__DEV__) console.log('[Profile] All data fetched successfully');
         } catch (err) {
@@ -1050,9 +930,9 @@ export default function Profile({ userIdProp }: any) {
         } finally {
           isProfileLoadingRef.current = false;
           lastProfileLoadAtRef.current = Date.now();
+          setLoading(false);
+          hasLoadedOnceRef.current = true;
         }
-        setLoading(false);
-        hasLoadedOnceRef.current = true;
       };
 
       fetchData();
@@ -1127,12 +1007,13 @@ export default function Profile({ userIdProp }: any) {
           if (!ids.includes(String(event.postId))) return p;
           return {
             ...p,
-            ...(patch.caption !== undefined ? { caption: patch.caption } : null),
-            ...(patch.content !== undefined ? { content: patch.content } : null),
+            ...patch,
             updatedAt: new Date().toISOString(),
           };
         };
         setPosts(prev => (Array.isArray(prev) ? prev.map(apply) : prev));
+        setTaggedPosts(prev => (Array.isArray(prev) ? prev.map(apply) : prev));
+        setSavedSectionPosts(prev => (Array.isArray(prev) ? prev.map(apply) : prev));
       }
       if (event.type === 'HIGHLIGHT_DELETED' && (event as any).highlightId) {
         const hid = String((event as any).highlightId);
@@ -1158,16 +1039,220 @@ export default function Profile({ userIdProp }: any) {
   }, []);
 
 
-  // Render helpers
-  const renderSkeletonPosts = () => (
-    <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginTop: 0 }}>
-      {Array.from({ length: POSTS_PER_PAGE }).map((_, idx) => (
-        <View key={idx} style={{ flexBasis: '33.3333%', aspectRatio: 1, padding: 1 }}>
-          <View style={{ backgroundColor: '#eee', borderRadius: 8, width: '100%', height: '100%' }} />
-        </View>
-      ))}
-    </View>
-  );
+  const renderProfileHeader = () => {
+    return (
+      <View style={styles.content}>
+        <ProfileHeader 
+          profile={profile}
+          userStories={userStories}
+          isOwnProfile={isOwnProfile}
+          isPrivate={isPrivate}
+          approvedFollower={approvedFollower}
+          onPressAvatar={() => {
+            hapticLight();
+            if (userStories.length > 0) {
+              setStoriesViewerVisible(true);
+            } else if (isOwnProfile) {
+              handleAvatarPick();
+            }
+          }}
+          onAddStory={handleAddStory}
+          onPressPassport={() => {
+            hapticLight();
+            router.push({ pathname: '/passport', params: { user: viewedUserId } } as any);
+          }}
+        />
+
+        <ProfileStats 
+          locationsCount={passportLocationsCount}
+          postsCount={posts.length}
+          followersCount={Math.max(0, Number(profile?.followersCount ?? (profile?.followers?.length || 0)) || 0)}
+          followingCount={Math.max(0, Number(profile?.followingCount ?? (profile?.following?.length || 0)) || 0)}
+          onPressLocations={() => {
+            if (!viewedUserId) return;
+            router.push({
+              pathname: '/user/[userId]/locations',
+              params: { userId: String(viewedUserId) }
+            } as any);
+          }}
+          onPressFollowers={() => {
+            router.push(`/friends?userId=${viewedUserId}&tab=followers` as any);
+          }}
+          onPressFollowing={() => {
+            router.push(`/friends?userId=${viewedUserId}&tab=following` as any);
+          }}
+          isPrivate={isPrivate}
+          isOwnProfile={isOwnProfile}
+          approvedFollower={approvedFollower}
+        />
+
+        <ProfileActions 
+          isOwnProfile={isOwnProfile}
+          isFollowing={isFollowing}
+          followRequestPending={followRequestPending}
+          followLoading={followLoading}
+          isPrivate={isPrivate}
+          approvedFollower={approvedFollower}
+          onFollowToggle={handleFollowToggle}
+          onMessage={handleMessage}
+          onEditProfile={() => {
+            hapticLight();
+            router.push({ pathname: '/edit-profile', params: { userId: viewedUserId } } as any);
+          }}
+          onViewCollections={() => {
+            hapticLight();
+            if (isOwnProfile) {
+              router.push('/(tabs)/saved' as any);
+            } else {
+              setViewCollectionsModal(true);
+            }
+          }}
+        />
+
+        {(!isPrivate || isOwnProfile || approvedFollower) && (
+          <View style={{ marginBottom: 12 }}>
+            <HighlightCarousel 
+              highlights={highlights} 
+              onPressHighlight={handlePressHighlight} 
+              isOwnProfile={isOwnProfile} 
+            />
+            <HighlightViewer
+              visible={highlightViewerVisible}
+              highlightId={selectedHighlightId}
+              onClose={() => setHighlightViewerVisible(false)}
+              userId={isOwnProfile ? (currentUserId || undefined) : undefined}
+              userName={profile?.displayName || profile?.name}
+              userAvatar={profile?.avatar || profile?.photoURL || undefined}
+            />
+          </View>
+        )}
+
+        {(!isPrivate || isOwnProfile || approvedFollower) && (
+          <ProfileTabs 
+            activeTab={segmentTab}
+            onChangeTab={(tab) => {
+              setSegmentTab(tab);
+              if (tab !== 'grid') setSelectedSection(null);
+            }}
+            mapEnabled={PROFILE_MAP_ENABLED}
+          />
+        )}
+
+        {/* Collections horizontal scroller (keeping inline for specific logic) */}
+        {(!isPrivate || isOwnProfile || approvedFollower) && segmentTab === 'grid' && (() => {
+          const visibleSections = (sections as any[]).filter(s => {
+            if (isOwnProfile) return true;
+            if (!s.visibility || s.visibility === 'public') return true;
+            const collaborators = Array.isArray(s.collaborators) ? s.collaborators : [];
+            const viewerId = String(currentUserId || '');
+            return collaborators.some((c: any) => {
+              const cid = typeof c === 'string' ? c : (c.userId || c.uid || c._id || c.firebaseUid);
+              return String(cid) === viewerId;
+            });
+          });
+
+          if (visibleSections.length === 0) return null;
+
+          return (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 12, gap: 14, paddingVertical: 10 }}>
+              {visibleSections.map((s, idx) => {
+                const isActive = selectedSection === s.name;
+                const coverUri = s.coverImage || sectionSourcePosts.find(p => s.postIds?.includes?.(getPostId(p)))?.imageUrl || DEFAULT_AVATAR_URL;
+                return (
+                  <TouchableOpacity
+                    key={`section-${String((s as any)?._id || s.name)}-${idx}`}
+                    activeOpacity={0.8}
+                    onPress={() => { hapticLight(); setSelectedSection(isActive ? null : s.name); }}
+                    style={{ alignItems: 'center', width: 60 }}
+                  >
+                    <View style={{ width: 60, height: 60, borderRadius: 10, overflow: 'hidden', borderWidth: isActive ? 2 : 0, borderColor: '#0A3D62', backgroundColor: '#eee' }}>
+                      <ExpoImage source={{ uri: coverUri }} style={{ width: '100%', height: '100%' }} contentFit="cover" transition={0} />
+                    </View>
+                    <Text numberOfLines={1} style={{ marginTop: 4, fontSize: 10, fontWeight: isActive ? '700' : '400', color: isActive ? '#0A3D62' : '#333', textAlign: 'center', width: 60 }}>{s.name}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          );
+        })()}
+      </View>
+    );
+  };
+
+  const currentPostsArray = segmentTab === 'grid' ? (selectedSection ? visiblePosts : posts) : taggedPosts;
+
+  const renderGridItem = ({ item, index }: { item: any, index: number }) => {
+    return (
+      <TouchableOpacity
+        style={styles.gridItem}
+        activeOpacity={0.8}
+        onPress={() => {
+          hapticLight();
+          const modalIndex = currentPostsArray.findIndex(p => (p.id || p._id) === (item.id || item._id));
+          setSelectedPostIndex(modalIndex >= 0 ? modalIndex : index);
+          setPostViewerVisible(true);
+        }}
+      >
+        {(() => {
+          const firstMedia = item.videoUrl || item.mediaUrls?.[0] || item.imageUrls?.[0] || item.imageUrl || '';
+          const isVideo = isVideoUrl(firstMedia) || item.postType === 'video' || item.mediaType === 'video' || !!item.videoUrl;
+          const thumbnailUrl = item.thumbnailUrl || item.imageUrl;
+          const hasThumbnailImage = !!thumbnailUrl && !isVideoUrl(thumbnailUrl);
+
+          if (isVideo && !hasThumbnailImage) {
+            return (
+              <View style={{ width: '100%', height: '100%', backgroundColor: '#000', overflow: 'hidden', justifyContent: 'center', alignItems: 'center' }}>
+                <Video
+                  source={{ uri: firstMedia }}
+                  style={{ width: '100%', height: '100%', position: 'absolute' }}
+                  resizeMode={ResizeMode.COVER}
+                  shouldPlay={false}
+                  isMuted={true}
+                  useNativeControls={false}
+                />
+                <Ionicons name="play" size={24} color="rgba(255,255,255,0.4)" />
+              </View>
+            );
+          }
+
+          return (
+            <ExpoImage
+              source={{ uri: hasThumbnailImage ? thumbnailUrl : (isVideo ? '' : (firstMedia || DEFAULT_IMAGE_URL)) }}
+              style={{ width: '100%', height: '100%', backgroundColor: isVideo ? '#000' : '#f0f0f0' }}
+              contentFit="cover"
+              transition={200}
+              cachePolicy="memory-disk"
+              priority="high"
+            />
+          );
+        })()}
+        {(() => {
+          const firstMedia = item.videoUrl || item.mediaUrls?.[0] || item.imageUrls?.[0] || item.imageUrl || '';
+          const isVideo = isVideoUrl(firstMedia) || item.postType === 'video' || item.mediaType === 'video' || !!item.videoUrl;
+          if (isVideo) {
+            return (
+              <View style={{ 
+                position: 'absolute', 
+                top: 6, 
+                right: 6, 
+                backgroundColor: 'rgba(0,0,0,0.5)', 
+                borderRadius: 4, 
+                padding: 4,
+                shadowColor: '#000',
+                shadowOffset: { width: 0, height: 1 },
+                shadowOpacity: 0.3,
+                shadowRadius: 2,
+                elevation: 3
+              }}>
+                <Ionicons name="play" size={14} color="#fff" style={{ marginLeft: 1 }} />
+              </View>
+            );
+          }
+          return null;
+        })()}
+      </TouchableOpacity>
+    );
+  };
 
   // UI
   // Show loading while auth is initializing
@@ -1209,7 +1294,8 @@ export default function Profile({ userIdProp }: any) {
           <Text style={styles.offlineBannerText}>You’re offline — showing cached profile</Text>
         </View>
       )}
-      {/* Header for other users' profiles with back button and 3-dots menu */}
+
+      {/* Header for other users' profiles */}
       {!isOwnProfile && (
         <View style={styles.profileHeader}>
           <TouchableOpacity
@@ -1221,24 +1307,14 @@ export default function Profile({ userIdProp }: any) {
           >
             <Feather name="arrow-left" size={20} color="#000" />
           </TouchableOpacity>
-          <Text style={styles.headerTitle} numberOfLines={1}>{profile?.username || profile?.name || (profile as any)?.displayName || 'Profile'}</Text>
+          <Text style={styles.headerTitle} numberOfLines={1}>
+            {profile?.username || profile?.name || (profile as any)?.displayName || 'Profile'}
+          </Text>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-            <TouchableOpacity
-              onPress={() => {
-                hapticLight();
-                router.push('/passport' as any);
-              }}
-              style={styles.headerMenuBtn}
-            >
+            <TouchableOpacity onPress={() => { hapticLight(); router.push('/passport' as any); }} style={styles.headerMenuBtn}>
               <Feather name="briefcase" size={20} color="#000" />
             </TouchableOpacity>
-            <TouchableOpacity
-              onPress={() => {
-                hapticLight();
-                setUserMenuVisible(true);
-              }}
-              style={styles.headerMenuBtn}
-            >
+            <TouchableOpacity onPress={() => { hapticLight(); setUserMenuVisible(true); }} style={styles.headerMenuBtn}>
               <Feather name="more-vertical" size={20} color="#000" />
             </TouchableOpacity>
           </View>
@@ -1250,543 +1326,42 @@ export default function Profile({ userIdProp }: any) {
           <ActivityIndicator size="large" color="#007aff" />
         </View>
       )}
-      <ScrollView 
-        contentContainerStyle={[styles.content, { paddingTop: headerHeight }]}
-        scrollEventThrottle={16}
-        // iOS: avoid unmount/remount while scrolling (prevents "reload" feel)
-        removeClippedSubviews={Platform.OS === 'android'}
-        // Keep scroll fully native-driven (no JS onScroll work).
-      >
-        {/* Avatar centered */}
-        <View style={styles.avatarContainer}>
-          <View style={{ position: 'relative', alignItems: 'center', justifyContent: 'center' }}>
-            {/* Story Ring - only show if there are stories */}
-            {userStories.length > 0 && (
-              <LinearGradient
-                colors={['#F58529', '#DD2A7B', '#8134AF']}
-                style={{
-                  position: 'absolute',
-                  width: 102,
-                  height: 102,
-                  borderRadius: 51,
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}
-              >
-                <View style={{ width: 96, height: 96, borderRadius: 48, backgroundColor: '#fff' }} />
-              </LinearGradient>
-            )}
-            <TouchableOpacity
-              activeOpacity={0.8}
-              onPress={() => {
-                hapticLight();
-                if (userStories.length > 0) {
-                  setStoriesViewerVisible(true);
-                } else if (isOwnProfile) {
-                  // Fallback: If no stories and own profile, trigger avatar change
-                  // or just let the handleAddStory (+) handle it
-                  // For better UX, let's trigger avatar pick if no stories
-                  handleAvatarPick();
-                }
-              }}
-            >
-              {(() => {
-                let avatarUri =
-                  normalizeAvatarUri(profile?.avatar) ||
-                  normalizeAvatarUri((profile as any)?.photoURL) ||
-                  normalizeAvatarUri((profile as any)?.profilePicture) ||
-                  null;
 
-                if (profileAvatarFailed) {
-                  avatarUri = null;
-                }
-
-                // Avoid logging in render path (hurts scroll perf).
-
-                const dimmed = isPrivate && !isOwnProfile && !approvedFollower;
-
-                // iOS Fix: Always show avatar URI if available, fallback to DEFAULT_AVATAR_URL not initials
-                if (avatarUri) {
-                  return (
-                    <ExpoImage
-                      source={{ uri: avatarUri }}
-                      style={[styles.avatar, dimmed && { opacity: 0.3 }]}
-                      contentFit="cover"
-                      transition={0}
-                      cachePolicy="memory-disk"
-                      priority="high"
-                      onError={() => {
-                        console.warn('[Profile] Avatar failed to load:', {
-                          avatarUri,
-                          platform: Platform.OS
-                        });
-                        setProfileAvatarFailed(true);
-                      }}
-                    />
-                  );
-                }
-
-                // iOS Fix: Use DEFAULT_AVATAR_URL instead of initials if no avatar found
-                return (
-                  <ExpoImage
-                    source={DEFAULT_AVATAR_SOURCE}
-                    style={[styles.avatar, dimmed && { opacity: 0.3 }]}
-                    contentFit="cover"
-                    transition={0}
-                    cachePolicy="memory-disk"
-                    priority="high"
-                  />
-                );
-              })()}
-              {isPrivate && !isOwnProfile && !approvedFollower && (
-                <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.3)', borderRadius: 60 }}>
-                  <Ionicons name="lock-closed" size={40} color="#fff" />
-                </View>
-              )}
-            </TouchableOpacity>
-            {/* Add story button overlay for own profile */}
-            {isOwnProfile && (
-              <TouchableOpacity
-                style={{ position: 'absolute', bottom: 0, right: 0, backgroundColor: '#007aff', borderRadius: 16, width: 32, height: 32, justifyContent: 'center', alignItems: 'center', borderWidth: 3, borderColor: '#fff', zIndex: 2 }}
-                onPress={handleAddStory}
-              >
-                <Feather name="plus" size={20} color="#fff" />
-              </TouchableOpacity>
-            )}
-          </View>
-        </View>
-
-        {/* Stats row: Locations | Posts | Followers | Following */}
-        <View style={styles.statsRow}>
-          {(!isPrivate || isOwnProfile || approvedFollower) ? (
-            <>
-              <TouchableOpacity
-                style={styles.statItem}
-                onPress={() => {
-                  hapticLight();
-                  if (!viewedUserId) return;
-                  router.push({
-                    pathname: '/user/[userId]/locations',
-                    params: { userId: String(viewedUserId) }
-                  } as any);
-                }}
-                disabled={!viewedUserId}
-              >
-                <Text style={styles.statNum}>{passportLocationsCount}</Text>
-                <Text style={styles.statLbl}>Locations</Text>
-              </TouchableOpacity>
-              <View style={styles.statItem}>
-                <Text style={styles.statNum}>{posts.length}</Text>
-                <Text style={styles.statLbl}>Posts</Text>
+      {(!isPrivate || isOwnProfile || approvedFollower) ? (
+        <FlatList
+          data={currentPostsArray}
+          keyExtractor={(item, index) => item.id || item._id || `post-${index}`}
+          renderItem={renderGridItem}
+          numColumns={3}
+          ListHeaderComponent={renderProfileHeader}
+          ListEmptyComponent={() => (
+            !loading && (
+              <View style={{ padding: 40, alignItems: 'center' }}>
+                <Ionicons name="grid-outline" size={48} color="#ccc" />
+                <Text style={{ marginTop: 10, color: '#999' }}>No posts yet</Text>
               </View>
-              <TouchableOpacity
-                style={styles.statItem}
-                onPress={() => {
-                  hapticLight();
-                  if (!isPrivate || isOwnProfile || approvedFollower) {
-                    router.push(`/friends?userId=${viewedUserId}&tab=followers` as any);
-                  }
-                }}
-                disabled={isPrivate && !isOwnProfile && !approvedFollower}
-              >
-                <Text style={styles.statNum}>{Math.max(0, Number(profile?.followersCount ?? (profile?.followers?.length || 0)) || 0)}</Text>
-                <Text style={styles.statLbl}>Followers</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.statItem}
-                onPress={() => {
-                  hapticLight();
-                  if (!isPrivate || isOwnProfile || approvedFollower) {
-                    router.push(`/friends?userId=${viewedUserId}&tab=following` as any);
-                  }
-                }}
-                disabled={isPrivate && !isOwnProfile && !approvedFollower}
-              >
-                <Text style={styles.statNum}>{Math.max(0, Number(profile?.followingCount ?? (profile?.following?.length || 0)) || 0)}</Text>
-                <Text style={styles.statLbl}>Following</Text>
-              </TouchableOpacity>
-            </>
-          ) : (
-            <View style={{ paddingVertical: 20, alignItems: 'center' }}>
-              <Ionicons name="lock-closed" size={32} color="#999" />
-              <Text style={{ marginTop: 8, fontSize: 14, color: '#999', textAlign: 'center' }}>This account is private</Text>
-              <Text style={{ fontSize: 13, color: '#999', textAlign: 'center', marginTop: 4 }}>Follow to see their stats and posts</Text>
-            </View>
+            )
           )}
-        </View>
-
-        {/* Name + Bio + Website + Location + Phone + Interests */}
-        <View style={styles.infoBlock}>
-          <Text style={styles.displayName}>{profile?.name || (profile as any)?.displayName || profile?.username || 'User'}</Text>
-          {!!profile?.username && <Text style={styles.username}>@{profile.username}</Text>}
-          
-          {/* Passport Button for other users */}
-          {!isOwnProfile && (
-            <TouchableOpacity
-              style={styles.passportBtnLarge}
-              onPress={() => {
-                hapticLight();
-                router.push({ pathname: '/passport', params: { user: viewedUserId } } as any);
-              }}
-            >
-              <Feather name="briefcase" size={18} color="#000" style={{ marginRight: 8 }} />
-              <Text style={styles.passportBtnText}>Passport</Text>
-            </TouchableOpacity>
-          )}
-
-          {!!profile?.bio && <Text style={styles.bio}>{profile.bio}</Text>}
-          {!!profile?.website && (!isPrivate || isOwnProfile || approvedFollower) && (
-            <View style={styles.linksBlock}>
-              {splitProfileLinks(profile.website).map((rawLink) => {
-                const url = normalizeExternalUrl(rawLink);
-                if (!url) return null;
-                const platform = detectProfileLinkPlatform(url);
-                const icon = (() => {
-                  if (platform === 'facebook') return <Feather name="facebook" size={16} color="#1877F2" />;
-                  if (platform === 'instagram') return <Feather name="instagram" size={16} color="#C13584" />;
-                  if (platform === 'twitter') return <Feather name="twitter" size={16} color="#1DA1F2" />;
-                  if (platform === 'youtube') return <Feather name="youtube" size={16} color="#FF0000" />;
-                  if (platform === 'linkedin') return <Feather name="linkedin" size={16} color="#0A66C2" />;
-                  if (platform === 'whatsapp') return <Ionicons name={'logo-whatsapp' as any} size={17} color="#25D366" />;
-                  if (platform === 'website') {
-                    return (
-                      <ExpoImage
-                        source={{ uri: getFaviconUrl(url) }}
-                        style={styles.linkFavicon}
-                        contentFit="cover"
-                        transition={150}
-                      />
-                    );
-                  }
-                  return <Feather name="link-2" size={16} color="#007aff" />;
-                })();
-
-                return (
-                  <TouchableOpacity
-                    key={url}
-                    activeOpacity={0.7}
-                    onPress={async () => {
-                      hapticLight();
-                      try {
-                        const canOpen = await Linking.canOpenURL(url);
-                        if (!canOpen) {
-                          Alert.alert('Invalid Link', 'Could not open this link.');
-                          return;
-                        }
-                        await Linking.openURL(url);
-                      } catch {
-                        Alert.alert('Error', 'Failed to open link.');
-                      }
-                    }}
-                    style={styles.linkRow}
-                  >
-                    <View style={styles.linkIconWrap}>{icon}</View>
-                    <Text style={styles.linkText} numberOfLines={1} ellipsizeMode="tail">{rawLink}</Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-          )}
-          {!!(profile as any)?.location && (!isPrivate || isOwnProfile || approvedFollower) && <Text style={styles.location}>ðŸ“ {(profile as any).location}</Text>}
-          {!!(profile as any)?.phone && (!isPrivate || isOwnProfile || approvedFollower) && <Text style={styles.phone}>📱 {(profile as any).phone}</Text>}
-          {!!(profile as any)?.interests && (!isPrivate || isOwnProfile || approvedFollower) && <Text style={styles.interests}>✨ {(profile as any).interests}</Text>}
-        </View>
-
-        {/* Action Buttons: Owner (Profile | Collections) */}
-        {isOwnProfile && (
-          <View style={[styles.pillRow, { marginBottom: 0 }]}>
-            <TouchableOpacity
-              style={[styles.pillBtn, { flex: 1, paddingVertical: 8 }]}
-              onPress={() => {
-                hapticLight();
-                router.push({ pathname: '/edit-profile', params: { userId: viewedUserId } } as any);
-              }}
-            >
-              <Feather name="edit-2" size={14} color="#000" style={{ marginRight: 6 }} />
-              <Text style={styles.pillText}>Profile</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.pillBtn, { flex: 1, paddingVertical: 8 }]}
-              onPress={() => {
-                hapticLight();
-                router.push('/(tabs)/saved' as any);
-              }}
-            >
-              <Feather name="edit-2" size={14} color="#000" style={{ marginRight: 6 }} />
-              <Text style={styles.pillText}>Collections</Text>
-            </TouchableOpacity>
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={{ paddingBottom: insets.bottom + 40 }}
+          onRefresh={onRefresh}
+          refreshing={refreshing}
+          scrollEventThrottle={16}
+          initialNumToRender={12}
+          maxToRenderPerBatch={12}
+          windowSize={7}
+          removeClippedSubviews={Platform.OS === 'android'}
+        />
+      ) : (
+        <ScrollView contentContainerStyle={{ paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
+          {renderProfileHeader()}
+          <View style={{ padding: 40, alignItems: 'center' }}>
+            <Ionicons name="lock-closed" size={48} color="#ccc" />
+            <Text style={{ marginTop: 10, color: '#999' }}>This account is private</Text>
+            <Text style={{ textAlign: 'center', color: '#999', marginTop: 4 }}>Follow to see their posts and photos.</Text>
           </View>
-        )}
-
-        {/* Action Buttons: Other User (Follow | Message | Collections) */}
-        {!isOwnProfile && (
-          <View style={[styles.pillRow, { marginBottom: 0 }]}>
-            <TouchableOpacity
-              style={[
-                styles.followBtn,
-                (isFollowing || followRequestPending) && styles.followingBtn,
-                { flex: 1, paddingVertical: 8 }
-              ]}
-              onPress={handleFollowToggle}
-              disabled={followLoading || followRequestPending}
-            >
-              <Text style={[
-                styles.followText,
-                (isFollowing || followRequestPending) && styles.followingText
-              ]}>
-                {followRequestPending
-                  ? 'Requested'
-                  : (isFollowing
-                    ? (followLoading ? 'Unfollowing...' : 'Following ⌄')
-                    : (followLoading ? 'Following...' : 'Follow'))}
-              </Text>
-            </TouchableOpacity>
-            {(!isPrivate || approvedFollower) && (
-              <TouchableOpacity style={[styles.pillBtn, { flex: 1, paddingVertical: 8 }]} onPress={handleMessage}>
-                <Ionicons name="chatbubble-outline" size={16} color="#000" style={{ marginRight: 6 }} />
-                <Text style={styles.pillText}>Message</Text>
-              </TouchableOpacity>
-            )}
-            {(!isPrivate || approvedFollower) && (
-              <TouchableOpacity
-                style={[styles.pillBtn, { flex: 1, paddingVertical: 8 }]}
-                onPress={() => {
-                  hapticLight();
-                  setViewCollectionsModal(true);
-                }}
-              >
-                <Ionicons name="folder-outline" size={16} color="#000" style={{ marginRight: 6 }} />
-                <Text style={styles.pillText}>Collections</Text>
-              </TouchableOpacity>
-            )}
-          </View>
-        )}
-
-        {/* Highlights carousel (Instagram-style) - only show for own profile or approved followers */}
-        {(!isPrivate || isOwnProfile || approvedFollower) && (
-          <View style={{ marginBottom: 0, marginTop: 4 }}>
-            <HighlightCarousel highlights={highlights} onPressHighlight={handlePressHighlight} isOwnProfile={isOwnProfile} />
-            {/* StoriesViewer for own stories */}
-            {storiesViewerVisible && (
-              <Modal
-                visible={storiesViewerVisible}
-                transparent={false}
-                animationType="fade"
-                onRequestClose={() => setStoriesViewerVisible(false)}
-              >
-                <StoriesViewer
-                  stories={userStories}
-                  onClose={() => setStoriesViewerVisible(false)}
-                />
-              </Modal>
-            )}
-            <HighlightViewer
-              visible={highlightViewerVisible}
-              highlightId={selectedHighlightId}
-              onClose={() => setHighlightViewerVisible(false)}
-              userId={isOwnProfile ? (currentUserId || undefined) : undefined}
-              userName={profile?.displayName || profile?.name}
-              userAvatar={profile?.avatar || profile?.photoURL || undefined}
-            />
-          </View>
-        )}
-
-        {/* Icon-based segment control: grid | map | tagged - only show if not private or approved */}
-        {(!isPrivate || isOwnProfile || approvedFollower) && (
-          <View style={styles.segmentControl}>
-            <TouchableOpacity
-              style={[styles.segmentBtn, segmentTab === 'grid' && styles.segmentBtnActive]}
-              onPress={() => {
-                hapticLight();
-                setSegmentTab('grid');
-                setSelectedSection(null); // Clear section filter when clicking grid icon
-              }}
-            >
-              <Ionicons name="grid-outline" size={24} color={segmentTab === 'grid' ? '#000' : '#999'} />
-            </TouchableOpacity>
-            {PROFILE_MAP_ENABLED && (
-              <TouchableOpacity
-                style={[styles.segmentBtn, segmentTab === 'map' && styles.segmentBtnActive]}
-                onPress={() => {
-                  hapticLight();
-                  setSegmentTab('map');
-                }}
-              >
-                <Ionicons name="location-outline" size={24} color={segmentTab === 'map' ? '#000' : '#999'} />
-              </TouchableOpacity>
-            )}
-            <TouchableOpacity
-              style={[styles.segmentBtn, segmentTab === 'tagged' && styles.segmentBtnActive]}
-              onPress={() => {
-                hapticLight();
-                setSegmentTab('tagged');
-              }}
-            >
-              <Ionicons name="pricetag-outline" size={24} color={segmentTab === 'tagged' ? '#000' : '#999'} />
-            </TouchableOpacity>
-          </View>
-        )}
-
-        {/* Map view - only show if not private or approved */}
-        {PROFILE_MAP_ENABLED && (!isPrivate || isOwnProfile || approvedFollower) && segmentTab === 'map' && (
-          <View style={styles.mapContainer}>
-            {Platform.OS !== 'web' && MapView ? (
-              <MapView
-                style={styles.map}
-                initialRegion={currentLocation ? {
-                  latitude: currentLocation.latitude,
-                  longitude: currentLocation.longitude,
-                  latitudeDelta: 0.0922,
-                  longitudeDelta: 0.0421,
-                } : undefined}
-                googleRenderer={Platform.OS === 'android' ? 'LATEST' : undefined}
-                provider={Platform.OS === 'ios' ? 'google' : undefined}
-              >
-                {posts.filter(p => {
-                  const lat = parseCoord(p.location?.latitude ?? p.location?.lat ?? p.lat ?? p.locationData?.lat);
-                  const lon = parseCoord(p.location?.longitude ?? p.location?.lon ?? p.lon ?? p.locationData?.lon);
-                  return lat !== null && lon !== null;
-                }).map((post) => {
-                  const lat = parseCoord(post.location?.latitude ?? post.location?.lat ?? post.lat ?? post.locationData?.lat);
-                  const lon = parseCoord(post.location?.longitude ?? post.location?.lon ?? post.lon ?? post.locationData?.lon);
-                  if (lat === null || lon === null) return null;
-                  const imageUrl = post.imageUrl || (Array.isArray(post.mediaUrls) && post.mediaUrls.length > 0 ? post.mediaUrls[0] : (Array.isArray(post.imageUrls) && post.imageUrls.length > 0 ? post.imageUrls[0] : DEFAULT_IMAGE_URL));
-                  const avatarUrl = post.userAvatar || profile?.avatar || DEFAULT_AVATAR_URL;
-
-                  // Marker with tracksViewChanges true until images are loaded
-                  return (
-                    <ProfilePostMarker
-                      key={`post-${post.id}`}
-                      lat={lat}
-                      lon={lon}
-                      imageUrl={imageUrl}
-                      avatarUrl={avatarUrl}
-                      onPress={() => {
-                        hapticLight();
-                        const targetUserId = String(viewedUserId || '');
-                        const tappedPostId = String(post?.id || post?._id || '');
-
-                        if (targetUserId && tappedPostId) {
-                          router.push({
-                            pathname: '/user/[userId]/posts',
-                            params: { userId: targetUserId, postId: tappedPostId }
-                          } as any);
-                          return;
-                        }
-
-                        const postIndex = posts.findIndex(p => p.id === post.id);
-                        setSelectedPostIndex(postIndex);
-                        setPostViewerVisible(true);
-                      }}
-                    />
-                  );
-                })}
-              </MapView>
-            ) : (
-              <View style={[styles.map, { alignItems: 'center', justifyContent: 'center' }]}>
-                <Text style={{ color: '#666' }}>Map is not available on web preview.</Text>
-              </View>
-            )}
-          </View>
-        )}
-
-        {/* Collections horizontal scroller - only show if not private or approved */}
-        {(!isPrivate || isOwnProfile || approvedFollower) && segmentTab === 'grid' && (() => {
-          const visibleSections = (sections as any[]).filter(s => {
-            if (isOwnProfile) return true;
-            // Public is always visible
-            if (!s.visibility || s.visibility === 'public') return true;
-            // Check collaborators for private/specific visibility
-            const collaborators = Array.isArray(s.collaborators) ? s.collaborators : [];
-            const viewerId = String(currentUserId || '');
-            return collaborators.some((c: any) => {
-              const cid = typeof c === 'string' ? c : (c.userId || c.uid || c._id || c.firebaseUid);
-              return String(cid) === viewerId;
-            });
-          });
-
-          if (visibleSections.length === 0) return null;
-
-          return (
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 12, gap: 14, paddingVertical: 10 }}>
-              {visibleSections.map((s, idx) => {
-                const isActive = selectedSection === s.name;
-                const coverUri = s.coverImage || sectionSourcePosts.find(p => s.postIds?.includes?.(getPostId(p)))?.imageUrl || DEFAULT_AVATAR_URL;
-                return (
-                  <TouchableOpacity
-                    key={`section-${String((s as any)?._id || s.name)}-${idx}`}
-                    activeOpacity={0.8}
-                    onPress={() => {
-                      hapticLight();
-                      setSelectedSection(isActive ? null : s.name);
-                    }}
-                    style={{ alignItems: 'center', width: 60 }}
-                  >
-                    <View style={{
-                      width: 60, height: 60,
-                      borderRadius: 10,
-                      overflow: 'hidden',
-                      borderWidth: isActive ? 2 : 0,
-                      borderColor: '#0A3D62',
-                      backgroundColor: '#eee',
-                    }}>
-                      <ExpoImage
-                        source={{ uri: coverUri }}
-                        style={{ width: '100%', height: '100%' }}
-                        contentFit="cover"
-                        transition={0}
-                      />
-                    </View>
-                    <Text
-                      numberOfLines={1}
-                      style={{
-                        marginTop: 4,
-                        fontSize: 10,
-                        fontWeight: isActive ? '700' : '400',
-                        color: isActive ? '#0A3D62' : '#333',
-                        textAlign: 'center',
-                        width: 60,
-                      }}
-                    >{s.name}</Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </ScrollView>
-          );
-        })()}
-
-        {/* Posts grid by segment tab - only show if not private or approved */}
-        {(!isPrivate || isOwnProfile || approvedFollower) && segmentTab !== 'map' && (
-          <View style={styles.grid}>
-            {/* Posts */}
-            {loading ? renderSkeletonPosts() : (segmentTab === 'grid' ? (selectedSection ? visiblePosts : posts) : taggedPosts).map((p, index) => {
-              const currentPostsArray = segmentTab === 'grid' ? (selectedSection ? visiblePosts : posts) : taggedPosts;
-              const postKey = p.id || p._id || `post-${index}`;
-              return (
-                <TouchableOpacity
-                  key={postKey}
-                  style={styles.gridItem}
-                  activeOpacity={0.8}
-                  onPress={() => {
-                    hapticLight();
-                    const modalIndex = currentPostsArray.findIndex(post => (post.id || post._id) === (p.id || p._id));
-                    setSelectedPostIndex(modalIndex >= 0 ? modalIndex : index);
-                    setPostViewerVisible(true);
-                  }}
-                >
-                  <ExpoImage
-                    source={{ uri: p.thumbnailUrl || p.imageUrl || p.mediaUrls?.[0] || p.imageUrls?.[0] || DEFAULT_IMAGE_URL }}
-                    style={{ width: '100%', height: '100%' }}
-                    contentFit="cover"
-                    transition={0}
-                    cachePolicy="memory-disk"
-                  />
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-        )}
-      </ScrollView>
+        </ScrollView>
+      )}
 
       {/* Collections View Sheet */}
       <Modal
@@ -1873,6 +1448,69 @@ export default function Profile({ userIdProp }: any) {
         setCommentModalAvatar: setCommentModalAvatar,
         setCommentModalVisible: setCommentModalVisible,
       })}
+
+      {/* Full-screen profile photo (Instagram-style) */}
+      <Modal
+        visible={!!avatarPreviewUri}
+        transparent
+        animationType="fade"
+        statusBarTranslucent={Platform.OS === 'android'}
+        onRequestClose={() => setAvatarPreviewUri(null)}
+      >
+        <Pressable
+          style={{
+            flex: 1,
+            backgroundColor: 'rgba(0,0,0,0.94)',
+            justifyContent: 'center',
+            alignItems: 'center',
+          }}
+          onPress={() => setAvatarPreviewUri(null)}
+        >
+          <TouchableOpacity
+            activeOpacity={1}
+            onPress={() => setAvatarPreviewUri(null)}
+            style={{ position: 'absolute', top: Math.max(insets.top, 12) + 4, right: 16, zIndex: 20, padding: 8 }}
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+          >
+            <Ionicons name="close" size={34} color="#fff" />
+          </TouchableOpacity>
+          {!!avatarPreviewUri && (
+            <Pressable onPress={(e) => e.stopPropagation()} style={{ width: '100%', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 16 }}>
+              <ExpoImage
+                source={{ uri: avatarPreviewUri }}
+                style={{
+                  width: Math.min(SCREEN_WIDTH - 32, SCREEN_HEIGHT * 0.72),
+                  height: Math.min(SCREEN_WIDTH - 32, SCREEN_HEIGHT * 0.72),
+                }}
+                contentFit="contain"
+                transition={150}
+                cachePolicy="memory-disk"
+              />
+            </Pressable>
+          )}
+          {isOwnProfile && !!avatarPreviewUri && (
+            <TouchableOpacity
+              style={{
+                position: 'absolute',
+                bottom: Math.max(insets.bottom, 16) + 8,
+                alignSelf: 'center',
+                backgroundColor: 'rgba(255,255,255,0.15)',
+                paddingVertical: 12,
+                paddingHorizontal: 22,
+                borderRadius: 24,
+                borderWidth: StyleSheet.hairlineWidth,
+                borderColor: 'rgba(255,255,255,0.35)',
+              }}
+              onPress={() => {
+                setAvatarPreviewUri(null);
+                handleAvatarPick();
+              }}
+            >
+              <Text style={{ color: '#fff', fontWeight: '700', fontSize: 15 }}>Change profile photo</Text>
+            </TouchableOpacity>
+          )}
+        </Pressable>
+      </Modal>
 
       <Modal visible={commentModalVisible} animationType="slide" transparent={true} onRequestClose={() => setCommentModalVisible(false)}>
         <KeyboardAvoidingView

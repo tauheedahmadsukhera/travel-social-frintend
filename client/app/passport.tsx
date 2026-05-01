@@ -156,6 +156,15 @@ const PassportStamp = ({ stamp, size = 140, type = 'circular' }: { stamp: Stamp,
   const grainOpacity = 0.06 + ((hash % 5) * 0.01);
   const ringDash = `${6 + (hash % 3)} ${3 + (hash % 2)}`;
 
+  // Dynamic font sizing to prevent overlap for long names
+  const ovalTitle = title.length > 24 ? `${title.slice(0, 22)}...` : title;
+  const ovalFontSize = title.length > 14 ? Math.max(10, Math.floor(220 / ovalTitle.length)) : 17;
+  const ovalY = 90 + (ovalFontSize * 0.35);
+  
+  const circleTitle = title.length > 16 ? `${title.slice(0, 14)}...` : title;
+  const circleFontSize = title.length > 8 ? Math.max(7, Math.floor(95 / circleTitle.length)) : 13;
+  const circleY = 80 + (circleFontSize * 0.35);
+
   if (useExternal && stamp.type === 'country') {
     return (
       <View style={[styles.stampCircle, { width: size, height: size, backgroundColor: 'transparent' }]}>
@@ -200,8 +209,8 @@ const PassportStamp = ({ stamp, size = 140, type = 'circular' }: { stamp: Stamp,
           </SvgText>
 
           <Rect x="58" y="70" width="204" height="40" rx="8" fill={color} fillOpacity={0.04} stroke={color} strokeWidth="2" />
-          <SvgText x="160" y="95" fill={color} fontSize="17" fontWeight="900" textAnchor="middle">
-            {title.length > 22 ? `${title.slice(0, 22)}...` : title}
+          <SvgText x="160" y={ovalY} fill={color} fontSize={ovalFontSize} fontWeight="900" textAnchor="middle" textLength={title.length > 15 ? "190" : undefined} lengthAdjust="spacingAndGlyphs">
+            {ovalTitle}
           </SvgText>
 
           <SvgText fill={color} fontSize="11" fontWeight="800" letterSpacing="0.8">
@@ -235,8 +244,8 @@ const PassportStamp = ({ stamp, size = 140, type = 'circular' }: { stamp: Stamp,
         </SvgText>
 
         <Rect x="36" y="64" width="88" height="32" rx="6" fill={color} fillOpacity={0.04} stroke={color} strokeWidth="2" />
-        <SvgText x="80" y="84" fill={color} fontSize="13" fontWeight="900" textAnchor="middle">
-          {title.length > 13 ? `${title.slice(0, 13)}...` : title}
+        <SvgText x="80" y={circleY} fill={color} fontSize={circleFontSize} fontWeight="900" textAnchor="middle" textLength={title.length > 9 ? "80" : undefined} lengthAdjust="spacingAndGlyphs">
+          {circleTitle}
         </SvgText>
         <SvgText x="80" y="107" fill={color} fontSize="8.5" fontWeight="700" textAnchor="middle" letterSpacing="0.6">
           {dateText}
@@ -788,6 +797,15 @@ export default function PassportScreen() {
           </View>
         </View>
 
+        {isOwner && !selectedCountry && (
+          <View style={styles.travelHintBox} accessibilityLabel="Background travel detection for passport stamps">
+            <Feather name="navigation" size={14} color="#0A3D62" style={{ marginRight: 8, marginTop: 2 }} />
+            <Text style={styles.travelHintText}>
+              Allow location while using Trips and notifications (optional): we can detect when you enter a new country and suggest a stamp—while the app is open. Open Home once while signed in so we can refresh your position.
+            </Text>
+          </View>
+        )}
+
         {/* Discovery / Suggestion Banner */}
         {isOwner && suggestion && !selectedCountry && (
           <TouchableOpacity
@@ -887,91 +905,100 @@ export default function PassportScreen() {
       <Modal
         visible={stampSearchVisible}
         transparent
-        animationType="fade"
+        animationType="slide"
         onRequestClose={closeStampSearch}
       >
-        <TouchableOpacity style={styles.deleteOverlay} activeOpacity={1} onPress={closeStampSearch}>
+        <View style={styles.searchModalOverlay}>
           <KeyboardAvoidingView
             behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-            style={{ width: '100%' }}
-            keyboardVerticalOffset={0}
+            style={{ width: '100%', height: '100%', justifyContent: 'flex-end' }}
           >
-            <TouchableOpacity
-              activeOpacity={1}
-              onPress={(e) => e.stopPropagation()}
-              style={styles.deleteSheet}
-            >
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                <View style={[styles.deleteIcon, { backgroundColor: '#0A3D62' }]}>
-                  <Feather name="search" size={18} color="#fff" />
+            <View style={styles.searchModalContent}>
+              {/* Modal Drag Indicator */}
+              <View style={styles.modalHandle} />
+
+              <View style={styles.searchModalHeader}>
+                <View>
+                  <Text style={styles.searchModalTitle}>Search Passport</Text>
+                  <Text style={styles.searchModalSub}>Find your travel milestones</Text>
                 </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.deleteTitle}>Search stamps</Text>
-                  <Text style={styles.deleteSub}>Find countries, cities, and places</Text>
-                </View>
+                <TouchableOpacity onPress={closeStampSearch} style={styles.searchModalCloseBtn}>
+                  <Feather name="x" size={20} color="#666" />
+                </TouchableOpacity>
               </View>
 
-              <View style={[styles.modalSearchContainer, { marginTop: 14 }]}>
-                <Feather name="search" size={18} color="#0A3D62" style={{ marginRight: 12 }} />
-                <TextInput
-                  style={styles.modalSearchInput}
-                  placeholder="Search (e.g. Dubai, France, city, place)"
-                  placeholderTextColor="#999"
-                  value={stampSearchQuery}
-                  onChangeText={setStampSearchQuery}
-                  autoFocus
-                  returnKeyType="search"
-                />
-                {!!stampSearchQuery && (
-                  <TouchableOpacity onPress={() => setStampSearchQuery('')} style={{ padding: 6 }}>
-                    <Feather name="x" size={18} color="#999" />
-                  </TouchableOpacity>
-                )}
+              <View style={styles.searchBarWrapper}>
+                <View style={styles.searchBarInner}>
+                  <Feather name="search" size={18} color="#0A3D62" />
+                  <TextInput
+                    style={styles.searchBarInput}
+                    placeholder="Search countries, cities, or places..."
+                    placeholderTextColor="#999"
+                    value={stampSearchQuery}
+                    onChangeText={setStampSearchQuery}
+                    autoFocus
+                    returnKeyType="search"
+                    clearButtonMode="while-editing"
+                  />
+                  {!!stampSearchQuery && Platform.OS === 'android' && (
+                    <TouchableOpacity onPress={() => setStampSearchQuery('')}>
+                      <Feather name="x-circle" size={16} color="#ccc" />
+                    </TouchableOpacity>
+                  )}
+                </View>
               </View>
 
               <ScrollView
-                style={{ marginTop: 10, maxHeight: 420 }}
+                style={styles.searchResultsList}
                 showsVerticalScrollIndicator={false}
                 keyboardShouldPersistTaps="handled"
+                contentContainerStyle={{ paddingBottom: 40 }}
               >
                 {stampSearchQuery.trim() ? (
                   stampSearchResults.length > 0 ? (
                     stampSearchResults.map((s) => (
                       <TouchableOpacity
                         key={`ss_${String(s._id)}`}
-                        style={{
-                          paddingVertical: 12,
-                          borderBottomWidth: StyleSheet.hairlineWidth,
-                          borderBottomColor: '#eee',
-                        }}
+                        style={styles.searchResultItem}
                         onPress={() => handlePickStampFromSearch(s)}
                       >
-                        <Text style={{ fontWeight: '800', color: '#111' }}>{s.name}</Text>
-                        <Text style={{ marginTop: 2, color: '#666', fontSize: 12 }}>
-                          {s.type.toUpperCase()}
-                          {s.parentCity ? ` • ${s.parentCity}` : ''}
-                          {s.parentCountry ? ` • ${s.parentCountry}` : ''}
-                        </Text>
+                        <View style={styles.searchResultIcon}>
+                          <Feather 
+                            name={s.type === 'country' ? 'globe' : s.type === 'city' ? 'map' : 'map-pin'} 
+                            size={16} 
+                            color="#0A3D62" 
+                          />
+                        </View>
+                        <View style={styles.searchResultText}>
+                          <Text style={styles.searchResultName}>{s.name}</Text>
+                          <Text style={styles.searchResultInfo}>
+                            {s.type.charAt(0).toUpperCase() + s.type.slice(1)}
+                            {s.parentCity ? ` • ${s.parentCity}` : ''}
+                            {s.parentCountry ? ` • ${s.parentCountry}` : ''}
+                          </Text>
+                        </View>
+                        <Feather name="chevron-right" size={16} color="#CCC" />
                       </TouchableOpacity>
                     ))
                   ) : (
-                    <View style={{ paddingVertical: 18 }}>
-                      <Text style={{ color: '#666', textAlign: 'center' }}>No matching stamps found.</Text>
+                    <View style={styles.searchEmptyState}>
+                      <Feather name="search" size={48} color="#EEE" />
+                      <Text style={styles.searchEmptyText}>No stamps match your search</Text>
+                      <Text style={styles.searchEmptySub}>Try searching for a different location</Text>
                     </View>
                   )
                 ) : (
-                  <View style={{ paddingVertical: 18 }}>
-                    <Text style={{ color: '#666', textAlign: 'center' }}>Type to search your passport stamps.</Text>
+                  <View style={styles.searchPlaceholderState}>
+                    <View style={styles.searchHistoryIcon}>
+                      <Feather name="compass" size={24} color="#CCC" />
+                    </View>
+                    <Text style={styles.searchPlaceholderText}>Start typing to search your passport</Text>
                   </View>
                 )}
               </ScrollView>
-
-              <TouchableOpacity style={styles.deleteCancelBtn} onPress={closeStampSearch}>
-                <Text style={styles.deleteCancelText}>Close</Text>
-              </TouchableOpacity>
-            </TouchableOpacity>
+            </View>
           </KeyboardAvoidingView>
-        </TouchableOpacity>
+        </View>
       </Modal>
 
       {/* Delete stamp sheet (owner only) */}
@@ -1218,6 +1245,17 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   verifiedText: { fontSize: 13, color: '#666', fontWeight: '500' },
+
+  travelHintBox: {
+    marginHorizontal: 20,
+    marginTop: 12,
+    padding: 12,
+    backgroundColor: '#F0F6FA',
+    borderRadius: 12,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+  },
+  travelHintText: { flex: 1, fontSize: 12, color: '#334', lineHeight: 17 },
 
   suggestionBox: { marginHorizontal: 20, marginTop: 15, borderRadius: 16, overflow: 'hidden' },
   suggestionGradient: { padding: 16, backgroundColor: '#F8F9FA', borderRadius: 16 },
@@ -1720,5 +1758,146 @@ const styles = StyleSheet.create({
   selectionRadioSelected: {
     borderColor: '#0A3D62',
     backgroundColor: '#0A3D62',
+  },
+
+  // Redesigned Search Modal Styles
+  searchModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    justifyContent: 'flex-end',
+  },
+  searchModalContent: {
+    backgroundColor: '#fff',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    height: '90%',
+    paddingTop: 12,
+  },
+  modalHandle: {
+    width: 40,
+    height: 5,
+    borderRadius: 2.5,
+    backgroundColor: '#E0E0E0',
+    alignSelf: 'center',
+    marginBottom: 12,
+  },
+  searchModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 24,
+    marginBottom: 20,
+  },
+  searchModalTitle: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: '#000',
+    letterSpacing: -0.5,
+  },
+  searchModalSub: {
+    fontSize: 13,
+    color: '#888',
+    marginTop: 2,
+    fontWeight: '500',
+  },
+  searchModalCloseBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#F5F5F5',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  searchBarWrapper: {
+    paddingHorizontal: 24,
+    marginBottom: 16,
+  },
+  searchBarInner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F8F9FA',
+    borderRadius: 16,
+    paddingHorizontal: 16,
+    height: 52,
+    borderWidth: 1,
+    borderColor: '#F0F0F0',
+  },
+  searchBarInput: {
+    flex: 1,
+    fontSize: 16,
+    color: '#000',
+    marginLeft: 12,
+    fontWeight: '500',
+  },
+  searchResultsList: {
+    flex: 1,
+    paddingHorizontal: 24,
+  },
+  searchResultItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0F0F0',
+  },
+  searchResultIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: '#F0F4F8',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 16,
+  },
+  searchResultText: {
+    flex: 1,
+  },
+  searchResultName: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#000',
+  },
+  searchResultInfo: {
+    fontSize: 13,
+    color: '#666',
+    marginTop: 2,
+    fontWeight: '500',
+  },
+  searchEmptyState: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 60,
+  },
+  searchEmptyText: {
+    fontSize: 17,
+    fontWeight: '700',
+    color: '#111',
+    marginTop: 16,
+  },
+  searchEmptySub: {
+    fontSize: 14,
+    color: '#888',
+    marginTop: 6,
+    textAlign: 'center',
+  },
+  searchPlaceholderState: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 100,
+  },
+  searchHistoryIcon: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: '#F9F9F9',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
+  },
+  searchPlaceholderText: {
+    fontSize: 15,
+    color: '#999',
+    fontWeight: '500',
+    textAlign: 'center',
   },
 });

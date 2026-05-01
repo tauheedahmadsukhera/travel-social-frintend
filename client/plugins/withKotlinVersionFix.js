@@ -1,4 +1,4 @@
-const { withProjectBuildGradle, withGradleProperties } = require("@expo/config-plugins");
+const { withProjectBuildGradle, withGradleProperties } = require("expo/config-plugins");
 
 const TARGET_KOTLIN_VERSION = "1.9.24";
 

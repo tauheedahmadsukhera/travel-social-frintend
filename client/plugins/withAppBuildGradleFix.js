@@ -1,4 +1,4 @@
-const { withAppBuildGradle } = require("@expo/config-plugins");
+const { withAppBuildGradle } = require("expo/config-plugins");
 
 /**
  * Config plugin to fix the "unknown property enableBundleCompression" error in android/app/build.gradle.
