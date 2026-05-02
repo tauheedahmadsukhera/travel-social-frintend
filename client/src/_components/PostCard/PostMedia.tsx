@@ -85,7 +85,7 @@ const PostMedia: React.FC<PostMediaProps> = ({
   };
 
   return (
-    <View style={{ height: mediaHeight }}>
+    <View style={{ height: mediaHeight, backgroundColor: '#f0f0f0' }}>
       <FlatList
         data={media}
         renderItem={renderItem}
@@ -94,10 +94,11 @@ const PostMedia: React.FC<PostMediaProps> = ({
         showsHorizontalScrollIndicator={false}
         onScroll={onScroll}
         scrollEventThrottle={16}
-        keyExtractor={(item, index) => `${item.url}-${index}`}
+        keyExtractor={(item, index) => `${item.url || index}-${index}`}
       />
     </View>
   );
+
 };
 
 export default React.memo(PostMedia);

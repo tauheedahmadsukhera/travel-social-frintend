@@ -119,24 +119,33 @@ const PostCard: React.FC<PostCardProps> = ({
       <PostMedia 
         media={useMemo(() => {
           const mediaArr: any[] = [];
+          const rawMedia = post?.media || post?.mediaUrls || post?.imageUrls;
           
-          // 1. Check dedicated media array
-          if (Array.isArray(post?.media) && post.media.length > 0) {
-            mediaArr.push(...post.media);
-          } 
-          // 2. Check mediaUrls string array
-          else if (Array.isArray(post?.mediaUrls) && post.mediaUrls.length > 0) {
-            post.mediaUrls.forEach((url: string) => {
-              if (url) mediaArr.push({ url, type: post.mediaType || 'image' });
+          // 1. Handle arrays (either strings or objects)
+          if (Array.isArray(rawMedia) && rawMedia.length > 0) {
+            rawMedia.forEach((item: any) => {
+              if (typeof item === 'string' && item.trim()) {
+                mediaArr.push({ url: item.trim(), type: post?.mediaType || 'image' });
+              } else if (item && typeof item === 'object' && (item.url || item.uri)) {
+                mediaArr.push({ 
+                  url: item.url || item.uri, 
+                  type: item.type || post?.mediaType || 'image' 
+                });
+              }
             });
-          }
-          // 3. Fallback to single imageUrl or url
-          else if (post?.imageUrl || post?.url) {
-            mediaArr.push({ url: post.imageUrl || post.url, type: post.mediaType || 'image' });
+          } 
+          
+          // 2. Fallback to single imageUrl or url fields if array was empty/missing
+          if (mediaArr.length === 0) {
+            const singleUrl = post?.imageUrl || post?.url || post?.mediaUrl;
+            if (typeof singleUrl === 'string' && singleUrl.trim()) {
+              mediaArr.push({ url: singleUrl.trim(), type: post?.mediaType || 'image' });
+            }
           }
           
           return mediaArr;
         }, [post])}
+
         mediaHeight={400}
         activeIndex={activeIndex}
         onScroll={onScroll}
