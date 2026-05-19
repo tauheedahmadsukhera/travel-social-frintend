@@ -69,10 +69,6 @@ export function AppBrandMark({
   const iconPx = iconSize ?? (isTabBar ? TAB_BAR.icon : showWordmark ? s.icon : Math.max(40, s.icon));
   const textSize = isTabBar ? TAB_BAR.text : s.text;
   const titleWeight = isTabBar ? TAB_BAR.weight : '900';
-  const pullText =
-    showIcon && showWordmark
-      ? { marginLeft: isTabBar ? TAB_BAR.textMarginLeft : DEFAULT_TEXT_TIGHTEN }
-      : null;
 
   return (
     <View
@@ -94,8 +90,13 @@ export function AppBrandMark({
         <Text
           style={[
             styles.word,
-            { fontSize: textSize, fontWeight: titleWeight },
-            pullText,
+            { 
+              fontSize: textSize, 
+              fontWeight: titleWeight,
+              marginLeft: (showIcon && showWordmark) 
+                ? (isTabBar ? TAB_BAR.textMarginLeft : DEFAULT_TEXT_TIGHTEN) 
+                : 0
+            },
             isTabBar ? { letterSpacing: TAB_BAR.letter } : null,
           ]}
         >
