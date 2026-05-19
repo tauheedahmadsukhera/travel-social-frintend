@@ -26,7 +26,7 @@ const TAB_BAR = {
   weight: '800' as const,
 };
 
-const DEFAULT_TEXT_TIGHTEN = -14; // Pull the Trips text slightly closer to the logo icon
+const DEFAULT_TEXT_TIGHTEN = -12; // Space between logo icon and Trips wordmark
 
 type Props = {
   /** Optional remote logo from `/branding`; otherwise bundled Trips mark is used. */
