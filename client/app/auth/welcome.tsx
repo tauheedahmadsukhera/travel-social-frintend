@@ -159,6 +159,7 @@ const styles = StyleSheet.create({
     flex: 1,
     padding: 20,
     paddingBottom: 10,
+    justifyContent: 'center', // Vertically center all layout blocks
   },
   buttonContainer: {
     marginBottom: 15,
