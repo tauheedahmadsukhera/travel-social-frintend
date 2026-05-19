@@ -26,7 +26,7 @@ const TAB_BAR = {
   weight: '800' as const,
 };
 
-const DEFAULT_TEXT_TIGHTEN = -8; // Pull the Trips text slightly closer to the logo icon
+const DEFAULT_TEXT_TIGHTEN = -14; // Pull the Trips text slightly closer to the logo icon
 
 type Props = {
   /** Optional remote logo from `/branding`; otherwise bundled Trips mark is used. */
