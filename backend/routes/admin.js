@@ -38,7 +38,7 @@ router.post('/login', async (req, res) => {
     const bcrypt = require('bcryptjs');
     const { generateToken } = require('../src/middleware/authMiddleware');
 
-    const user = await User.findOne({ email: email.toLowerCase() });
+    const user = await User.findOne({ email: email.toLowerCase() }).select('+password');
     if (!user || !user.password) {
       return res.status(401).json({ success: false, error: 'Invalid email or password' });
     }
