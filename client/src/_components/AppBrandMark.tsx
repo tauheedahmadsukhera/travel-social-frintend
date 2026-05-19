@@ -85,7 +85,7 @@ export function AppBrandMark({
       {showIcon ? (
         <ExpoImage
           source={iconSource}
-          style={{ width: iconPx, height: iconPx, marginLeft: 0 }}
+          style={{ width: iconPx, height: iconPx, marginLeft: -10 }}
           contentFit="contain"
           cachePolicy="memory-disk"
         />
