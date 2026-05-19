@@ -111,6 +111,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 0,
+    marginLeft: -15, // Shift left to reduce space on the left side of the logo
   },
   logoContainer: {
     flex: 1,
