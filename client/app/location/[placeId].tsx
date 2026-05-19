@@ -199,6 +199,43 @@ export default function LocationDetailsScreen() {
   const regionIdStr = String(regionId || placeId || '').toLowerCase();
   const isRegionScope = String(scope || '').toLowerCase() === 'region';
 
+  // Dynamic Geo-Scope detection
+  const getGeoScope = React.useCallback((): 'CONTINENT' | 'COUNTRY' | 'CITY' | 'NEIGHBORHOOD' => {
+    const name = String(locationName || '').toLowerCase().trim();
+    const sc = String(scope || '').toLowerCase().trim();
+
+    // Continent Detection
+    const continents = ['europe', 'asia', 'africa', 'americas', 'oceania', 'america', 'antarctica'];
+    if (sc === 'continent' || sc === 'region' || continents.includes(name)) {
+      return 'CONTINENT';
+    }
+
+    // Country Detection
+    if (sc === 'country') {
+      return 'COUNTRY';
+    }
+    const countries = [
+      'united kingdom', 'japan', 'pakistan', 'france', 'spain', 'italy', 'germany', 
+      'united states', 'usa', 'canada', 'australia', 'brazil', 'india', 'china'
+    ];
+    if (countries.includes(name)) {
+      return 'COUNTRY';
+    }
+
+    return 'CITY';
+  }, [locationName, scope]);
+
+  const extractCityFromAddress = React.useCallback((post: any): string => {
+    if (post?.locationData?.city) return post.locationData.city;
+    const addr = post?.locationData?.address || '';
+    if (addr) {
+      const parts = addr.split(',').map((p: string) => p.trim());
+      if (parts.length > 2) return parts[parts.length - 3] || parts[0];
+      return parts[0];
+    }
+    return '';
+  }, []);
+
   const inferRegionKey = React.useCallback((rid: string, rname: string) => {
     const rawId = String(rid || '').trim().toLowerCase();
     const rawName = String(rname || '').trim().toLowerCase();
@@ -544,22 +581,37 @@ export default function LocationDetailsScreen() {
     }
   };
 
-  // --- NEW: Hierarchical Grouping & Filtering Logic ---
+  // --- NEW: Hierarchical Grouping & Filtering Logic (Adaptive Geo-Scope Aware) ---
   useEffect(() => {
     if (allPosts.length === 0) {
       setSubLocations([]);
       return;
     }
 
+    const currentScope = getGeoScope();
     const areaMap = new Map<string, SubLocation>();
     
     allPosts.forEach((post: any) => {
-      let areaName = extractSubLocationName(post);
-      const spotName = post?.locationData?.name || post?.locationName || areaName;
+      let areaName = 'General';
+      let spotName = post?.locationData?.name || post?.locationName || 'General';
 
-      // Avoid using the main city name as a sub-location if possible
-      if (areaName.toLowerCase() === String(locationName).toLowerCase()) {
-        areaName = spotName !== areaName ? spotName : 'General';
+      if (currentScope === 'CONTINENT') {
+        // Continent Scope: Group by Country, Nested Spots = Cities/Venues
+        areaName = post?.locationData?.country || post?.locationData?.countryCode || 'Other Countries';
+        spotName = post?.locationData?.city || post?.locationData?.name || post?.locationName || 'General';
+      } else if (currentScope === 'COUNTRY') {
+        // Country Scope: Group by City, Nested Spots = Neighborhoods/Venues
+        areaName = post?.locationData?.city || extractCityFromAddress(post) || 'Other Cities';
+        spotName = post?.locationData?.neighborhood || post?.locationData?.name || post?.locationName || 'General';
+      } else {
+        // City Scope (Default): Group by Neighborhood/District, Nested Spots = Venues/Landmarks
+        areaName = extractSubLocationName(post);
+        spotName = post?.locationData?.name || post?.locationName || areaName;
+
+        // Avoid redundancy (e.g. area name shouldn't equal main city name)
+        if (areaName.toLowerCase() === String(locationName).toLowerCase()) {
+          areaName = spotName !== areaName ? spotName : 'General';
+        }
       }
 
       if (!areaMap.has(areaName)) {
@@ -577,7 +629,7 @@ export default function LocationDetailsScreen() {
       areaObj.count++;
 
       // Spot Grouping within Area
-      if (spotName !== areaName) {
+      if (spotName !== areaName && spotName !== 'General') {
         let spotObj = areaObj.spots?.find(s => s.name === spotName);
         if (!spotObj) {
           spotObj = { name: spotName, thumbnail: post.imageUrl || '', posts: [] };
@@ -589,7 +641,7 @@ export default function LocationDetailsScreen() {
 
     const subs = Array.from(areaMap.values()).sort((a, b) => b.count - a.count);
     setSubLocations(subs);
-  }, [allPosts, locationName]);
+  }, [allPosts, locationName, scope, getGeoScope]);
 
   // Update Filtered Posts whenever selection or data changes
   useEffect(() => {
