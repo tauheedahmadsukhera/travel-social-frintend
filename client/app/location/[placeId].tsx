@@ -130,13 +130,24 @@ export default function LocationDetailsScreen() {
   }, []);
 
   // Optimized Image Helper
-  const getOptimizedUrl = (url: string, width = 800) => {
+  const getOptimizedUrl = React.useCallback((url: string, width = 800) => {
     if (!url || !url.includes('cloudinary.com')) return url;
     return url.replace('/upload/', `/upload/w_${width},c_limit,q_auto,f_auto/`);
-  };
+  }, []);
+
+  const renderPostItem = React.useCallback(({ item }: { item: Post }) => (
+    <PostCard 
+      post={{
+        ...item,
+        imageUrl: getOptimizedUrl(item.imageUrl, 800)
+      }} 
+      currentUser={currentUser} 
+      showMenu={false} 
+    />
+  ), [currentUser, getOptimizedUrl]);
 
   // Premium Skeleton Component
-  const LocationSkeleton = () => (
+  const LocationSkeleton = React.useCallback(() => (
     <View style={{ padding: 20, marginBottom: 10 }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 20 }}>
         <View style={{ width: 80, height: 80, backgroundColor: '#f2f2f2', borderRadius: 28 }} />
@@ -147,7 +158,7 @@ export default function LocationDetailsScreen() {
       </View>
       <View style={{ height: 300, backgroundColor: '#f2f2f2', borderRadius: 16, width: '100%' }} />
     </View>
-  );
+  ), []);
 
   // Scroll animation state
   const safeTop = Math.max(insets.top, 12);
@@ -191,10 +202,10 @@ export default function LocationDetailsScreen() {
   const lastScrollYRef = React.useRef(0);
   const lastEmitTsRef = React.useRef(0);
 
-  const onStoryPress = (stories: Story[], initialIndex: number) => {
+  const onStoryPress = React.useCallback((stories: Story[], initialIndex: number) => {
     setSelectedStories(stories);
     setShowStoriesViewer(true);
-  };
+  }, []);
 
   const regionIdStr = String(regionId || placeId || '').toLowerCase();
   const isRegionScope = String(scope || '').toLowerCase() === 'region';
@@ -401,7 +412,7 @@ export default function LocationDetailsScreen() {
     fetchDetails();
   }, [placeId, locationName, locationAddress, isRegionScope, regionIdStr, viewerId]);
 
-  const extractSubLocationName = (post: any): string => {
+  const extractSubLocationName = React.useCallback((post: any): string => {
     // Priority 0: Google Maps enriched data
     if (post?.locationData?.neighborhood) return post.locationData.neighborhood;
     if (post?.locationData?.sublocality) return post.locationData.sublocality;
@@ -423,7 +434,7 @@ export default function LocationDetailsScreen() {
     }
 
     return name || 'Unknown';
-  };
+  }, []);
 
   const fetchLocationPosts = async (searchLocationName: string, isLoadMore = false) => {
     if (!searchLocationName) return;
@@ -955,16 +966,7 @@ export default function LocationDetailsScreen() {
               )}
             </>
           }
-          renderItem={({ item }) => (
-            <PostCard 
-              post={{
-                ...item,
-                imageUrl: getOptimizedUrl(item.imageUrl, 800)
-              }} 
-              currentUser={currentUser} 
-              showMenu={false} 
-            />
-          )}
+          renderItem={renderPostItem}
           onEndReached={() => {
             if (hasMore && !loadingMore && !loading) {
               if (isRegionScope) fetchRegionPosts(regionIdStr, locationName as string, true);
