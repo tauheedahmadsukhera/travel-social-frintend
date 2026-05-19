@@ -26,7 +26,7 @@ const TAB_BAR = {
   weight: '800' as const,
 };
 
-const DEFAULT_TEXT_TIGHTEN = 0; // 0px space between logo and text
+const DEFAULT_TEXT_TIGHTEN = -4; // Pull the Trips text slightly closer to the logo icon
 
 type Props = {
   /** Optional remote logo from `/branding`; otherwise bundled Trips mark is used. */
@@ -85,7 +85,7 @@ export function AppBrandMark({
       {showIcon ? (
         <ExpoImage
           source={iconSource}
-          style={{ width: iconPx, height: iconPx, marginLeft: 0 }}
+          style={{ width: iconPx, height: iconPx, marginLeft: -13 }}
           contentFit="contain"
           cachePolicy="memory-disk"
         />
