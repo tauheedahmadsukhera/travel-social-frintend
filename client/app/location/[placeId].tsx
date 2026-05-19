@@ -290,6 +290,27 @@ export default function LocationDetailsScreen() {
     return 'General';
   }, []);
 
+  const formatHeaderLocationName = React.useCallback(() => {
+    const mainName = placeDetails?.name || locationName || '';
+    const country = placeDetails?.country;
+
+    if (typeof mainName !== 'string') return '';
+
+    // If mainName already contains a comma, just use it directly
+    if (mainName.includes(',')) {
+      return mainName;
+    }
+
+    // If country is present and different from mainName, append it nicely
+    if (country && typeof country === 'string' && country.trim().length > 0) {
+      if (mainName.toLowerCase().trim() !== country.toLowerCase().trim()) {
+        return `${mainName}, ${country}`;
+      }
+    }
+
+    return mainName;
+  }, [placeDetails, locationName]);
+
   const inferRegionKey = React.useCallback((rid: string, rname: string) => {
     const rawId = String(rid || '').trim().toLowerCase();
     const rawName = String(rname || '').trim().toLowerCase();
@@ -849,7 +870,7 @@ export default function LocationDetailsScreen() {
                   <View style={styles.locationRow}>
                     <Ionicons name="location" size={16} color="#000" />
                     <Text style={styles.locationNameText} numberOfLines={1}>
-                      {placeDetails?.name || locationName}, {placeDetails?.country || 'United Kingdom'}
+                      {formatHeaderLocationName()}
                     </Text>
                   </View>
                   <View style={[styles.locationRow, { marginTop: 6 }]}>
