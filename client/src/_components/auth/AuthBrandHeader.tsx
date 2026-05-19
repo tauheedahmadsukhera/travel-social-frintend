@@ -25,7 +25,7 @@ export function AuthBrandHeader({
 }: AuthBrandHeaderProps) {
   return (
     <View style={[variant === 'welcome' ? styles.welcomeOuter : styles.defaultOuter, style]}>
-      <View style={styles.markWrap}>
+      <View style={[styles.markWrap, variant === 'welcome' && { marginLeft: -13 }]}>
         {/* Brand lockup: icon + Trips text (rendered as Text for crispness). */}
         <AppBrandMark size="lg" iconAsset="app" showWordmark iconSize={78} />
       </View>
