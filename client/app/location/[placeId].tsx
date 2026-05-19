@@ -225,15 +225,58 @@ export default function LocationDetailsScreen() {
     return 'CITY';
   }, [locationName, scope]);
 
-  const extractCityFromAddress = React.useCallback((post: any): string => {
-    if (post?.locationData?.city) return post.locationData.city;
-    const addr = post?.locationData?.address || '';
-    if (addr) {
-      const parts = addr.split(',').map((p: string) => p.trim());
-      if (parts.length > 2) return parts[parts.length - 3] || parts[0];
-      return parts[0];
+  const extractCountryIntelligently = React.useCallback((post: any): string => {
+    if (post?.locationData?.country && typeof post.locationData.country === 'string' && post.locationData.country.trim().length > 0) {
+      return post.locationData.country.trim();
     }
-    return '';
+    const fields = [
+      post?.locationData?.address,
+      post?.locationName,
+      post?.location,
+      post?.locationData?.name
+    ];
+    for (const f of fields) {
+      if (f && typeof f === 'string') {
+        const parts = f.split(',').map(p => p.trim()).filter(Boolean);
+        if (parts.length > 0) {
+          const lastPart = parts[parts.length - 1];
+          if (isNaN(Number(lastPart)) && lastPart.toLowerCase() !== 'europe' && lastPart.toLowerCase() !== 'asia') {
+            return lastPart;
+          }
+          if (parts.length > 1) {
+            return parts[parts.length - 2];
+          }
+        }
+      }
+    }
+    return 'General';
+  }, []);
+
+  const extractCityIntelligently = React.useCallback((post: any): string => {
+    if (post?.locationData?.city && typeof post.locationData.city === 'string' && post.locationData.city.trim().length > 0) {
+      return post.locationData.city.trim();
+    }
+    const fields = [
+      post?.locationData?.address,
+      post?.locationName,
+      post?.location,
+      post?.locationData?.name
+    ];
+    for (const f of fields) {
+      if (f && typeof f === 'string') {
+        const parts = f.split(',').map(p => p.trim()).filter(Boolean);
+        if (parts.length > 1) {
+          if (parts.length === 2) {
+            return parts[0];
+          }
+          const cityIndex = parts.length - 2;
+          return parts[cityIndex];
+        } else if (parts.length === 1) {
+          return parts[0];
+        }
+      }
+    }
+    return 'General';
   }, []);
 
   const inferRegionKey = React.useCallback((rid: string, rname: string) => {
@@ -597,11 +640,11 @@ export default function LocationDetailsScreen() {
 
       if (currentScope === 'CONTINENT') {
         // Continent Scope: Group by Country, Nested Spots = Cities/Venues
-        areaName = post?.locationData?.country || post?.locationData?.countryCode || 'Other Countries';
-        spotName = post?.locationData?.city || post?.locationData?.name || post?.locationName || 'General';
+        areaName = extractCountryIntelligently(post);
+        spotName = extractCityIntelligently(post);
       } else if (currentScope === 'COUNTRY') {
         // Country Scope: Group by City, Nested Spots = Neighborhoods/Venues
-        areaName = post?.locationData?.city || extractCityFromAddress(post) || 'Other Cities';
+        areaName = extractCityIntelligently(post);
         spotName = post?.locationData?.neighborhood || post?.locationData?.name || post?.locationName || 'General';
       } else {
         // City Scope (Default): Group by Neighborhood/District, Nested Spots = Venues/Landmarks
