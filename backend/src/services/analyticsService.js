@@ -9,7 +9,7 @@ const logEvent = async (event, data = {}, userId = 'SYSTEM') => {
     const AdminLog = mongoose.model('AdminLog');
     
     const log = new AdminLog({
-      adminId: userId,
+      adminId: mongoose.Types.ObjectId.isValid(userId) ? userId : undefined,
       action: event,
       targetId: data.targetId || null,
       targetType: data.targetType || 'Analytics',

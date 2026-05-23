@@ -1,8 +1,11 @@
+const mongoose = require('mongoose');
+const logger = require('../utils/logger');
 const User = require('../models/User');
 const Post = require('../models/Post');
 const Highlight = require('../models/Highlight');
 const Section = require('../models/Section');
 const Story = require('../models/Story');
+const Report = require('../models/Report');
 
 // Create or update user (for social login or registration)
 exports.createOrUpdateUser = async (req, res) => {
@@ -33,7 +36,6 @@ exports.createOrUpdateUser = async (req, res) => {
 exports.getUserProfile = async (req, res) => {
   try {
     const { uid } = req.params;
-    const mongoose = require('mongoose');
 
     // Build query - check firebaseUid first, then uid field, then try ObjectId if valid
     const query = { $or: [{ firebaseUid: uid }, { uid }] };
@@ -47,7 +49,6 @@ exports.getUserProfile = async (req, res) => {
     if (!user) return res.status(404).json({ success: false, error: 'User not found' });
     res.json({ success: true, data: user });
   } catch (err) {
-    const logger = require('../utils/logger');
     logger.error('[UserController] getUserProfile error: %O', err);
     res.status(500).json({ success: false, error: 'Failed to fetch user profile' });
   }
@@ -58,8 +59,6 @@ exports.updateUserProfile = async (req, res) => {
   try {
     const { uid } = req.params;
     const { displayName, name, bio, website, location, phone, interests, avatar, photoURL, isPrivate, lastKnownLocation } = req.body;
-
-    const mongoose = require('mongoose');
 
     // Build query - check firebaseUid first, then uid field, then try ObjectId if valid
     const query = { $or: [{ firebaseUid: uid }, { uid }] };
@@ -96,7 +95,6 @@ exports.updateUserProfile = async (req, res) => {
 
     res.json({ success: true, data: user });
   } catch (err) {
-    const logger = require('../utils/logger');
     logger.error('[UserController] updateUserProfile error: %O', err);
     res.status(500).json({ success: false, error: 'Failed to update profile' });
   }
@@ -169,8 +167,6 @@ exports.getUserStories = async (req, res) => {
 exports.listUsers = async (req, res) => {
   try {
     // Secondary check: verify admin role even if route-level middleware missed it
-    const User = require('../models/User');
-    const mongoose = require('mongoose');
     const adminUser = await User.findById(req.userId).select('role').lean();
     if (!adminUser || adminUser.role !== 'admin') {
       return res.status(403).json({ success: false, error: 'Forbidden: admin access required' });
@@ -187,7 +183,6 @@ exports.listUsers = async (req, res) => {
     const total = await User.countDocuments();
     res.json({ success: true, data: users, total, limit, skip });
   } catch (err) {
-    const logger = require('../utils/logger');
     logger.error('[UserController] listUsers error: %O', err);
     res.status(500).json({ success: false, error: 'Failed to fetch users' });
   }
@@ -257,8 +252,6 @@ exports.deleteSection = async (req, res) => {
   }
 };
 
-const Report = require('../models/Report');
-
 // Search users by name/username
 exports.searchUsers = async (req, res) => {
   try {
@@ -286,6 +279,13 @@ exports.blockUser = async (req, res) => {
     const { uid, targetUid } = req.params;
     if (uid === targetUid) return res.status(400).json({ success: false, error: "Cannot block yourself" });
 
+    // Defense-in-depth ownership verification
+    const authedUser = await User.findById(req.userId).select('role uid firebaseUid').lean();
+    if (!authedUser) return res.status(401).json({ success: false, error: 'Unauthorized' });
+    if (authedUser.role !== 'admin' && authedUser.uid !== uid && authedUser.firebaseUid !== uid && String(authedUser._id) !== uid) {
+      return res.status(403).json({ success: false, error: 'Forbidden: You can only perform this action for your own account' });
+    }
+
     const user = await User.findOneAndUpdate(
       { $or: [{ firebaseUid: uid }, { uid }] },
       { $addToSet: { blockedUsers: targetUid } },
@@ -303,6 +303,14 @@ exports.blockUser = async (req, res) => {
 exports.unblockUser = async (req, res) => {
   try {
     const { uid, targetUid } = req.params;
+
+    // Defense-in-depth ownership verification
+    const authedUser = await User.findById(req.userId).select('role uid firebaseUid').lean();
+    if (!authedUser) return res.status(401).json({ success: false, error: 'Unauthorized' });
+    if (authedUser.role !== 'admin' && authedUser.uid !== uid && authedUser.firebaseUid !== uid && String(authedUser._id) !== uid) {
+      return res.status(403).json({ success: false, error: 'Forbidden: You can only perform this action for your own account' });
+    }
+
     const user = await User.findOneAndUpdate(
       { $or: [{ firebaseUid: uid }, { uid }] },
       { $pull: { blockedUsers: targetUid } },
@@ -320,6 +328,14 @@ exports.unblockUser = async (req, res) => {
 exports.getBlockedUsers = async (req, res) => {
   try {
     const { uid } = req.params;
+
+    // Defense-in-depth ownership verification
+    const authedUser = await User.findById(req.userId).select('role uid firebaseUid').lean();
+    if (!authedUser) return res.status(401).json({ success: false, error: 'Unauthorized' });
+    if (authedUser.role !== 'admin' && authedUser.uid !== uid && authedUser.firebaseUid !== uid && String(authedUser._id) !== uid) {
+      return res.status(403).json({ success: false, error: 'Forbidden: You can only perform this action for your own account' });
+    }
+
     const user = await User.findOne({ $or: [{ firebaseUid: uid }, { uid }] });
     if (!user) return res.status(404).json({ success: false, error: 'User not found' });
 
@@ -379,7 +395,6 @@ exports.updatePushToken = async (req, res) => {
       return res.status(400).json({ success: false, error: 'pushToken is required' });
     }
 
-    const mongoose = require('mongoose');
     const query = { $or: [{ firebaseUid: uid }, { uid }] };
     if (mongoose.Types.ObjectId.isValid(uid)) {
       query.$or.push({ _id: new mongoose.Types.ObjectId(uid) });
@@ -387,7 +402,7 @@ exports.updatePushToken = async (req, res) => {
 
     const user = await User.findOneAndUpdate(
       query,
-      { $set: { pushToken, updatedAt: new Date() } },
+      { $set: { pushToken, pushTokenUpdatedAt: new Date(), updatedAt: new Date() } },
       { new: true }
     );
 

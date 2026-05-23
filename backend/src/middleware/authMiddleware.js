@@ -23,7 +23,7 @@ const getJwtSecretOrNull = () => {
 
 // ============= TOKEN VERIFICATION =============
 
-const verifyToken = (req, res, next) => {
+const verifyToken = async (req, res, next) => {
   try {
     const authHeader = req.headers.authorization;
 
@@ -38,6 +38,27 @@ const verifyToken = (req, res, next) => {
     const decoded = jwt.verify(token, getJwtSecret());
     req.user = decoded;
     req.userId = decoded.userId;
+
+    // SECURITY: Verify user status in database in real-time to prevent access control bypass
+    const User = mongoose.model('User');
+    const user = await User.findById(decoded.userId).select('status role').lean();
+    
+    if (!user) {
+      return res.status(401).json({
+        success: false,
+        error: 'User account not found'
+      });
+    }
+
+    if (user.status === 'suspended' || user.status === 'banned') {
+      return res.status(403).json({
+        success: false,
+        error: `Your account has been ${user.status}. Access denied.`
+      });
+    }
+
+    // Sync actual role from DB to req.user
+    req.user.role = user.role;
 
     next();
   } catch (error) {
@@ -83,6 +104,18 @@ const generateToken = (userId, email, firebaseUid = null) => {
     },
     getJwtSecret(),
     { expiresIn: '7d' }
+  );
+};
+
+const generateRefreshToken = (userId) => {
+  return jwt.sign(
+    {
+      userId: String(userId),
+      type: 'refresh_token',
+      iat: Math.floor(Date.now() / 1000),
+    },
+    getJwtSecret(),
+    { expiresIn: '30d' }
   );
 };
 
@@ -171,6 +204,7 @@ module.exports = {
   verifyToken,
   optionalAuth,
   generateToken,
+  generateRefreshToken,
   isAdmin,
   requireOwnership,
   getJwtSecret,

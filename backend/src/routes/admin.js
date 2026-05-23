@@ -1,3 +1,9 @@
+// ============================================================================
+// ⚠️ DEPRECATED / INACTIVE ROUTE FILE
+// This file is NOT active. The running admin route is: backend/routes/admin.js
+// Imported via backend/src/routes/index.js (../../routes/admin)
+// ============================================================================
+
 const express = require('express');
 const router = express.Router();
 const adminController = require('../controllers/adminController');

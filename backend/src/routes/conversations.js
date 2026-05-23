@@ -363,7 +363,7 @@ router.post('/resolve', verifyToken, async (req, res) => {
       data: conversation,
     });
   } catch (err) {
-    console.error('[POST] /conversations/resolve - Error:', err.message);
+    logger.error('[POST] /conversations/resolve - Error:', err.message);
     return res.status(500).json({ success: false, error: 'Operation failed' });
   }
 });
@@ -397,7 +397,7 @@ router.get('/:id', verifyToken, async (req, res) => {
       }
     });
   } catch (err) {
-    console.error('[GET] /conversations/:id - Error:', err.message);
+    logger.error('[GET] /conversations/:id - Error:', err.message);
     return res.status(500).json({ success: false, error: 'Operation failed' });
   }
 });
@@ -440,7 +440,7 @@ router.post('/group', verifyToken, validate(createConversationSchema), async (re
     await conversation.save();
     return res.json({ success: true, data: conversation, conversationId });
   } catch (err) {
-    console.error('[POST] /conversations/group - Error:', err.message);
+    logger.error('[POST] /conversations/group - Error:', err.message);
     return res.status(500).json({ success: false, error: 'Operation failed' });
   }
 });
@@ -484,7 +484,7 @@ router.patch('/:id/group-members', verifyToken, async (req, res) => {
 
     return res.json({ success: true, data: conversation });
   } catch (err) {
-    console.error('[PATCH] /conversations/:id/group-members - Error:', err.message);
+    logger.error('[PATCH] /conversations/:id/group-members - Error:', err.message);
     return res.status(500).json({ success: false, error: 'Operation failed' });
   }
 });
@@ -529,7 +529,7 @@ router.post('/:id/archive', verifyToken, async (req, res) => {
 
     return res.json({ success: true });
   } catch (err) {
-    console.error('[POST] /conversations/:id/archive - Error:', err.message);
+    logger.error('[POST] /conversations/:id/archive - Error:', err.message);
     return res.status(500).json({ success: false, error: 'Operation failed' });
   }
 });
@@ -571,7 +571,7 @@ router.post('/:id/unarchive', verifyToken, async (req, res) => {
 
     return res.json({ success: true });
   } catch (err) {
-    console.error('[POST] /conversations/:id/unarchive - Error:', err.message);
+    logger.error('[POST] /conversations/:id/unarchive - Error:', err.message);
     return res.status(500).json({ success: false, error: 'Operation failed' });
   }
 });
@@ -616,7 +616,7 @@ router.post('/:id/delete', verifyToken, async (req, res) => {
 
     return res.json({ success: true });
   } catch (err) {
-    console.error('[POST] /conversations/:id/delete - Error:', err.message);
+    logger.error('[POST] /conversations/:id/delete - Error:', err.message);
     return res.status(500).json({ success: false, error: 'Operation failed' });
   }
 });
@@ -648,7 +648,7 @@ router.post('/:id/clear', verifyToken, async (req, res) => {
 
     return res.json({ success: true, clearedAt: now });
   } catch (err) {
-    console.error('[POST] /conversations/:id/clear - Error:', err.message);
+    logger.error('[POST] /conversations/:id/clear - Error:', err.message);
     return res.status(500).json({ success: false, error: 'Operation failed' });
   }
 });
@@ -673,7 +673,7 @@ router.get('/:id/messages', verifyToken, async (req, res) => {
       const p1Ids = await resolveUserIdVariants(p1);
       const p2Ids = await resolveUserIdVariants(p2);
       
-      console.log(`[GET] /messages - Smart lookup for pair: ${p1} and ${p2}`);
+      logger.info(`[GET] /messages - Smart lookup for pair: ${p1} and ${p2}`);
       
       convos = await Conversation.find({
         $and: [
@@ -795,7 +795,7 @@ router.get('/:id/messages', verifyToken, async (req, res) => {
       }
     });
   } catch (err) {
-    console.error('[GET] /:id/messages - Error:', err.message);
+    logger.error('[GET] /:id/messages - Error:', err.message);
     res.status(500).json({ success: false, error: 'Operation failed' });
   }
 });
@@ -906,7 +906,7 @@ router.patch('/:id/read', verifyToken, async (req, res) => {
 
     return res.json({ success: true, markedCount });
   } catch (err) {
-    console.error('[PATCH] /:id/read - Error:', err.message);
+    logger.error('[PATCH] /:id/read - Error:', err.message);
     return res.status(500).json({ success: false, error: 'Operation failed' });
   }
 });
@@ -972,12 +972,12 @@ router.post('/:id/messages', verifyToken, validate(sendMessageSchema), async (re
       : null;
 
     if (!convo) {
-      console.log('[POST] /:id/messages - Conversation not found, creating new one:', conversationId);
+      logger.info('[POST] /:id/messages - Conversation not found, creating new one:', conversationId);
       if (participants.length < 2) {
-        console.error('[POST] ERROR: Cannot create conversation without 2 participants! Got:', participants);
+        logger.error('[POST] ERROR: Cannot create conversation without 2 participants! Got:', participants);
         return res.status(400).json({ success: false, error: 'Requires both senderId and recipientId' });
       }
-      console.log('[POST] Creating conversation with participants:', sortedParticipants, 'conversationId:', standardConversationId);
+      logger.info('[POST] Creating conversation with participants:', sortedParticipants, 'conversationId:', standardConversationId);
       convo = new Conversation({
         conversationId: standardConversationId,
         participants: sortedParticipants
@@ -1125,11 +1125,11 @@ router.post('/:id/messages', verifyToken, validate(sendMessageSchema), async (re
         }).catch(() => {});
       }
     } catch (e) {
-      console.warn('[POST] /:id/messages - Notification skipped:', e.message);
+      logger.warn('[POST] /:id/messages - Notification skipped:', e.message);
     }
 
-    console.log('[POST] /:id/messages - Message saved successfully!');
-    console.log('[POST] Conversation state after save:', {
+    logger.info('[POST] /:id/messages - Message saved successfully!');
+    logger.info('[POST] Conversation state after save:', {
       conversationId: convo.conversationId,
       participants: convo.participants,
       messageCount: convo.messages?.length,
@@ -1139,15 +1139,15 @@ router.post('/:id/messages', verifyToken, validate(sendMessageSchema), async (re
     // Emit message to recipient via Socket.IO for real-time delivery
     try {
       const io = req.app.get('io');
-      console.log('[Socket] IO instance available?', !!io);
+      logger.info('[Socket] IO instance available?', !!io);
 
       if (!io) {
-        console.error('[Socket] ❌ IO instance not found on req.app');
+        logger.error('[Socket] ❌ IO instance not found on req.app');
       } else {
         // Use the actual conversationId from the saved conversation (not the route param)
         const actualConversationId = convo.conversationId;
-        console.log('[Socket] 📡 Emitting newMessage to conversationId:', actualConversationId);
-        console.log('[Socket] 📡 Message data:', {
+        logger.info('[Socket] 📡 Emitting newMessage to conversationId:', actualConversationId);
+        logger.info('[Socket] 📡 Message data:', {
           messageId: message.id,
           senderId: normalizedSenderId,
           recipientId: normalizedRecipientId,
@@ -1163,7 +1163,7 @@ router.post('/:id/messages', verifyToken, validate(sendMessageSchema), async (re
         };
         
         io.to(actualConversationId).emit('newMessage', socketPayload);
-        console.log('[Socket] ✅ Emitted message to conversation room:', actualConversationId);
+        logger.info('[Socket] ✅ Emitted message to conversation room:', actualConversationId);
 
         if (isGroupConversation) {
           const members = Array.isArray(convo?.participants) ? convo.participants.map(String) : [];
@@ -1174,14 +1174,14 @@ router.post('/:id/messages', verifyToken, validate(sendMessageSchema), async (re
               conversationId: actualConversationId
             });
           }
-          console.log('[Socket] ✅ Emitted group message to members:', recipients.length);
+          logger.info('[Socket] ✅ Emitted group message to members:', recipients.length);
         } else if (normalizedRecipientId) {
           // Also emit to recipient's personal room
           io.to(`user_${normalizedRecipientId}`).emit('newMessage', {
             ...message,
             conversationId: actualConversationId
           });
-          console.log('[Socket] ✅ Emitted to recipient room:', `user_${normalizedRecipientId}`);
+          logger.info('[Socket] ✅ Emitted to recipient room:', `user_${normalizedRecipientId}`);
         }
 
         // Also emit to sender's personal room ONLY if they are not in the conversation room
@@ -1191,19 +1191,19 @@ router.post('/:id/messages', verifyToken, validate(sendMessageSchema), async (re
           tempId, // Crucial for client-side optimistic UI matching
           conversationId: actualConversationId
         });
-        console.log('[Socket] ✅ Emitted to sender room:', `user_${normalizedSenderId}`);
+        logger.info('[Socket] ✅ Emitted to sender room:', `user_${normalizedSenderId}`);
 
-        console.log('[Socket] ✅✅✅ All emits complete!');
+        logger.info('[Socket] ✅✅✅ All emits complete!');
       }
     } catch (socketError) {
-      console.error('[Socket] ❌ Error emitting message:', socketError);
-      console.error('[Socket] ❌ Error stack:', socketError.stack);
+      logger.error('[Socket] ❌ Error emitting message:', socketError);
+      logger.error('[Socket] ❌ Error stack:', socketError.stack);
       // Don't fail the request if socket emit fails
     }
 
     res.json({ success: true, message });
   } catch (err) {
-    console.error('[POST] /:id/messages - Error:', err.message);
+    logger.error('[POST] /:id/messages - Error:', err.message);
     res.status(500).json({ success: false, error: 'Operation failed' });
   }
 });
@@ -1306,7 +1306,7 @@ router.get('/users/:userId', verifyToken, async (req, res) => {
 
     res.json({ success: true, data: enrichedConversations });
   } catch (err) {
-    console.error('[GET /conversations/users/:userId] Error:', err.message);
+    logger.error('[GET /conversations/users/:userId] Error:', err.message);
     res.status(500).json({ success: false, error: 'Operation failed' });
   }
 });
@@ -1318,7 +1318,7 @@ router.patch('/:conversationId/messages/:messageId', verifyToken, async (req, re
     const { text } = req.body;
     const { conversationId, messageId } = req.params;
 
-    console.log('[PATCH] /:conversationId/messages/:messageId - Request:', {
+    logger.info('[PATCH] /:conversationId/messages/:messageId - Request:', {
       conversationId,
       messageId,
       userId,
@@ -1338,20 +1338,20 @@ router.patch('/:conversationId/messages/:messageId', verifyToken, async (req, re
     });
 
     if (!conversation) {
-      console.log('[PATCH] Conversation not found:', conversationId);
+      logger.info('[PATCH] Conversation not found:', conversationId);
       return res.status(404).json({ success: false, error: 'Conversation not found' });
     }
 
     // Find message in Message collection
     const message = await Message.findOne({ $or: [{ id: messageId }, { _id: mongoose.Types.ObjectId.isValid(messageId) ? messageId : null }] });
     if (!message) {
-      console.log('[PATCH] Message not found:', messageId);
+      logger.info('[PATCH] Message not found:', messageId);
       return res.status(404).json({ success: false, error: 'Message not found' });
     }
 
     // Check authorization
     if (message.senderId !== userId) {
-      console.log('[PATCH] Unauthorized - senderId:', message.senderId, 'userId:', userId);
+      logger.info('[PATCH] Unauthorized - senderId:', message.senderId, 'userId:', userId);
       return res.status(403).json({ success: false, error: 'Unauthorized - you can only edit your own messages' });
     }
 
@@ -1360,10 +1360,10 @@ router.patch('/:conversationId/messages/:messageId', verifyToken, async (req, re
     message.editedAt = new Date();
     await message.save();
 
-    console.log('[PATCH] Message updated:', messageId);
+    logger.info('[PATCH] Message updated:', messageId);
     res.json({ success: true, data: message });
   } catch (err) {
-    console.error('[PATCH] /:conversationId/messages/:messageId error:', err.message);
+    logger.error('[PATCH] /:conversationId/messages/:messageId error:', err.message);
     return res.status(500).json({ success: false, error: 'Operation failed' });
   }
 });
@@ -1374,7 +1374,7 @@ router.delete('/:conversationId/messages/:messageId', verifyToken, async (req, r
     const userId = String(req.userId || '');
     const { conversationId, messageId } = req.params;
 
-    console.log('[DELETE] /:conversationId/messages/:messageId - Request:', {
+    logger.info('[DELETE] /:conversationId/messages/:messageId - Request:', {
       conversationId,
       messageId,
       userId
@@ -1393,30 +1393,30 @@ router.delete('/:conversationId/messages/:messageId', verifyToken, async (req, r
     });
 
     if (!conversation) {
-      console.log('[DELETE] Conversation not found:', conversationId);
+      logger.info('[DELETE] Conversation not found:', conversationId);
       return res.status(404).json({ success: false, error: 'Conversation not found' });
     }
 
     // Find message in Message collection
     const message = await Message.findOne({ $or: [{ id: messageId }, { _id: mongoose.Types.ObjectId.isValid(messageId) ? messageId : null }] });
     if (!message) {
-      console.log('[DELETE] Message not found:', messageId);
+      logger.info('[DELETE] Message not found:', messageId);
       return res.status(404).json({ success: false, error: 'Message not found' });
     }
 
     // Check authorization
     if (message.senderId !== userId) {
-      console.log('[DELETE] Unauthorized - senderId:', message.senderId, 'userId:', userId);
+      logger.info('[DELETE] Unauthorized - senderId:', message.senderId, 'userId:', userId);
       return res.status(403).json({ success: false, error: 'Unauthorized - you can only delete your own messages' });
     }
 
     // Delete message from collection
     await Message.deleteOne({ _id: message._id });
 
-    console.log('[DELETE] Message deleted:', messageId);
+    logger.info('[DELETE] Message deleted:', messageId);
     res.json({ success: true, message: 'Message deleted' });
   } catch (err) {
-    console.error('[DELETE] /:conversationId/messages/:messageId error:', err.message);
+    logger.error('[DELETE] /:conversationId/messages/:messageId error:', err.message);
     return res.status(500).json({ success: false, error: 'Operation failed' });
   }
 });
@@ -1431,7 +1431,7 @@ router.post('/:conversationId/messages/:messageId/reactions', verifyToken, async
     // Accept both 'reaction' and 'emoji' for compatibility
     const actualReaction = reaction || emoji;
 
-    console.log('[POST] /:conversationId/messages/:messageId/reactions - Request:', {
+    logger.info('[POST] /:conversationId/messages/:messageId/reactions - Request:', {
       conversationId,
       messageId,
       userId,
@@ -1451,14 +1451,14 @@ router.post('/:conversationId/messages/:messageId/reactions', verifyToken, async
     });
 
     if (!conversation) {
-      console.log('[POST] Conversation not found:', conversationId);
+      logger.info('[POST] Conversation not found:', conversationId);
       return res.status(404).json({ success: false, error: 'Conversation not found' });
     }
 
     // Find message in Message collection
     const message = await Message.findOne({ $or: [{ id: messageId }, { _id: mongoose.Types.ObjectId.isValid(messageId) ? messageId : null }] });
     if (!message) {
-      console.log('[POST] Message not found:', messageId);
+      logger.info('[POST] Message not found:', messageId);
       return res.status(404).json({ success: false, error: 'Message not found' });
     }
 
@@ -1482,10 +1482,10 @@ router.post('/:conversationId/messages/:messageId/reactions', verifyToken, async
     
     if (userIndex === -1) {
       reactionsArray.push(userId);
-      console.log('[POST] Added reaction:', actualReaction, 'from user:', userId);
+      logger.info('[POST] Added reaction:', actualReaction, 'from user:', userId);
     } else {
       reactionsArray.splice(userIndex, 1);
-      console.log('[POST] Removed reaction:', actualReaction, 'from user:', userId);
+      logger.info('[POST] Removed reaction:', actualReaction, 'from user:', userId);
 
       // Remove empty reaction arrays
       if (reactionsArray.length === 0) {
@@ -1501,10 +1501,10 @@ router.post('/:conversationId/messages/:messageId/reactions', verifyToken, async
     message.markModified('reactions');
     await message.save();
 
-    console.log('[POST] Reactions updated for message:', messageId);
+    logger.info('[POST] Reactions updated for message:', messageId);
     res.json({ success: true, data: { reactions: message.reactions } });
   } catch (err) {
-    console.error('[POST] /:conversationId/messages/:messageId/reactions error:', err.message);
+    logger.error('[POST] /:conversationId/messages/:messageId/reactions error:', err.message);
     return res.status(500).json({ success: false, error: 'Operation failed' });
   }
 });
@@ -1541,7 +1541,7 @@ router.post('/upload-media', verifyToken, async (req, res) => {
       duration: result.duration || null
     });
   } catch (err) {
-    console.error('[POST] /upload-media error:', err.message);
+    logger.error('[POST] /upload-media error:', err.message);
     res.status(500).json({ success: false, error: 'Operation failed' });
   }
 });
@@ -1682,7 +1682,7 @@ router.post('/:conversationId/messages/media', verifyToken, validate(sendMessage
     
     await conversation.save();
 
-    console.log('[POST] Media message saved:', message.id);
+    logger.info('[POST] Media message saved:', message.id);
 
     // Emit message to all participants via Socket.IO for real-time delivery
     try {
@@ -1700,7 +1700,7 @@ router.post('/:conversationId/messages/media', verifyToken, validate(sendMessage
         };
         
         io.to(actualConversationId).emit('newMessage', socketPayload);
-        console.log('[Socket] ✅ Emitted media message to conversation room:', actualConversationId);
+        logger.info('[Socket] ✅ Emitted media message to conversation room:', actualConversationId);
 
         // For groups, emit to all members' personal rooms
         if (isGroupConversation) {
@@ -1712,14 +1712,14 @@ router.post('/:conversationId/messages/media', verifyToken, validate(sendMessage
               conversationId: actualConversationId
             });
           }
-          console.log('[Socket] ✅ Emitted media message to group members:', recipients.length);
+          logger.info('[Socket] ✅ Emitted media message to group members:', recipients.length);
         } else if (normalizedRecipientId) {
           // For 1:1, emit to recipient's personal room
           io.to(`user_${normalizedRecipientId}`).emit('newMessage', {
             ...message,
             conversationId: actualConversationId
           });
-          console.log('[Socket] ✅ Emitted media message to recipient room:', `user_${normalizedRecipientId}`);
+          logger.info('[Socket] ✅ Emitted media message to recipient room:', `user_${normalizedRecipientId}`);
         }
 
         // Emit to sender's personal room for multi-device sync
@@ -1728,17 +1728,17 @@ router.post('/:conversationId/messages/media', verifyToken, validate(sendMessage
           tempId,
           conversationId: actualConversationId
         });
-        console.log('[Socket] ✅ Emitted media message to sender room:', `user_${normalizedSenderId}`);
+        logger.info('[Socket] ✅ Emitted media message to sender room:', `user_${normalizedSenderId}`);
       }
     } catch (socketError) {
-      console.warn('[Socket] ⚠️ Warning emitting media message:', socketError.message);
+      logger.warn('[Socket] ⚠️ Warning emitting media message:', socketError.message);
       // Don't fail the request if socket emit fails
     }
 
     res.status(201).json({ success: true, data: message });
   } catch (err) {
-    console.error('[POST] /messages/media error:', err.message);
-    console.error('[POST] /messages/media stack:', err.stack);
+    logger.error('[POST] /messages/media error:', err.message);
+    logger.error('[POST] /messages/media stack:', err.stack);
     res.status(500).json({ success: false, error: 'Operation failed' });
   }
 });
@@ -1766,10 +1766,10 @@ router.post('/stories', verifyToken, async (req, res) => {
       expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000) // 24 hours
     });
 
-    console.log('[POST] Story created:', story._id);
+    logger.info('[POST] Story created:', story._id);
     res.status(201).json({ success: true, data: story });
   } catch (err) {
-    console.error('[POST] /stories error:', err.message);
+    logger.error('[POST] /stories error:', err.message);
     res.status(500).json({ success: false, error: 'Operation failed' });
   }
 });
@@ -1787,7 +1787,7 @@ router.get('/stories/user/:userId', verifyToken, async (req, res) => {
 
     res.json({ success: true, data: stories });
   } catch (err) {
-    console.error('[GET] /stories/user/:userId error:', err.message);
+    logger.error('[GET] /stories/user/:userId error:', err.message);
     res.status(500).json({ success: false, error: 'Operation failed' });
   }
 });
@@ -1802,7 +1802,7 @@ router.get('/stories/feed', verifyToken, async (req, res) => {
 
     res.json({ success: true, data: stories });
   } catch (err) {
-    console.error('[GET] /stories/feed error:', err.message);
+    logger.error('[GET] /stories/feed error:', err.message);
     res.status(500).json({ success: false, error: 'Operation failed' });
   }
 });
@@ -1827,7 +1827,7 @@ router.post('/stories/:storyId/view', verifyToken, async (req, res) => {
 
     res.json({ success: true, data: story });
   } catch (err) {
-    console.error('[POST] /stories/:storyId/view error:', err.message);
+    logger.error('[POST] /stories/:storyId/view error:', err.message);
     res.status(500).json({ success: false, error: 'Operation failed' });
   }
 });

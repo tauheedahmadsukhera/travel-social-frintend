@@ -47,7 +47,7 @@ const PORT = process.env.PORT || 5000;
 // ============= RATE LIMITING =============
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 1000, // limit each IP to 1000 requests per windowMs
+  max: 300, // limit each IP to 300 requests per windowMs (defense against DDoS/scraping)
   message: { success: false, error: 'Too many requests, please try again later.' },
   standardHeaders: true,
   legacyHeaders: false,
@@ -132,6 +132,11 @@ app.use('/api', routes);
 // ============= SENTRY ERROR HANDLER =============
 // Must be registered after all controllers and before other error middleware
 setupSentryErrorHandler(app);
+
+// ============= ERROR RATE ALERTING =============
+// Monitors critical error spike thresholds
+const errorAlertMiddleware = require('./middleware/errorAlertMiddleware');
+app.use(errorAlertMiddleware);
 
 app.get('/', (req, res) => {
   res.json({ message: 'Trips API is running', version: '1.2.0' });

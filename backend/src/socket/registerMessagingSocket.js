@@ -12,6 +12,42 @@ function registerMessagingSocket({ io, mongoose, toObjectId, sendExpoPushToUser 
   const lastEventAtBySocket = new Map();
 
   const now = () => Date.now();
+
+  // Helper to broadcast status changes to active chat participants only (avoids O(N) broadcast storm)
+  async function broadcastUserStatus(userId, status) {
+    try {
+      const Conversation = mongoose.model('Conversation');
+      // Retrieve conversation participants
+      const userConversations = await Conversation.find({ participants: userId }, 'participants').lean();
+      const contactIds = new Set();
+      for (const convo of userConversations) {
+        for (const p of convo.participants) {
+          const pStr = String(p);
+          if (pStr !== String(userId)) {
+            contactIds.add(pStr);
+          }
+        }
+      }
+
+      const updatePayload = {
+        userId,
+        status,
+        lastSeen: status === 'offline' ? new Date() : undefined
+      };
+
+      // Emit userStatusUpdate to each active chat participant's room
+      for (const contactId of contactIds) {
+        io.to(`user_${contactId}`).emit('userStatusUpdate', updatePayload);
+      }
+
+      // Sync status across user's own connected devices
+      io.to(`user_${userId}`).emit('userStatusUpdate', updatePayload);
+      
+      logger.debug('[Socket] Broadcasted status update "%s" for user %s to %d contacts', status, userId, contactIds.size);
+    } catch (err) {
+      logger.error('[Socket] Failed to broadcast user status for %s: %s', userId, err.message);
+    }
+  }
   const clampText = (v, max) => {
     if (typeof v !== 'string') return '';
     const s = v.trim();
@@ -153,7 +189,7 @@ function registerMessagingSocket({ io, mongoose, toObjectId, sendExpoPushToUser 
         logger.info(`👤 User ${authId} joined (variants: ${variants.join(', ')}) with socket ${socket.id}`);
         socket.emit('connected', { userId: authId, socketId: socket.id });
         
-        io.emit('userStatusUpdate', { userId: authId, status: 'online' });
+        broadcastUserStatus(authId, 'online');
 
         const User = mongoose.model('User');
         User.updateOne({ _id: toObjectId(authId) }, { isOnline: true, lastSeen: new Date() }).catch(() => {});
@@ -169,7 +205,7 @@ function registerMessagingSocket({ io, mongoose, toObjectId, sendExpoPushToUser 
           socket.join(`user_${v}`);
         }
         socket.emit('connected', { userId: claimedUserId, socketId: socket.id });
-        io.emit('userStatusUpdate', { userId: String(claimedUserId), status: 'online' });
+        broadcastUserStatus(String(claimedUserId), 'online');
 
         const User = mongoose.model('User');
         User.updateOne(
@@ -513,11 +549,7 @@ function registerMessagingSocket({ io, mongoose, toObjectId, sendExpoPushToUser 
       if (socket.userId) {
         connectedUsers.delete(socket.userId);
         logger.info(`👋 User ${socket.userId} disconnected (socket: ${socket.id})`);
-        io.emit('userStatusUpdate', { 
-          userId: socket.userId, 
-          status: 'offline', 
-          lastSeen: new Date() 
-        });
+        broadcastUserStatus(socket.userId, 'offline');
 
         const User = mongoose.model('User');
         User.updateOne({ _id: toObjectId(socket.userId) }, { isOnline: false, lastSeen: new Date() }).catch(() => {});

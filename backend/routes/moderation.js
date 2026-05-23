@@ -33,7 +33,6 @@ router.post('/report', verifyToken, async (req, res, next) => {
 
     // Log the event for admins
     const log = new AdminLog({
-      adminId: 'SYSTEM',
       action: 'REPORT_SUBMITTED',
       targetId: report._id,
       targetType: 'Report',

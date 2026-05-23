@@ -3,8 +3,9 @@ const router = express.Router();
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const crypto = require('crypto');
 const logger = require('../utils/logger');
-const { generateToken } = require('../middleware/authMiddleware');
+const { generateToken, generateRefreshToken } = require('../middleware/authMiddleware');
 const validate = require('../middleware/validateMiddleware');
 const rateLimit = require('express-rate-limit');
 const { 
@@ -109,9 +110,11 @@ router.post('/register-firebase', validate(registerFirebaseSchema), async (req, 
     }
 
     const token = generateToken(user._id, user.email, user.firebaseUid || user.uid);
+    const refreshToken = generateRefreshToken(user._id);
     res.json({
       success: true,
       token,
+      refreshToken,
       user: {
         id: user._id,
         firebaseUid,
@@ -185,9 +188,11 @@ router.post('/login-firebase', validate(loginFirebaseSchema), async (req, res) =
     }
 
     const token = generateToken(user._id, user.email, user.firebaseUid || user.uid);
+    const refreshToken = generateRefreshToken(user._id);
     res.json({
       success: true,
       token,
+      refreshToken,
       user: {
         id: user._id,
         firebaseUid,
@@ -220,7 +225,8 @@ router.post('/register', validate(registerSchema), async (req, res) => {
     await user.save();
 
     const token = generateToken(user._id, user.email, user.firebaseUid || user.uid);
-    res.status(201).json({ success: true, token, user: { id: user._id, email: user.email, displayName: user.displayName } });
+    const refreshToken = generateRefreshToken(user._id);
+    res.status(201).json({ success: true, token, refreshToken, user: { id: user._id, email: user.email, displayName: user.displayName } });
   } catch (error) {
     logger.error('[Auth] Register error: %O', error);
     res.status(500).json({ success: false, error: 'Registration failed' });
@@ -239,8 +245,13 @@ router.post('/login', validate(loginSchema), async (req, res) => {
     const isValidPassword = await bcrypt.compare(password, user.password);
     if (!isValidPassword) return res.status(401).json({ success: false, error: 'Invalid email or password' });
 
+    if (user.status === 'suspended' || user.status === 'banned') {
+      return res.status(403).json({ success: false, error: `Account is ${user.status}` });
+    }
+
     const token = generateToken(user._id, email, user.firebaseUid || user.uid);
-    res.json({ success: true, token, user: { id: user._id, email: user.email, displayName: user.displayName } });
+    const refreshToken = generateRefreshToken(user._id);
+    res.json({ success: true, token, refreshToken, user: { id: user._id, email: user.email, displayName: user.displayName } });
   } catch (error) {
     logger.error('[Auth] Login error: %O', error);
     res.status(500).json({ success: false, error: 'Login failed' });
@@ -272,6 +283,51 @@ router.post('/logout', async (req, res) => {
     res.json({ success: true, message: 'Logged out successfully' });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message || 'Logout failed' });
+  }
+});
+
+/**
+ * POST /api/auth/refresh-token
+ * Refresh access token using a valid refresh token
+ */
+router.post('/refresh-token', async (req, res) => {
+  try {
+    const { refreshToken } = req.body;
+    if (!refreshToken) {
+      return res.status(400).json({ success: false, error: 'Refresh token is required' });
+    }
+
+    let decoded;
+    try {
+      decoded = jwt.verify(refreshToken, JWT_SECRET);
+    } catch (err) {
+      return res.status(401).json({ success: false, error: 'Invalid or expired refresh token' });
+    }
+
+    if (decoded.type !== 'refresh_token') {
+      return res.status(401).json({ success: false, error: 'Invalid token type' });
+    }
+
+    const user = await User.findById(decoded.userId).lean();
+    if (!user) {
+      return res.status(404).json({ success: false, error: 'User not found' });
+    }
+
+    if (user.status === 'suspended' || user.status === 'banned') {
+      return res.status(403).json({ success: false, error: `Account is ${user.status}` });
+    }
+
+    const token = generateToken(user._id, user.email, user.firebaseUid || user.uid);
+    const newRefreshToken = generateRefreshToken(user._id);
+
+    res.json({
+      success: true,
+      token,
+      refreshToken: newRefreshToken
+    });
+  } catch (error) {
+    logger.error('[Auth] Refresh token error: %O', error);
+    res.status(500).json({ success: false, error: 'Failed to refresh token' });
   }
 });
 
@@ -329,10 +385,12 @@ router.post('/username/signup', validate(usernameSignupSchema), async (req, res)
     logger.info(`✅ User registered with username: ${cleanUsername}`);
 
     const token = generateToken(user._id, internalEmail, user.firebaseUid || user.uid);
+    const refreshToken = generateRefreshToken(user._id);
 
     res.status(201).json({
       success: true,
       token,
+      refreshToken,
       user: {
         id: user._id,
         username: user.username,
@@ -369,11 +427,17 @@ router.post('/username/login', validate(usernameLoginSchema), async (req, res) =
       return res.status(401).json({ success: false, error: 'Invalid username or password' });
     }
 
+    if (user.status === 'suspended' || user.status === 'banned') {
+      return res.status(403).json({ success: false, error: `Account is ${user.status}` });
+    }
+
     const token = generateToken(user._id, user.email, user.firebaseUid || user.uid);
+    const refreshToken = generateRefreshToken(user._id);
 
     res.json({
       success: true,
       token,
+      refreshToken,
       user: {
         id: user._id,
         username: user.username,
@@ -405,8 +469,8 @@ router.post('/forgot-password', validate(require('../validations/authValidation'
       return res.json({ success: true, message: 'If an account exists with that email, a code has been sent.' });
     }
 
-    // Generate 6-digit code
-    const resetCode = Math.floor(100000 + Math.random() * 900000).toString();
+    // Generate 6-digit code securely using crypto.randomInt
+    const resetCode = crypto.randomInt(100000, 1000000).toString();
     
     user.resetCode = resetCode;
     user.resetCodeExpires = Date.now() + 10 * 60 * 1000; // 10 minutes

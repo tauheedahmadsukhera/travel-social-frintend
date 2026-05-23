@@ -1,7 +1,11 @@
 const mongoose = require('mongoose');
 
 const AdminLogSchema = new mongoose.Schema({
-  adminId: { type: String, required: true },
+  adminId: { 
+    type: mongoose.Schema.Types.ObjectId, 
+    ref: 'User', 
+    required: false 
+  },
   action: { type: String, required: true },
   targetId: String,
   targetType: String,

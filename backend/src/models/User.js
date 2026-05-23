@@ -29,14 +29,7 @@ const UserSchema = new mongoose.Schema({
     type: String,
     default: null,
   },
-  photoURL: {
-    type: String,
-    default: null,
-  },
-  profilePicture: {
-    type: String,
-    default: null,
-  },
+
   firebaseUid: {
     type: String,
     unique: true,
@@ -159,14 +152,20 @@ const UserSchema = new mongoose.Schema({
   },
 });
 
-// Synchronize the 3 avatar fields for backward compatibility
+// Define virtual fields for backward compatibility with photoURL and profilePicture
+UserSchema.virtual('photoURL')
+  .get(function() { return this.avatar; })
+  .set(function(v) { this.avatar = v; });
+
+UserSchema.virtual('profilePicture')
+  .get(function() { return this.avatar; })
+  .set(function(v) { this.avatar = v; });
+
+// Ensure virtuals are serialized in JSON and Object outputs
+UserSchema.set('toJSON', { virtuals: true });
+UserSchema.set('toObject', { virtuals: true });
+
 UserSchema.pre('save', function(next) {
-  const avatar = this.avatar || this.photoURL || this.profilePicture;
-  if (avatar) {
-    this.avatar = avatar;
-    this.photoURL = avatar;
-    this.profilePicture = avatar;
-  }
   this.updatedAt = new Date();
   next();
 });
