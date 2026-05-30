@@ -116,7 +116,7 @@ const CategoryModal: React.FC<CategoryModalProps> = ({
                 }
               />
 
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 16, borderTopWidth: 1, borderTopColor: '#f0f0f0' }}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 16 }}>
                 <TouchableOpacity onPress={onClose}>
                   <Text style={{ color: '#111', fontWeight: '700', fontSize: 15 }}>Cancel</Text>
                 </TouchableOpacity>

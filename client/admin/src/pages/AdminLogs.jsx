@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { adminAPI } from '../services/adminService';
 import { format } from 'date-fns';
-import { HiOutlineDocumentText, HiOutlineClock } from 'react-icons/hi';
+import { HiOutlineClock } from 'react-icons/hi';
 
 const AdminLogs = () => {
   const [logs, setLogs] = useState([]);

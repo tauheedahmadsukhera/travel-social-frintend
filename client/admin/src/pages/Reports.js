@@ -3,9 +3,7 @@ import { adminAPI } from '../services/adminService';
 import { 
   HiOutlineCheckCircle, 
   HiOutlineXCircle, 
-  HiOutlineClock,
-  HiOutlineFilter,
-  HiOutlineSearch
+  HiOutlineClock
 } from 'react-icons/hi';
 import { format } from 'date-fns';
 import toast from 'react-hot-toast';

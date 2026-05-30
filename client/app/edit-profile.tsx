@@ -4,6 +4,7 @@ import AsyncStorage from '@/lib/storage';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, Image, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Switch, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { uploadImage } from '../lib/firebaseHelpers';
 import { updateUserProfile } from '../lib/firebaseHelpers/index';
@@ -475,7 +476,13 @@ export default function EditProfile() {
             onPress={handleSave} 
             disabled={saving}
           >
-            <Text style={styles.shareText}>{saving ? 'Saving...' : 'Save'}</Text>
+            <LinearGradient
+              colors={['#FBBC04', '#FF8D00']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={StyleSheet.absoluteFill}
+            />
+            <Text style={[styles.shareText, { zIndex: 1 }]}>{saving ? 'Saving...' : 'Save'}</Text>
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
@@ -546,7 +553,7 @@ const styles = StyleSheet.create({
     width: 100, 
     height: 100, 
     borderRadius: 50, 
-    backgroundColor: '#f0f0f0' 
+    backgroundColor: '#f5f5f5' 
   },
   formGroup: { 
     paddingHorizontal: 16, 
@@ -565,7 +572,7 @@ const styles = StyleSheet.create({
   input: { 
     fontSize: 14, 
     color: '#222', 
-    backgroundColor: '#f3f4f6',
+    backgroundColor: '#f5f5f5',
     borderRadius: 14,
     paddingHorizontal: 14,
     paddingVertical: 12,
@@ -581,7 +588,7 @@ const styles = StyleSheet.create({
     marginTop: 20,
     paddingHorizontal: 16,
     paddingVertical: 16,
-    backgroundColor: '#f8f9fa',
+    backgroundColor: '#f5f5f5',
     borderRadius: 12,
     marginHorizontal: 16,
   },
@@ -625,10 +632,13 @@ const styles = StyleSheet.create({
     fontWeight: '400' 
   },
   shareBtn: { 
-    backgroundColor: PRIMARY, 
     paddingVertical: 10, 
     paddingHorizontal: 32, 
-    borderRadius: 8 
+    borderRadius: 8,
+    overflow: 'hidden',
+    position: 'relative',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   shareText: { 
     color: '#fff', 

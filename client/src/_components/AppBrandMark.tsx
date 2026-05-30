@@ -18,15 +18,15 @@ const SIZES: Record<Size, { text: number; icon: number }> = {
 
 /** Top tab bar: icon + wordmark sized as a pair (icon cap-height ≈ text line). */
 const TAB_BAR = {
-  icon: 36,
-  text: 20,
+  icon: 42,
+  text: 24,
   // Spacing between icon and wordmark
-  textMarginLeft: 0,
+  textMarginLeft: -6,
   letter: -0.45,
   weight: '800' as const,
 };
 
-const DEFAULT_TEXT_TIGHTEN = -12; // Space between logo icon and Trips wordmark
+const DEFAULT_TEXT_TIGHTEN = -6; // Space between logo icon and Trips wordmark
 
 type Props = {
   /** Optional remote logo from `/branding`; otherwise bundled Trips mark is used. */
@@ -76,12 +76,13 @@ export function AppBrandMark({
         styles.row,
         !showIcon && styles.rowTextOnly,
         !showWordmark && styles.rowIconOnly,
+        isTabBar && { marginLeft: 0 },
       ]}
     >
       {showIcon ? (
         <ExpoImage
           source={iconSource}
-          style={{ width: iconPx, height: iconPx, marginLeft: -13 }}
+          style={{ width: iconPx, height: iconPx, marginLeft: isTabBar ? -12 : -13 }}
           contentFit="contain"
           cachePolicy="memory-disk"
         />
@@ -97,7 +98,13 @@ export function AppBrandMark({
                 ? (isTabBar ? TAB_BAR.textMarginLeft : DEFAULT_TEXT_TIGHTEN) 
                 : 0
             },
-            isTabBar ? { letterSpacing: TAB_BAR.letter } : null,
+            isTabBar ? { 
+              letterSpacing: TAB_BAR.letter,
+              lineHeight: 28,
+              includeFontPadding: false,
+              textAlignVertical: 'center',
+              transform: [{ translateY: 1 }],
+            } : null,
           ]}
         >
           Trips

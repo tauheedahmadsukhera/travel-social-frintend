@@ -235,7 +235,7 @@ export default function RootLayout() {
                 <Stack.Screen name="(tabs)" />
                 <Stack.Screen name="create-post" options={{ presentation: 'fullScreenModal', animation: 'slide_from_bottom' }} />
                 <Stack.Screen name="edit-post" options={{ headerShown: false, animation: 'slide_from_right' }} />
-                <Stack.Screen name="search-modal" options={{ headerShown: false, animation: 'slide_from_right' }} />
+                <Stack.Screen name="search-modal" options={{ headerShown: false, animation: 'fade' }} />
                 <Stack.Screen name="inbox" options={{ headerShown: false }} />
                 <Stack.Screen name="edit-profile" options={{ headerShown: false }} />
                 <Stack.Screen name="passport" options={{ headerShown: false }} />

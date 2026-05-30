@@ -39,7 +39,7 @@ export function AuthBrandHeader({
 const styles = StyleSheet.create({
   welcomeOuter: {
     alignItems: 'center',
-    marginTop: 10,
+    marginTop: 0,
     marginBottom: 6,
   },
   defaultOuter: {

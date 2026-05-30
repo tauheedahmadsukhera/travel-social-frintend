@@ -421,7 +421,7 @@ const DraggableText = ({
             {/* ── Preview ── */}
             <View style={styles.preview}>
                 {selectedUri ? (
-                    <Image source={{ uri: selectedUri }} style={styles.previewImg} resizeMode="cover" />
+                    <Image source={{ uri: selectedUri }} style={styles.previewImg} resizeMode="contain" />
                 ) : null}
 
                 {/* Text overlays preview */}

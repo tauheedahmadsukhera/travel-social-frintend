@@ -88,6 +88,67 @@ export default function UserLocationsScreen() {
     setRefreshing(false);
   }, [load]);
 
+  const normalizeLocationKey = (val?: string) => 
+    String(val || '').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+
+  const groupedLocations = useMemo(() => {
+    const countryMap = new Map<string, { title: string, countryCode: string, data: Stamp[], latest: number, hasCountryStamp: boolean, count: number }>();
+
+    locations.forEach(stamp => {
+      let cName = '';
+      if (stamp.type === 'country') {
+        cName = stamp.name;
+      } else {
+        cName = stamp.parentCountry || 'Unknown';
+      }
+
+      const normalizedKey = normalizeLocationKey(cName) || 'unknown';
+
+      if (!countryMap.has(normalizedKey)) {
+        countryMap.set(normalizedKey, {
+          title: cName,
+          countryCode: stamp.countryCode || 'XX',
+          data: [],
+          latest: 0,
+          hasCountryStamp: false,
+          count: 0
+        });
+      }
+
+      const cData = countryMap.get(normalizedKey)!;
+
+      if (cData.title === 'Unknown' || (stamp.type === 'country' && stamp.name)) {
+        cData.title = cName;
+      }
+
+      if (stamp.countryCode && cData.countryCode === 'XX') {
+        cData.countryCode = stamp.countryCode;
+      }
+
+      const ts = stamp.createdAt ? new Date(stamp.createdAt).getTime() : 0;
+      if (ts > cData.latest) cData.latest = ts;
+
+      if (stamp.type === 'country') {
+        cData.hasCountryStamp = true;
+        cData.count = stamp.count || cData.count;
+      } else {
+        cData.data.push(stamp);
+      }
+    });
+
+    const result = Array.from(countryMap.values()).map(group => {
+      // Sort cities by newest first
+      group.data.sort((a, b) => {
+        const ta = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+        const tb = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+        return tb - ta;
+      });
+      return group;
+    }).sort((a, b) => b.latest - a.latest);
+
+    return result;
+  }, [locations]);
+
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
@@ -109,8 +170,8 @@ export default function UserLocationsScreen() {
         </View>
       ) : (
         <FlatList
-          data={locations}
-          keyExtractor={(item, index) => `${item.name}-${index}`}
+          data={groupedLocations}
+          keyExtractor={(item, index) => `${item.title}-${index}`}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#0A3D62" />}
           ListHeaderComponent={
             <View style={styles.listHeader}>
@@ -118,31 +179,50 @@ export default function UserLocationsScreen() {
               <Text style={styles.countLabel}>Places Visited</Text>
             </View>
           }
-          renderItem={({ item }) => {
-            const cityName = item.name || 'Unknown';
-            const countryName = item.parentCountry || '';
-            const ts = item.createdAt ? new Date(item.createdAt).getTime() : 0;
-            const dateText = ts ? new Date(ts).toLocaleDateString() : '';
-
+          renderItem={({ item: group }) => {
             return (
-              <View style={styles.row}>
-                <View style={styles.stampIconWrap}>
-                  <LinearGradient
-                    colors={['#0A3D62', '#e74c3c']}
-                    style={styles.stampIconGrad}
-                  >
-                    <CountryFlag countryCode={item.countryCode || 'XX'} size={24} />
-                    {item.count > 1 && (
-                      <View style={styles.miniBadge}>
-                        <Text style={styles.miniBadgeText}>{item.count}</Text>
+              <View style={styles.countryGroup}>
+                <View style={styles.countryHeader}>
+                  <View style={styles.stampIconWrap}>
+                    <LinearGradient
+                      colors={['#0A3D62', '#e74c3c']}
+                      style={styles.stampIconGrad}
+                    >
+                      <CountryFlag countryCode={group.countryCode} size={24} />
+                      {group.count > 1 && (
+                        <View style={styles.miniBadge}>
+                          <Text style={styles.miniBadgeText}>{group.count}</Text>
+                        </View>
+                      )}
+                    </LinearGradient>
+                  </View>
+                  <View style={{ flex: 1, marginLeft: 12 }}>
+                    <Text style={styles.countryTitle}>{group.title}</Text>
+                  </View>
+                </View>
+
+                {group.data.map((city, cIndex) => {
+                  const ts = city.createdAt ? new Date(city.createdAt).getTime() : 0;
+                  const dateText = ts ? new Date(ts).toLocaleDateString() : '';
+                  const regionText = city.type === 'place' && city.parentCity ? `${city.parentCity} • ` : '';
+                  
+                  return (
+                    <View key={`${city._id}-${cIndex}`} style={styles.cityRow}>
+                      <View style={styles.cityDot} />
+                      <View style={styles.cityInfo}>
+                        <Text style={styles.cityTitle}>{city.name}</Text>
+                        {(regionText || dateText) ? (
+                          <Text style={styles.cityDate}>{regionText}{dateText}</Text>
+                        ) : null}
                       </View>
-                    )}
-                  </LinearGradient>
-                </View>
-                <View style={{ flex: 1, marginLeft: 12 }}>
-                  <Text style={styles.rowTitle}>{cityName}</Text>
-                  <Text style={styles.rowSub}>{countryName}{dateText ? ` • ${dateText}` : ''}</Text>
-                </View>
+                      {city.count > 1 && (
+                        <View style={styles.cityBadge}>
+                          <Text style={styles.cityBadgeText}>{city.count}</Text>
+                        </View>
+                      )}
+                    </View>
+                  );
+                })}
               </View>
             );
           }}
@@ -152,7 +232,7 @@ export default function UserLocationsScreen() {
               <Text style={styles.emptyText}>Add a stamp in Passport to see it here.</Text>
             </View>
           }
-          contentContainerStyle={locations.length === 0 ? { flexGrow: 1 } : undefined}
+          contentContainerStyle={groupedLocations.length === 0 ? { flexGrow: 1 } : undefined}
         />
       )}
     </SafeAreaView>
@@ -176,18 +256,22 @@ const styles = StyleSheet.create({
   listHeader: { paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 0.5, borderBottomColor: '#eee' },
   countText: { fontSize: 20, fontWeight: '800', color: '#222' },
   countLabel: { fontSize: 12, color: '#666', marginTop: 2 },
-  row: {
-    flexDirection: 'row',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+  
+  countryGroup: {
     borderBottomWidth: 0.5,
     borderBottomColor: '#f0f0f0',
+    paddingVertical: 8,
+  },
+  countryHeader: {
+    flexDirection: 'row',
     alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
   },
   stampIconWrap: {
     width: 60,
     height: 60,
-    borderRadius: 10, // User requested 10 radius
+    borderRadius: 10,
     backgroundColor: '#fff',
     padding: 3,
     elevation: 2,
@@ -213,8 +297,36 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   miniBadgeText: { fontSize: 8, fontWeight: '800', color: '#0A3D62' },
-  rowTitle: { fontSize: 15, fontWeight: '700', color: '#222' },
-  rowSub: { fontSize: 12, color: '#666', marginTop: 1 }, // 10px font size might be too small, using 12 for better readability but keeping close
+  countryTitle: { fontSize: 16, fontWeight: '700', color: '#222' },
+  
+  cityRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingLeft: 88, // 16 (padding) + 60 (icon) + 12 (margin)
+    paddingRight: 16,
+    paddingVertical: 8,
+  },
+  cityDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#e74c3c',
+    marginRight: 10,
+  },
+  cityInfo: {
+    flex: 1,
+  },
+  cityTitle: { fontSize: 15, fontWeight: '600', color: '#333' },
+  cityDate: { fontSize: 12, color: '#666', marginTop: 2 },
+  cityBadge: {
+    backgroundColor: '#f0f0f0',
+    borderRadius: 10,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    marginLeft: 8,
+  },
+  cityBadgeText: { fontSize: 10, fontWeight: '700', color: '#555' },
+
   emptyTitle: { fontSize: 16, fontWeight: '700', color: '#222' },
   emptyText: { fontSize: 13, color: '#777', marginTop: 6, textAlign: 'center' },
   privateTitle: { fontSize: 16, fontWeight: '700', color: '#222' },

@@ -1017,12 +1017,25 @@ export default function SavedScreen() {
 
                 {/* Collaborator chips */}
                 {editCollaborators.length > 0 && (
-                    <Text style={styles.collabChipsInline}>
-                      Collaborators: {editCollaborators.map(u => {
-                        const name = typeof u === 'string' ? u : (u.name || u.displayName || u.username);
-                        return name || 'Collaborator';
-                      }).join(', ')}
-                    </Text>
+                  <View style={{ paddingHorizontal: 16, marginTop: 4, marginBottom: 12 }}>
+                    <Text style={{ fontSize: 12, color: '#666', fontWeight: '600', marginBottom: 6 }}>Collaborators</Text>
+                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                      {editCollaborators.map((u, index) => {
+                        const name = typeof u === 'string' ? u : (u.name || u.displayName || u.username || 'Collaborator');
+                        const avatar = typeof u === 'string' ? null : u.avatar;
+                        return (
+                          <View key={index} style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#f0f2f5', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 16 }}>
+                            {avatar ? (
+                              <ExpoImage source={{ uri: avatar }} style={{ width: 20, height: 20, borderRadius: 10, marginRight: 6 }} />
+                            ) : (
+                              <Ionicons name="person-circle" size={20} color="#999" style={{ marginRight: 6 }} />
+                            )}
+                            <Text style={{ fontSize: 13, color: '#333', fontWeight: '600' }}>{name}</Text>
+                          </View>
+                        );
+                      })}
+                    </View>
+                  </View>
                 )}
 
                 {/* Delete button (Owner only) */}
@@ -1445,8 +1458,6 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 16,
     paddingVertical: 14,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#eee',
   },
   editCancel: { fontSize: 15, color: '#555', fontWeight: '500' },
   editTitle: { fontSize: 16, fontWeight: '700', color: '#111' },
@@ -1460,8 +1471,6 @@ const styles = StyleSheet.create({
   },
   nameInputWrap: {
     marginHorizontal: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#ddd',
     marginBottom: 4,
   },
   nameInput: { fontSize: 16, color: '#111', paddingVertical: 10 },
@@ -1469,9 +1478,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingVertical: 16,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#f0f0f0',
+    paddingVertical: 10,
     gap: 12,
   },
   optionLabel: { flex: 1, fontSize: 14, color: '#222' },
@@ -1484,8 +1491,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 16,
     paddingVertical: 16,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#f0f0f0',
   },
   radioLabel: { fontSize: 15, fontWeight: '600', color: '#111', marginBottom: 2 },
   radioSub: { fontSize: 12, color: '#999' },
@@ -1514,6 +1519,9 @@ const styles = StyleSheet.create({
     color: '#0A3D62',
     fontWeight: '500',
     flex: 1,
+    marginHorizontal: 16,
+    marginTop: 8,
+    marginBottom: 8,
   },
   groupSectionEdit: {
     paddingLeft: 44,
@@ -1564,8 +1572,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 16,
     paddingVertical: 12,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#f0f0f0',
   },
   userAvatarEdit: {
     width: 44,

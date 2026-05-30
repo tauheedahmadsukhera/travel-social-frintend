@@ -88,6 +88,34 @@ type SubLocation = {
   }[];
 };
 
+const getCleanAddressParts = (addressString?: string | null): string[] => {
+  if (!addressString || typeof addressString !== 'string') return [];
+  
+  const parts = addressString.split(',').map(p => p.trim()).filter(Boolean);
+  const cleanParts: string[] = [];
+  
+  for (const part of parts) {
+    let p = part;
+    
+    // Remove UK-style postal codes (case-insensitive, e.g. SW1A 1AA)
+    p = p.replace(/\b[A-Z]{1,2}\d[A-Z\d]?\s?\d[A-Z]{2}\b/gi, '');
+    
+    // Remove US/Canadian/European zip codes and any stand-alone numbers
+    p = p.replace(/\b\d{3,8}\b/g, '');
+    p = p.replace(/\b\d+\b/g, '');
+    
+    // Clean up extra whitespace
+    p = p.trim().replace(/\s+/g, ' ');
+    
+    // Only keep if it has at least 2 characters and contains letters
+    if (p.length >= 2 && /[a-zA-Z]/.test(p)) {
+      cleanParts.push(p);
+    }
+  }
+  
+  return cleanParts;
+};
+
 export default function LocationDetailsScreen() {
   const { placeId, locationName, locationAddress, scope, regionId, regionKey } = useLocalSearchParams();
   const router = useRouter();
@@ -212,12 +240,12 @@ export default function LocationDetailsScreen() {
 
   // Dynamic Geo-Scope detection
   const getGeoScope = React.useCallback((): 'CONTINENT' | 'COUNTRY' | 'CITY' | 'NEIGHBORHOOD' => {
-    const name = String(locationName || '').toLowerCase().trim();
+    const name = String(locationName || placeDetails?.name || '').toLowerCase().trim();
     const sc = String(scope || '').toLowerCase().trim();
 
     // Continent Detection
     const continents = ['europe', 'asia', 'africa', 'americas', 'oceania', 'america', 'antarctica'];
-    if (sc === 'continent' || sc === 'region' || continents.includes(name)) {
+    if (sc === 'region' || sc === 'continent' || continents.includes(name)) {
       return 'CONTINENT';
     }
 
@@ -227,14 +255,27 @@ export default function LocationDetailsScreen() {
     }
     const countries = [
       'united kingdom', 'japan', 'pakistan', 'france', 'spain', 'italy', 'germany', 
-      'united states', 'usa', 'canada', 'australia', 'brazil', 'india', 'china'
+      'united states', 'usa', 'canada', 'australia', 'brazil', 'india', 'china',
+      'united arab emirates', 'uae', 'saudi arabia', 'mexico', 'thailand', 'turkey',
+      'portugal', 'greece', 'switzerland', 'egypt', 'morocco', 'south africa', 'kenya'
     ];
     if (countries.includes(name)) {
       return 'COUNTRY';
     }
 
+    if (sc === 'city') {
+      return 'CITY';
+    }
+
     return 'CITY';
-  }, [locationName, scope]);
+  }, [locationName, placeDetails?.name, scope]);
+
+  const getSubLocationsTitle = React.useCallback(() => {
+    const geoScope = getGeoScope();
+    if (geoScope === 'CONTINENT') return 'COUNTRIES';
+    if (geoScope === 'COUNTRY') return 'CITIES';
+    return 'PLACES';
+  }, [getGeoScope]);
 
   const extractCountryIntelligently = React.useCallback((post: any): string => {
     if (post?.locationData?.country && typeof post.locationData.country === 'string' && post.locationData.country.trim().length > 0) {
@@ -248,14 +289,14 @@ export default function LocationDetailsScreen() {
     ];
     for (const f of fields) {
       if (f && typeof f === 'string') {
-        const parts = f.split(',').map(p => p.trim()).filter(Boolean);
-        if (parts.length > 0) {
-          const lastPart = parts[parts.length - 1];
-          if (isNaN(Number(lastPart)) && lastPart.toLowerCase() !== 'europe' && lastPart.toLowerCase() !== 'asia') {
+        const cleanParts = getCleanAddressParts(f);
+        if (cleanParts.length > 0) {
+          const lastPart = cleanParts[cleanParts.length - 1];
+          if (lastPart.toLowerCase() !== 'europe' && lastPart.toLowerCase() !== 'asia' && lastPart.toLowerCase() !== 'america' && lastPart.toLowerCase() !== 'africa') {
             return lastPart;
           }
-          if (parts.length > 1) {
-            return parts[parts.length - 2];
+          if (cleanParts.length > 1) {
+            return cleanParts[cleanParts.length - 2];
           }
         }
       }
@@ -275,15 +316,25 @@ export default function LocationDetailsScreen() {
     ];
     for (const f of fields) {
       if (f && typeof f === 'string') {
-        const parts = f.split(',').map(p => p.trim()).filter(Boolean);
-        if (parts.length > 1) {
-          if (parts.length === 2) {
-            return parts[0];
+        const cleanParts = getCleanAddressParts(f);
+        
+        // Filter out street names
+        const streetIndicators = /\b(street|st|avenue|ave|road|rd|boulevard|blvd|lane|ln|drive|dr|court|ct|place|pl|square|sq|way|parkway|pkwy)\b/i;
+        const nonStreetParts = cleanParts.filter(p => !streetIndicators.test(p));
+        
+        if (nonStreetParts.length > 0) {
+          const len = nonStreetParts.length;
+          if (len === 1) {
+            return nonStreetParts[0];
+          } else if (len === 2) {
+            return nonStreetParts[0];
+          } else {
+            const secondToLast = nonStreetParts[len - 2];
+            if (secondToLast.length === 2 && secondToLast === secondToLast.toUpperCase()) {
+              return nonStreetParts[len - 3] || nonStreetParts[len - 2];
+            }
+            return secondToLast;
           }
-          const cityIndex = parts.length - 2;
-          return parts[cityIndex];
-        } else if (parts.length === 1) {
-          return parts[0];
         }
       }
     }
@@ -398,24 +449,74 @@ export default function LocationDetailsScreen() {
 
   useEffect(() => {
     async function fetchDetails() {
-      if (!locationName) return;
       setLoading(true);
       try {
+        let name = locationName as string;
+        let address = locationAddress as string;
+
+        // If locationName is missing, fetch from maps service using placeId
+        if (!name && placeId && placeId !== 'unknown') {
+          const details = await mapService.getPlaceDetails(placeId as string);
+          if (details) {
+            name = details.placeName || details.city || '';
+            address = details.address || '';
+          }
+        }
+
+        // Fallback to placeId as name if still not set
+        if (!name) {
+          name = String(placeId || '');
+          if (name === 'unknown') name = '';
+        }
+
+        // Validate name to make sure we don't display a numeric value, zip code, or Place ID (like "ChIJ...")
+        const isPlaceId = typeof name === 'string' && (name.startsWith('ChIJ') || (name.length > 15 && !name.includes(' ')));
+        const isNumeric = !isNaN(Number(name));
+        if (isPlaceId || isNumeric || !name || name === 'unknown') {
+          if (address) {
+            const cleanParts = getCleanAddressParts(address);
+            name = cleanParts[0] || 'Location';
+          } else {
+            name = 'Location';
+          }
+        }
+
+        if (!name) {
+          setPlaceDetails(null);
+          setLoading(false);
+          return;
+        }
+
+        // Format name beautifully if it is lowercase/raw
+        if (name && name === name.toLowerCase()) {
+          name = name.charAt(0).toUpperCase() + name.slice(1);
+        }
+
         const placeDetailsData = {
-          name: locationName as string,
-          formatted_address: (locationAddress as string) || (locationName as string),
+          name,
+          formatted_address: address || name,
         };
         setPlaceDetails(placeDetailsData);
 
+        // Dynamic check for region scope
+        const sc = String(scope || '').toLowerCase().trim();
+        const continents = ['europe', 'asia', 'africa', 'americas', 'america', 'antarctica', 'oceania'];
+        const isRegion = sc === 'region' || sc === 'continent' || continents.includes(name.toLowerCase());
+
+        let countriesList: string[] = [];
+        if (isRegion) {
+          countriesList = await getCountriesForRegion(regionIdStr, name);
+        }
+
         // 1. Parallel Fetching for faster initial load
         await Promise.all([
-          isRegionScope 
-            ? fetchRegionPosts(regionIdStr, locationName as string) 
-            : fetchLocationPosts(locationName as string),
-          fetchLocationStories(locationName as string),
+          isRegion 
+            ? fetchRegionPosts(regionIdStr, name) 
+            : fetchLocationPosts(name),
+          fetchLocationStories(name, countriesList),
           (async () => {
              try {
-               const metaRes = await apiService.getLocationMeta(locationName as string, viewerId || undefined);
+               const metaRes = await apiService.getLocationMeta(name, viewerId || undefined);
                if (metaRes?.success && metaRes?.data) {
                  setTotalVisits(metaRes.data.visits || 0);
                  setVerifiedVisits(metaRes.data.verifiedVisits || 0);
@@ -431,27 +532,37 @@ export default function LocationDetailsScreen() {
       }
     }
     fetchDetails();
-  }, [placeId, locationName, locationAddress, isRegionScope, regionIdStr, viewerId]);
+  }, [placeId, locationName, locationAddress, scope, regionIdStr, viewerId]);
 
   const extractSubLocationName = React.useCallback((post: any): string => {
     // Priority 0: Google Maps enriched data
-    if (post?.locationData?.neighborhood) return post.locationData.neighborhood;
-    if (post?.locationData?.sublocality) return post.locationData.sublocality;
+    const neighborhood = post?.locationData?.neighborhood;
+    if (neighborhood && typeof neighborhood === 'string') {
+      const clean = getCleanAddressParts(neighborhood)[0];
+      if (clean) return clean;
+    }
+    const sublocality = post?.locationData?.sublocality;
+    if (sublocality && typeof sublocality === 'string') {
+      const clean = getCleanAddressParts(sublocality)[0];
+      if (clean) return clean;
+    }
 
     // Priority 1: Use a city/area part of the address if available
     const addr = post?.locationData?.address || '';
     if (addr) {
-      const parts = addr.split(',').map((p: string) => p.trim());
-      // Usually city or district is 2nd or 3rd part in reverse if full address
-      // For simple addresses, it's the first part.
-      if (parts.length > 2) return parts[parts.length - 3] || parts[0];
-      return parts[0];
+      const cleanParts = getCleanAddressParts(addr);
+      if (cleanParts.length > 0) {
+        return cleanParts[0];
+      }
     }
     
     // Priority 2: Use locationName if it looks like an area
     const name = post?.locationData?.name || post?.locationName || post?.location || '';
     if (typeof name === 'string' && name.includes(',')) {
-      return name.split(',')[0].trim();
+      const cleanParts = getCleanAddressParts(name);
+      if (cleanParts.length > 0) {
+        return cleanParts[0];
+      }
     }
 
     return name || 'Unknown';
@@ -554,7 +665,7 @@ export default function LocationDetailsScreen() {
     }
   };
 
-  const fetchLocationStories = async (searchLocationName: string) => {
+  const fetchLocationStories = async (searchLocationName: string, countriesList: string[] = []) => {
     try {
       const pid = typeof placeId === 'string' ? placeId : Array.isArray(placeId) ? placeId[0] : '';
       const addr = typeof locationAddress === 'string' ? locationAddress : Array.isArray(locationAddress) ? locationAddress[0] : '';
@@ -589,15 +700,28 @@ export default function LocationDetailsScreen() {
       const needle = String(searchLocationName || '').toLowerCase().trim();
       const needleAddr = String(addr || '').toLowerCase().trim();
       const pidLower = String(pid || '').toLowerCase().trim();
+      const countrySet = new Set(countriesList.map(c => c.toLowerCase()));
 
       const locationStories = normalizedStories.filter((story: any) => {
         const name = String(story?.locationData?.name || story?.location || '').toLowerCase();
         const storyAddr = String(story?.locationData?.address || '').toLowerCase();
         const storyPid = String(story?.locationData?.placeId || '').toLowerCase();
+        const storyCountry = String(story?.locationData?.country || '').toLowerCase();
+
         if (pidLower && storyPid && storyPid === pidLower) return true;
         if (needle && name.includes(needle)) return true;
         if (needleAddr && (name.includes(needleAddr) || storyAddr.includes(needleAddr))) return true;
         if (needleAddr && needle && storyAddr.includes(needle)) return true;
+
+        // If we have a list of countries for region scope, match countries
+        if (countriesList.length > 0) {
+          if (storyCountry && countrySet.has(storyCountry)) return true;
+          for (const country of countriesList) {
+            const cLower = country.toLowerCase();
+            if (name.includes(cLower) || storyAddr.includes(cLower)) return true;
+          }
+        }
+
         return false;
       });
 
@@ -761,11 +885,33 @@ export default function LocationDetailsScreen() {
 
 
 
+  if (loading && !placeDetails) {
+    return (
+      <SafeAreaView style={{ flex: 1, backgroundColor: '#fff' }}>
+        <View style={[styles.header, { justifyContent: 'space-between', paddingTop: safeTop, height: totalHeaderHeight }]}>
+          <TouchableOpacity onPress={() => safeRouterBack()} style={styles.backButton}>
+            <Feather name="arrow-left" size={28} color="#000" />
+          </TouchableOpacity>
+        </View>
+        <View style={{ flex: 1, paddingTop: 10 }}>
+          <LocationSkeleton />
+          <LocationSkeleton />
+          <LocationSkeleton />
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   if (!placeDetails) {
     return (
-      <View style={{ flex: 1, backgroundColor: '#fff' }}>
-        <Text style={{ margin: 24, marginTop: 40 + insets.top, fontSize: 16, color: '#666' }}>No details found.</Text>
-      </View>
+      <SafeAreaView style={{ flex: 1, backgroundColor: '#fff' }}>
+        <View style={[styles.header, { justifyContent: 'space-between', paddingTop: safeTop, height: totalHeaderHeight }]}>
+          <TouchableOpacity onPress={() => safeRouterBack()} style={styles.backButton}>
+            <Feather name="arrow-left" size={28} color="#000" />
+          </TouchableOpacity>
+        </View>
+        <Text style={{ margin: 24, fontSize: 16, color: '#666', textAlign: 'center' }}>No details found.</Text>
+      </SafeAreaView>
     );
   }
 
@@ -915,7 +1061,7 @@ export default function LocationDetailsScreen() {
               {/* Sub Locations Section (PLACES) */}
               {subLocations.length > 0 && (
                 <View style={styles.subLocationsSection}>
-                  <Text style={styles.sectionTitle}>PLACES</Text>
+                  <Text style={styles.sectionTitle}>{getSubLocationsTitle()}</Text>
                   <ScrollView
                     horizontal
                     showsHorizontalScrollIndicator={false}

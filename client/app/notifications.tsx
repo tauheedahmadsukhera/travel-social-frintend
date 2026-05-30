@@ -278,8 +278,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 8,
     paddingBottom: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#eee',
     backgroundColor: '#fff',
   },
   title: {

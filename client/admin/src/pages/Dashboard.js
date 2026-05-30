@@ -77,15 +77,15 @@ const Dashboard = () => {
           title="Total Users" 
           value={stats?.totalUsers?.toLocaleString()} 
           icon={<HiOutlineUsers />} 
-          trend="+12.4%" 
+          trend={stats?.userTrend || '+0.0%'} 
           color="indigo"
           loading={loading}
         />
         <StatsCard 
-          title="Daily Posts" 
+          title="Total Posts" 
           value={stats?.totalPosts?.toLocaleString()} 
           icon={<HiOutlinePhotograph />} 
-          trend="+5.1%" 
+          trend={stats?.postTrend || '+0.0%'} 
           color="emerald"
           loading={loading}
         />
@@ -93,15 +93,15 @@ const Dashboard = () => {
           title="Active Reports" 
           value={stats?.activeReports} 
           icon={<HiOutlineExclamation />} 
-          trend="-15%" 
+          trend={stats?.reportTrend || '0.0%'} 
           color="orange"
           loading={loading}
         />
         <StatsCard 
-          title="Retention Rate" 
-          value="94.2%" 
+          title="Active User Rate" 
+          value={stats?.activeUserRate || '100%'} 
           icon={<HiOutlineTrendingUp />} 
-          trend="+2.1%" 
+          trend={stats?.activeUserRateTrend || '+0.0%'} 
           color="blue"
           loading={loading}
         />

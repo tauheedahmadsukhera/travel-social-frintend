@@ -121,7 +121,7 @@ const VerifiedLocationModal: React.FC<VerifiedLocationModalProps> = ({
                       return <Text style={{ fontWeight: '700', fontSize: 14, color: '#111', marginTop: (uiItem.type === 'header_passport' ? 18 : 0), marginBottom: 8 }}>{uiItem.label}</Text>;
                     }
                     if (uiItem.type === 'error_location') {
-                      return <Text style={{ color: '#888', marginBottom: 12, textAlign: 'center' }}>Enable location permission to see nearby verified places.</Text>;
+                      return <Text style={{ color: '#888', marginBottom: 12, textAlign: 'left' }}>Enable location permissions to see nearby verified places.</Text>;
                     }
                     if (uiItem.type === 'loading') {
                       return <ActivityIndicator size="small" color="#0095f6" style={{ marginVertical: 10 }} />;
@@ -159,9 +159,7 @@ const VerifiedLocationModal: React.FC<VerifiedLocationModalProps> = ({
                 flexDirection: 'row', 
                 justifyContent: 'space-between', 
                 alignItems: 'center', 
-                paddingVertical: 16, 
-                borderTopWidth: 1, 
-                borderTopColor: '#f0f0f0' 
+                paddingVertical: 16
               }}>
                 <TouchableOpacity onPress={onClose}>
                   <Text style={{ color: '#111', fontWeight: '700', fontSize: 15 }}>Cancel</Text>

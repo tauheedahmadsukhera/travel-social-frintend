@@ -1,6 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import React from 'react';
 import { ActivityIndicator, StyleSheet, Text, TextStyle, TouchableOpacity, ViewStyle, View } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 
 interface CustomButtonProps {
 	title: string;
@@ -53,7 +54,7 @@ export default function CustomButton({
 		}
 	};
 
-	const defaultIconColor = variant === 'outline' ? '#000' : '#fff';
+	const defaultIconColor = variant === 'outline' ? '#000' : (variant === 'secondary' ? '#FF8D00' : '#fff');
 
 	return (
 		<TouchableOpacity
@@ -68,8 +69,25 @@ export default function CustomButton({
 			disabled={disabled || loading}
 			activeOpacity={0.8}
 		>
+			{(variant === 'primary' || variant === 'secondary') && (
+				<LinearGradient
+					colors={['#FBBC04', '#FF8D00']}
+					start={{ x: 0, y: 0 }}
+					end={{ x: 1, y: 0 }}
+					style={[
+						StyleSheet.absoluteFill,
+						{ borderRadius: 8 },
+						variant === 'secondary' && { padding: 1.5 }
+					]}
+				>
+					{variant === 'secondary' && (
+						<View style={{ flex: 1, backgroundColor: '#fff', borderRadius: 6.5 }} />
+					)}
+				</LinearGradient>
+			)}
+
 			{loading ? (
-				<ActivityIndicator color={variant === 'primary' ? '#fff' : '#000'} />
+				<ActivityIndicator color={variant === 'primary' ? '#fff' : (variant === 'secondary' ? '#FF8D00' : '#000')} />
 			) : (
 				<View style={styles.buttonContent}>
 					{icon && (
@@ -94,20 +112,22 @@ const styles = StyleSheet.create({
 		alignItems: 'center',
 		justifyContent: 'center',
 		paddingHorizontal: 20,
+		// Ensure inner absolute fill components respect borders if needed, but not strictly required
 	},
 	buttonContent: {
 		flexDirection: 'row',
 		alignItems: 'center',
 		justifyContent: 'center',
+		zIndex: 1, // Ensure text and icon appear above the absolute LinearGradient
 	},
 	icon: {
 		marginRight: 10,
 	},
 	primaryButton: {
-		backgroundColor: '#0A3D62',
+		borderWidth: 0,
 	},
 	secondaryButton: {
-		backgroundColor: '#000',
+		borderWidth: 0,
 	},
 	outlineButton: {
 		backgroundColor: 'transparent',
@@ -120,7 +140,7 @@ const styles = StyleSheet.create({
 		fontWeight: '600',
 	},
 	secondaryText: {
-		color: '#fff',
+		color: '#FF8D00',
 		fontSize: 16,
 		fontWeight: '600',
 	},

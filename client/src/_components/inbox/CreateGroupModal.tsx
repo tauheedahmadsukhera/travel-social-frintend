@@ -9,14 +9,15 @@ import {
   TextInput,
   StyleSheet,
   Pressable,
-  Image,
 } from 'react-native';
+import { Image as ExpoImage } from 'expo-image';
 import { Feather } from '@expo/vector-icons';
 import { FlashList } from '@shopify/flash-list';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { apiService } from '@/src/_services/apiService';
 import { DEFAULT_AVATAR_URL } from '@/lib/api';
+
 
 interface CreateGroupModalProps {
   visible: boolean;
@@ -235,9 +236,26 @@ export const CreateGroupModal: React.FC<CreateGroupModalProps> = ({
                 );
                 const name = u?.displayName || u?.username || u?.name || 'User';
                 const avatar = u?.avatar || u?.photoURL || DEFAULT_AVATAR_URL;
+                const isDefaultAvatar = !avatar || avatar === DEFAULT_AVATAR_URL || avatar.includes('avatardefault.webp');
                 return (
                   <TouchableOpacity style={styles.memberRow} onPress={() => toggleGroupMember(u)} activeOpacity={0.8}>
-                    <Image source={{ uri: avatar }} style={styles.memberAvatar} />
+                    <View style={{ width: 34, height: 34, borderRadius: 17, overflow: 'hidden', marginRight: 10 }}>
+                      {isDefaultAvatar ? (
+                        <View style={{ width: 34, height: 34, borderRadius: 17, backgroundColor: '#788d9a', alignItems: 'center', justifyContent: 'center' }}>
+                          <Text style={{ color: '#fff', fontSize: 18, fontWeight: '700' }}>
+                            {String(name || 'U').trim().charAt(0).toUpperCase()}
+                          </Text>
+                        </View>
+                      ) : (
+                        <ExpoImage 
+                          source={{ uri: avatar }} 
+                          style={[styles.memberAvatar, { marginRight: 0 }]} 
+                          contentFit="cover"
+                          cachePolicy="memory-disk"
+                          transition={150}
+                        />
+                      )}
+                    </View>
                     <Text style={styles.memberName} numberOfLines={1}>
                       {name}
                     </Text>
@@ -368,7 +386,7 @@ const styles = StyleSheet.create({
     height: 34,
     borderRadius: 17,
     marginRight: 10,
-    backgroundColor: '#e5e7eb',
+    backgroundColor: 'transparent',
   },
   memberName: {
     flex: 1,

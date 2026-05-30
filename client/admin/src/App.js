@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { Suspense, lazy } from 'react';
 import { Toaster } from 'react-hot-toast';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { useAuthStore } from './stores/authStore';
@@ -6,14 +6,21 @@ import { useAuthStore } from './stores/authStore';
 // Components
 import Sidebar from './components/Sidebar';
 
-// Pages
-import Dashboard from './pages/Dashboard';
-import Reports from './pages/Reports';
-import Users from './pages/Users';
-import Management from './pages/Management';
-import Login from './pages/Login';
-import AdminLogs from './pages/AdminLogs';
-import Settings from './pages/Settings';
+// Lazy Loaded Pages
+const Dashboard = lazy(() => import('./pages/Dashboard'));
+const Reports = lazy(() => import('./pages/Reports'));
+const Users = lazy(() => import('./pages/Users'));
+const Management = lazy(() => import('./pages/Management'));
+const Login = lazy(() => import('./pages/Login'));
+const AdminLogs = lazy(() => import('./pages/AdminLogs'));
+const Settings = lazy(() => import('./pages/Settings'));
+
+// Loading Fallback
+const PageLoader = () => (
+  <div className="flex items-center justify-center min-h-[60vh]">
+    <div className="w-10 h-10 border-4 border-indigo-500/30 border-t-indigo-500 rounded-full animate-spin"></div>
+  </div>
+);
 
 // Protected Route Wrapper
 const ProtectedRoute = ({ children }) => {
@@ -25,7 +32,9 @@ const ProtectedRoute = ({ children }) => {
     <div className="flex">
       <Sidebar />
       <main className="flex-1 ml-64 p-8 min-h-screen">
-        {children}
+        <Suspense fallback={<PageLoader />}>
+          {children}
+        </Suspense>
       </main>
     </div>
   );
@@ -37,7 +46,7 @@ const App = () => {
       <div className="min-h-screen bg-bgDark">
         <Toaster position="top-right" reverseOrder={false} />
         <Routes>
-          <Route path="/login" element={<Login />} />
+          <Route path="/login" element={<Suspense fallback={<PageLoader />}><Login /></Suspense>} />
           <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
           <Route path="/reports" element={<ProtectedRoute><Reports /></ProtectedRoute>} />
           <Route path="/users" element={<ProtectedRoute><Users /></ProtectedRoute>} />

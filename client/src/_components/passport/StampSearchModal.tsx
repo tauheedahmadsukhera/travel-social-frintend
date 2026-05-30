@@ -175,8 +175,6 @@ const styles = StyleSheet.create({
   searchBarWrapper: {
     paddingHorizontal: 20,
     paddingBottom: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
   },
   searchBarInner: {
     flexDirection: 'row',

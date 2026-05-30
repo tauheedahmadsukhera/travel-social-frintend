@@ -77,15 +77,15 @@ export default function WelcomeScreen() {
           {/* Main Action Buttons */}
           <View style={styles.buttonContainer}>
             <CustomButton
-              title="Login"
-              onPress={() => router.push('/auth/login-options')}
-              variant="primary"
-              style={styles.mainButton}
-            />
-            <CustomButton
               title="Sign up"
               onPress={() => router.push('/auth/signup-options')}
               variant="secondary"
+              style={styles.mainButton}
+            />
+            <CustomButton
+              title="Login"
+              onPress={() => router.push('/auth/login-options')}
+              variant="primary"
               style={styles.mainButton}
             />
           </View>
@@ -98,7 +98,7 @@ export default function WelcomeScreen() {
               <View style={styles.line} />
             </View>
 
-            <View style={{ marginBottom: 15 }}>
+            <View style={{ marginBottom: 21 }}>
               <Text style={styles.agreementText}>
                 By continuing, you agree to our{' '}
                 <Text style={styles.footerLink} onPress={() => router.push('/legal/terms' as any)}>Terms of Service</Text> and{' '}
@@ -113,34 +113,7 @@ export default function WelcomeScreen() {
           </View>
 
 
-          {/* Footer */}
-          <View style={styles.footer}>
-            <Text style={styles.footerText}>
-              You have an account?{' '}
-              <Text
-                style={styles.footerLink}
-                onPress={() => router.push('/auth/login-options')}
-              >
-                Log in
-              </Text>
-            </Text>
 
-              <View style={styles.legalLinks}>
-                <Text
-                  style={styles.legalLink}
-                  onPress={() => router.push('/legal/privacy' as any)}
-                >
-                  Privacy Policy
-                </Text>
-                <View style={{ width: 16 }} />
-                <Text
-                  style={styles.legalLink}
-                  onPress={() => router.push('/legal/terms' as any)}
-                >
-                  Terms of Service
-                </Text>
-              </View>
-          </View>
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -158,17 +131,18 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
     padding: 20,
-    paddingBottom: 10,
+    paddingBottom: 80, // Extra padding to forcefully shift content up
     justifyContent: 'center', // Vertically center all layout blocks
   },
   buttonContainer: {
-    marginBottom: 15,
+    marginTop: 15,
+    marginBottom: 3,
   },
   mainButton: {
     marginBottom: 8,
   },
   socialSection: {
-    marginBottom: 15,
+    marginBottom: 0,
   },
   divider: {
     flexDirection: 'row',
@@ -191,6 +165,7 @@ const styles = StyleSheet.create({
   snapButton: {
     backgroundColor: '#FFFC00',
     borderColor: '#FFFC00',
+    marginBottom: 0,
   },
   footer: {
     alignItems: 'center',

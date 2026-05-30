@@ -575,7 +575,7 @@ export async function uploadMedia(uri: string, mediaType: 'image' | 'video' = 'i
     console.log(`[uploadMedia] 📤 Starting ${mediaType} upload from URI:`, uri);
 
     // Fast path: all local uploads via multipart (industry standard)
-    if (uri.startsWith('file://')) {
+    if (uri.startsWith('file://') || uri.startsWith('content://') || uri.startsWith('/') || !uri.includes('://')) {
       const multipartResult = await uploadWithMultipart(uri, mediaType, path);
       if (multipartResult?.success && multipartResult?.url) {
         return multipartResult;

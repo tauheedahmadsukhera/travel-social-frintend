@@ -1,5 +1,6 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { Image as ExpoImage } from 'expo-image';
 import { Feather } from '@expo/vector-icons';
 import { DEFAULT_AVATAR_URL } from '@/lib/api';
 
@@ -33,6 +34,8 @@ const ConversationItem: React.FC<ConversationItemProps> = ({
     ? (item?.groupAvatar || DEFAULT_AVATAR_URL)
     : (profile?.avatar || profile?.photoURL || embeddedUser?.avatar || embeddedUser?.photoURL || item?.otherUserAvatar || DEFAULT_AVATAR_URL);
 
+  const isDefaultAvatar = !avatar || avatar === DEFAULT_AVATAR_URL || avatar.includes('avatardefault.webp');
+
   const hasUnread = typeof item?.unreadCount === 'number' && item.unreadCount > 0;
   const lastMsg = item.lastMessage || 'No messages yet';
 
@@ -44,8 +47,22 @@ const ConversationItem: React.FC<ConversationItemProps> = ({
       onPress={() => onPress(item)}
     >
       <View style={styles.avatarContainer}>
-        <View style={[styles.avatarRing, hasUnread && styles.avatarRingUnread]}>
-          <Image source={{ uri: avatar }} style={styles.avatar} />
+        <View style={[styles.avatarRing, hasUnread && styles.avatarRingUnread, { overflow: 'hidden' }]}>
+          {isDefaultAvatar ? (
+            <View style={[styles.avatar, { backgroundColor: '#788d9a', alignItems: 'center', justifyContent: 'center' }]}>
+              <Text style={{ color: '#fff', fontSize: 26, fontWeight: '700' }}>
+                {String(displayName || 'U').trim().charAt(0).toUpperCase()}
+              </Text>
+            </View>
+          ) : (
+            <ExpoImage 
+              source={{ uri: avatar }} 
+              style={styles.avatar} 
+              contentFit="cover"
+              cachePolicy="memory-disk"
+              transition={150}
+            />
+          )}
         </View>
         {profile?.isOnline && <View style={styles.onlineDot} />}
       </View>
@@ -83,18 +100,14 @@ const styles = StyleSheet.create({
     borderRadius: 32,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: '#dbdbdb',
   },
   avatarRingUnread: {
-    borderColor: '#0095f6',
-    borderWidth: 2,
   },
   avatar: {
     width: 56,
     height: 56,
     borderRadius: 28,
-    backgroundColor: '#efefef',
+    backgroundColor: 'transparent',
   },
   chatContent: {
     flex: 1,

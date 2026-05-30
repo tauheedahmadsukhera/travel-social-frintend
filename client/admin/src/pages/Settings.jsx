@@ -1,5 +1,5 @@
 import React from 'react';
-import { HiOutlineCog, HiOutlineDatabase, HiOutlineShieldCheck, HiOutlineMail } from 'react-icons/hi';
+import { HiOutlineCog, HiOutlineDatabase, HiOutlineShieldCheck } from 'react-icons/hi';
 
 const Settings = () => {
   return (

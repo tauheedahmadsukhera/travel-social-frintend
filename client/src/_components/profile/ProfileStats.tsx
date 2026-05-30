@@ -6,11 +6,12 @@ import { hapticLight } from '@/lib/haptics';
 interface ProfileStatsProps {
   locationsCount: number;
   postsCount: number;
-  followersCount: number;
-  followingCount: number;
+  taggedCount: number;
+  collectionsCount: number;
   onPressLocations: () => void;
-  onPressFollowers: () => void;
-  onPressFollowing: () => void;
+  onPressPosts?: () => void;
+  onPressTags?: () => void;
+  onPressCollections?: () => void;
   isPrivate?: boolean;
   isOwnProfile?: boolean;
   approvedFollower?: boolean;
@@ -19,11 +20,12 @@ interface ProfileStatsProps {
 const ProfileStats: React.FC<ProfileStatsProps> = ({
   locationsCount,
   postsCount,
-  followersCount,
-  followingCount,
+  taggedCount,
+  collectionsCount,
   onPressLocations,
-  onPressFollowers,
-  onPressFollowing,
+  onPressPosts,
+  onPressTags,
+  onPressCollections,
   isPrivate,
   isOwnProfile,
   approvedFollower
@@ -42,25 +44,27 @@ const ProfileStats: React.FC<ProfileStatsProps> = ({
 
   return (
     <View style={styles.statsRow}>
+      <TouchableOpacity style={styles.statItem} onPress={() => { hapticLight(); onPressPosts?.(); }}>
+        <Text style={styles.statNum}>{postsCount}</Text>
+        <Text style={styles.statLbl} numberOfLines={1}>Posts</Text>
+      </TouchableOpacity>
+      
       <TouchableOpacity style={styles.statItem} onPress={() => { hapticLight(); onPressLocations(); }}>
         <Text style={styles.statNum}>{locationsCount}</Text>
-        <Text style={styles.statLbl}>Locations</Text>
+        <Text style={styles.statLbl} numberOfLines={1}>Locations</Text>
       </TouchableOpacity>
       
-      <View style={styles.statItem}>
-        <Text style={styles.statNum}>{postsCount}</Text>
-        <Text style={styles.statLbl}>Posts</Text>
-      </View>
-      
-      <TouchableOpacity style={styles.statItem} onPress={() => { hapticLight(); onPressFollowers(); }}>
-        <Text style={styles.statNum}>{followersCount}</Text>
-        <Text style={styles.statLbl}>Followers</Text>
+      <TouchableOpacity style={styles.statItem} onPress={() => { hapticLight(); onPressTags?.(); }}>
+        <Text style={styles.statNum}>{taggedCount}</Text>
+        <Text style={styles.statLbl} numberOfLines={1}>Tags</Text>
       </TouchableOpacity>
-      
-      <TouchableOpacity style={styles.statItem} onPress={() => { hapticLight(); onPressFollowing(); }}>
-        <Text style={styles.statNum}>{followingCount}</Text>
-        <Text style={styles.statLbl}>Following</Text>
-      </TouchableOpacity>
+
+      {onPressCollections && (
+        <TouchableOpacity style={styles.statItem} onPress={() => { hapticLight(); onPressCollections(); }}>
+          <Text style={styles.statNum}>{collectionsCount}</Text>
+          <Text style={styles.statLbl} numberOfLines={1}>Saved</Text>
+        </TouchableOpacity>
+      )}
     </View>
   );
 };
@@ -69,23 +73,27 @@ const styles = StyleSheet.create({
   statsRow: {
     flexDirection: 'row',
     justifyContent: 'space-around',
-    paddingVertical: 15,
-    borderTopWidth: 0.5,
-    borderBottomWidth: 0.5,
-    borderColor: '#eee',
+    paddingTop: 5,
+    paddingBottom: 10,
+    paddingHorizontal: 16,
     backgroundColor: '#fff',
+    gap: 6,
   },
   statItem: {
     alignItems: 'center',
     flex: 1,
+    backgroundColor: '#f5f5f5',
+    paddingVertical: 12,
+    paddingHorizontal: 4,
+    borderRadius: 12,
   },
   statNum: {
-    fontSize: 18,
+    fontSize: 15,
     fontWeight: '700',
     color: '#000',
   },
   statLbl: {
-    fontSize: 12,
+    fontSize: 10,
     color: '#666',
     marginTop: 2,
   },

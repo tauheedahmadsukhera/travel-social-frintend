@@ -6,6 +6,7 @@ import { FlashList } from "@shopify/flash-list";
 import AsyncStorage from '@/lib/storage';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Image } from 'react-native';
+import { Image as ExpoImage } from 'expo-image';
 // import { useAuthLoading, useUser } from '@/src/_components/UserContext';
 // import {} from '../lib/firebaseHelpers';
 // @ts-ignore
@@ -872,7 +873,7 @@ function Inbox() {
 
       {/* Horizontal Following/Friends List */}
       {followingUsers.length > 0 && (
-        <View style={{ height: 110, paddingVertical: 10, borderBottomWidth: 0.5, borderBottomColor: '#f0f0f0' }}>
+        <View style={{ height: 110, paddingVertical: 10 }}>
         <FlashList
           horizontal
           showsHorizontalScrollIndicator={false}
@@ -896,11 +897,22 @@ function Inbox() {
                 });
               }}
             >
-              <View style={[styles.igAvatarRing, { width: 62, height: 62, borderRadius: 31, padding: 2, borderWidth: 1, borderColor: '#dbdbdb' }]}>
-                <Image 
-                  source={{ uri: item.avatar || DEFAULT_AVATAR_URL }} 
-                  style={{ width: 56, height: 56, borderRadius: 28 }}
-                />
+              <View style={[styles.igAvatarRing, { width: 62, height: 62, borderRadius: 31, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }]}>
+                {(!item.avatar || item.avatar === DEFAULT_AVATAR_URL || item.avatar.includes('avatardefault.webp')) ? (
+                  <View style={{ width: 56, height: 56, borderRadius: 28, backgroundColor: '#788d9a', alignItems: 'center', justifyContent: 'center' }}>
+                    <Text style={{ color: '#fff', fontSize: 26, fontWeight: '700' }}>
+                      {String(item.name || item.username || 'U').trim().charAt(0).toUpperCase()}
+                    </Text>
+                  </View>
+                ) : (
+                  <ExpoImage 
+                    source={{ uri: item.avatar }} 
+                    style={{ width: 56, height: 56, borderRadius: 28 }}
+                    contentFit="cover"
+                    cachePolicy="memory-disk"
+                    transition={150}
+                  />
+                )}
               </View>
               <Text 
                 style={{ fontSize: 11, color: '#262626', marginTop: 4, textAlign: 'center' }} 
@@ -1505,20 +1517,16 @@ const styles = StyleSheet.create({
     width: 66,
     height: 66,
     borderRadius: 33,
-    borderWidth: 2,
-    borderColor: 'transparent',
-    padding: 2,
     alignItems: 'center',
     justifyContent: 'center',
   },
   igAvatarRingUnread: {
-    borderColor: '#c13584',
   },
   igAvatar: {
     width: 58,
     height: 58,
     borderRadius: 29,
-    backgroundColor: '#efefef',
+    backgroundColor: 'transparent',
   },
   igUsername: {
     fontSize: 15,
@@ -1560,8 +1568,6 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 8,
     height: 56,
-    borderBottomWidth: 0.5,
-    borderBottomColor: '#efefef',
     backgroundColor: '#fff',
   },
   title: { fontSize: 17, fontWeight: '700', color: '#000' },
@@ -1583,8 +1589,6 @@ const styles = StyleSheet.create({
   tabsWrap: {
     flexDirection: 'row',
     paddingHorizontal: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F2F2F2',
     height: 48,
     backgroundColor: '#fff',
   },

@@ -7,18 +7,13 @@ interface ProfileTabsProps {
   activeTab: 'grid' | 'map' | 'tagged' | 'saved';
   onChangeTab: (tab: 'grid' | 'map' | 'tagged' | 'saved') => void;
   mapEnabled?: boolean;
+  onViewCollections?: () => void;
 }
 
-const ProfileTabs: React.FC<ProfileTabsProps> = ({ activeTab, onChangeTab, mapEnabled = false }) => {
+const ProfileTabs: React.FC<ProfileTabsProps> = ({ activeTab, onChangeTab, mapEnabled = false, onViewCollections }) => {
   return (
     <View style={styles.container}>
-      <TouchableOpacity
-        style={[styles.tab, activeTab === 'grid' && styles.activeTab]}
-        onPress={() => { hapticLight(); onChangeTab('grid'); }}
-      >
-        <Ionicons name="grid-outline" size={24} color={activeTab === 'grid' ? '#000' : '#999'} />
-      </TouchableOpacity>
-      
+
       {mapEnabled && (
         <TouchableOpacity
           style={[styles.tab, activeTab === 'map' && styles.activeTab]}
@@ -34,6 +29,15 @@ const ProfileTabs: React.FC<ProfileTabsProps> = ({ activeTab, onChangeTab, mapEn
       >
         <Ionicons name="pricetag-outline" size={24} color={activeTab === 'tagged' ? '#000' : '#999'} />
       </TouchableOpacity>
+
+      {onViewCollections && (
+        <TouchableOpacity
+          style={[styles.tab]}
+          onPress={() => { hapticLight(); onViewCollections(); }}
+        >
+          <Ionicons name="folder-outline" size={24} color="#999" />
+        </TouchableOpacity>
+      )}
     </View>
   );
 };
@@ -41,19 +45,21 @@ const ProfileTabs: React.FC<ProfileTabsProps> = ({ activeTab, onChangeTab, mapEn
 const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
-    borderTopWidth: 0.5,
-    borderBottomWidth: 0.5,
-    borderColor: '#eee',
+    paddingTop: 10,
+    paddingBottom: 12,
+    paddingHorizontal: 12,
     backgroundColor: '#fff',
+    gap: 8,
   },
   tab: {
     flex: 1,
     alignItems: 'center',
     paddingVertical: 12,
+    backgroundColor: '#f5f5f5',
+    borderRadius: 12,
   },
   activeTab: {
-    borderBottomWidth: 2,
-    borderBottomColor: '#000',
+    backgroundColor: '#f5f5f5',
   }
 });
 

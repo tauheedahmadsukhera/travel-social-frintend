@@ -557,7 +557,7 @@ const styles = StyleSheet.create({
     width: 54,
     height: 54,
     borderRadius: 27,
-    backgroundColor: '#f0f0f0',
+    backgroundColor: 'transparent',
   },
   avatarFallback: {
     width: 54,

@@ -1,5 +1,6 @@
 import {
   normalizeCountryName,
+  getCleanAddressParts,
   getCountryFromAddress,
   isReadableLocationLabel,
   getSuggestionLocationLabel,
@@ -22,6 +23,34 @@ describe('passportUtils', () => {
     });
   });
 
+  describe('getCleanAddressParts', () => {
+    it('should handle null/undefined/non-strings', () => {
+      expect(getCleanAddressParts(null)).toEqual([]);
+      expect(getCleanAddressParts(undefined)).toEqual([]);
+    });
+
+    it('should clean and split typical Google Maps addresses, filtering numeric ZIP codes and street numbers', () => {
+      expect(getCleanAddressParts('1600 Amphitheatre Pkwy, Mountain View, CA 94043, USA')).toEqual([
+        'Amphitheatre Pkwy',
+        'Mountain View',
+        'CA',
+        'USA'
+      ]);
+      
+      expect(getCleanAddressParts('Buckingham Palace, London SW1A 1AA, UK')).toEqual([
+        'Buckingham Palace',
+        'London',
+        'UK'
+      ]);
+
+      expect(getCleanAddressParts('Eiffel Tower, Paris, 75007, France')).toEqual([
+        'Eiffel Tower',
+        'Paris',
+        'France'
+      ]);
+    });
+  });
+
   describe('getCountryFromAddress', () => {
     it('should return null for null/undefined', () => {
       expect(getCountryFromAddress(null)).toBeNull();
@@ -33,7 +62,12 @@ describe('passportUtils', () => {
       expect(getCountryFromAddress('London, UK')).toBe('UK');
     });
 
-    it('should return the whole string if no commas', () => {
+    it('should bypass zip codes and stand-alone numbers at the end', () => {
+      expect(getCountryFromAddress('Eiffel Tower, Paris, 75007')).toBe('Paris');
+      expect(getCountryFromAddress('Buckingham Palace, London SW1A 1AA')).toBe('London');
+    });
+
+    it('should return the whole string if no commas and no digits', () => {
       expect(getCountryFromAddress('Australia')).toBe('Australia');
     });
   });

@@ -136,7 +136,7 @@ export default function CreatePostScreen() {
             </ScrollView>
 
             {/* Footer */}
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, paddingBottom: (insets.bottom || 20) + 5, borderTopWidth: 0.5, borderTopColor: '#f0f0f0' }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, paddingBottom: (insets.bottom || 20) + 5 }}>
               <TouchableOpacity onPress={() => {
                 setCaption('');
                 setHashtags([]);

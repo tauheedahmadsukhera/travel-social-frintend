@@ -49,9 +49,9 @@ const styles = StyleSheet.create({
     backgroundColor: '#e0245e', alignItems: 'center', justifyContent: 'center', elevation: 8, zIndex: 100,
   },
   searchBar: {
-    marginHorizontal: 16,
-    marginTop: 8,
-    marginBottom: 8,
+    marginHorizontal: 10,
+    marginTop: 12,
+    marginBottom: 12,
     backgroundColor: '#FFFFFF',
     height: 48,
     borderRadius: 24,
@@ -69,8 +69,8 @@ const styles = StyleSheet.create({
     borderColor: '#F0F0F0',
   },
   searchText: { color: '#222', fontSize: 15, fontWeight: '400' },
-  headerSection: { paddingBottom: 12, paddingTop: 2, backgroundColor: '#fff', marginBottom: 0 },
-  chip: { alignItems: 'center', marginRight: 10 },
+  headerSection: { paddingBottom: 12, paddingTop: 0, backgroundColor: '#fff', marginBottom: 0 },
+  chip: { alignItems: 'center', marginRight: 12 },
   chipIconWrap: { width: 64, height: 64, borderRadius: 14, backgroundColor: '#f5f5f5', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
   chipIconWrapActive: { borderColor: '#0A3D62', borderWidth: 2.5 },
   chipText: { color: '#000000', marginTop: 5, fontSize: 11, textAlign: 'center' },
@@ -296,9 +296,8 @@ export default function Home() {
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
-          centerContent={true}
           contentContainerStyle={[
-            { paddingLeft: 16, paddingRight: 6, paddingVertical: 6, flexGrow: 1, justifyContent: 'center' },
+            { paddingLeft: 10, paddingRight: 10, paddingVertical: 0, flexGrow: 1 },
             MIRROR_HOME && { flexDirection: 'row-reverse' },
           ]}
         >
@@ -338,6 +337,7 @@ export default function Home() {
       <FlashList
         testID="home-feed-list"
         ref={listRef}
+        showsVerticalScrollIndicator={false}
         data={showInitialSkeleton ? skeletonItems : filteredRaw}
         renderItem={showInitialSkeleton ? (renderSkeletonItem as any) : renderPostItem}
         keyExtractor={(item: any, index: number) => showInitialSkeleton ? String(item?.key || `sk-${index}`) : keyExtractor(item)}

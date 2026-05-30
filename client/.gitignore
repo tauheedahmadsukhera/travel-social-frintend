@@ -9,6 +9,7 @@
 # Secrets
 serviceAccountKey.json
 serviceAccount*.json
+release.keystore.base64
 # google-services.json + GoogleService-Info.plist: tracked so EAS/CI gets Firebase native config (client keys are not server secrets).
 
 # dependencies

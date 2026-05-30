@@ -88,7 +88,8 @@ const styles = StyleSheet.create({
   container: {
     paddingHorizontal: 12,
     gap: 14,
-    paddingVertical: 10,
+    paddingVertical: 0,
+    marginBottom: 8,
   },
   sectionItem: {
     alignItems: 'center',

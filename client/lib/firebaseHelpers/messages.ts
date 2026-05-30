@@ -157,7 +157,7 @@ export async function uploadMedia(
     let payloadFile = file;
 
     // Prefer multipart for local files (especially audio) to avoid large base64 conversion failures.
-    if (typeof file === 'string' && file.startsWith('file://')) {
+    if (typeof file === 'string' && (file.startsWith('file://') || file.startsWith('content://') || file.startsWith('/') || !file.includes('://'))) {
       try {
         const token = await AsyncStorage.getItem('token');
         const endpointUrl = `${API_BASE_URL}/media/upload`;

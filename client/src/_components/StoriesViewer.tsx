@@ -603,7 +603,7 @@ export default function StoriesViewer({ stories, onClose, initialIndex = 0 }: { 
                       ref={videoRef}
                       source={{ uri: currentStoryVideoUrl || currentStoryImageUrl }}
                       style={viewerStyles.fullScreenMedia}
-                      resizeMode={ResizeMode.COVER}
+                      resizeMode={ResizeMode.CONTAIN}
                       shouldPlay={!isPaused && !showComments}
                       isMuted={isMuted}
                       isLooping={false}
@@ -631,7 +631,7 @@ export default function StoriesViewer({ stories, onClose, initialIndex = 0 }: { 
                     <Image
                       source={{ uri: currentStoryImageUrl }}
                       style={viewerStyles.fullScreenMedia}
-                      resizeMode="cover"
+                      resizeMode="contain"
                       onLoadStart={() => setImageLoading(true)}
                       onLoad={() => setImageLoading(false)}
                       onError={() => setImageLoading(false)}
@@ -714,6 +714,18 @@ export default function StoriesViewer({ stories, onClose, initialIndex = 0 }: { 
           <LinearGradient colors={['transparent', 'rgba(0,0,0,0.85)']} style={StyleSheet.absoluteFillObject} pointerEvents="none" />
           
           <View style={viewerStyles.footerIconsRow}>
+             <View style={viewerStyles.footerIconBtnRow}>
+                <Feather name="film" size={22} color="#fff" />
+                <Text style={viewerStyles.footerIconText}>
+                  {(() => {
+                    const durationMilli = videoDuration || 5000;
+                    const mins = Math.floor(durationMilli / 60000);
+                    const secs = Math.floor((durationMilli % 60000) / 1000);
+                    return `${mins}:${secs.toString().padStart(2, '0')}`;
+                  })()}
+                </Text>
+             </View>
+
              {isOwnCurrentStory && (
                 <TouchableOpacity 
                    onPress={() => {
@@ -736,42 +748,34 @@ export default function StoriesViewer({ stories, onClose, initialIndex = 0 }: { 
                 </TouchableOpacity>
              )}
 
-             <TouchableOpacity onPress={() => setShowShareModal(true)} style={viewerStyles.footerIconBtn}>
-                <Feather name="send" size={24} color="#fff" />
-             </TouchableOpacity>
-
              {isOwnCurrentStory && (
                 <TouchableOpacity onPress={handleOpenHighlightModal} style={viewerStyles.footerIconBtn} accessibilityLabel="Add to highlight">
                    <Feather name="chevrons-up" size={24} color="#fff" />
                 </TouchableOpacity>
              )}
 
-             <TouchableOpacity onPress={handleLike} style={viewerStyles.footerIconBtnRow}>
-                <Ionicons name={isLiked ? "heart" : "heart-outline"} size={26} color={isLiked ? "#e74c3c" : "#fff"} />
-                <Text style={viewerStyles.footerIconText}>{likesCount}</Text>
-             </TouchableOpacity>
+             <View style={viewerStyles.footerIconBtnRow}>
+                <Feather name="image" size={22} color="#fff" />
+                <Text style={viewerStyles.footerIconText}>{`${currentIndex + 1}/${localStories.length}`}</Text>
+             </View>
 
              <TouchableOpacity onPress={() => setShowComments(true)} style={viewerStyles.footerIconBtnRow}>
                 <MaterialCommunityIcons name="comment-outline" size={24} color="#fff" />
                 <Text style={viewerStyles.footerIconText}>{currentStory.comments?.length || 0}</Text>
              </TouchableOpacity>
 
-             <View style={viewerStyles.footerIconBtnRow}>
-                <Feather name="image" size={22} color="#fff" />
-                <Text style={viewerStyles.footerIconText}>{`${currentIndex + 1}/${localStories.length}`}</Text>
-             </View>
+             <TouchableOpacity onPress={handleLike} style={viewerStyles.footerIconBtnRow}>
+                {isLiked ? (
+                  <Ionicons name="heart" size={24} color="#e74c3c" />
+                ) : (
+                  <Feather name="heart" size={24} color="#fff" strokeWidth={2.5} />
+                )}
+                <Text style={viewerStyles.footerIconText}>{likesCount}</Text>
+             </TouchableOpacity>
 
-             <View style={viewerStyles.footerIconBtnRow}>
-                <Feather name="film" size={22} color="#fff" />
-                <Text style={viewerStyles.footerIconText}>
-                  {(() => {
-                    const durationMilli = videoDuration || 5000;
-                    const mins = Math.floor(durationMilli / 60000);
-                    const secs = Math.floor((durationMilli % 60000) / 1000);
-                    return `${mins}:${secs.toString().padStart(2, '0')}`;
-                  })()}
-                </Text>
-             </View>
+             <TouchableOpacity onPress={() => setShowShareModal(true)} style={viewerStyles.footerIconBtn}>
+                <Feather name="send" size={24} color="#fff" />
+             </TouchableOpacity>
           </View>
         </View>
 

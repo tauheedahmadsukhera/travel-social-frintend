@@ -717,9 +717,9 @@ function TopMenu({ setMenuVisible, setGroupsDrawerVisible }: { setMenuVisible: (
 
   return (
     <View style={[styles.topMenu, { paddingTop: Math.max(insets.top, 12), height: (isSmallDevice ? 50 : 56) + Math.max(insets.top, 12) }]}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', minWidth: 150 }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', minWidth: 150, marginRight: 8 }}>
         <TouchableOpacity
-          style={{ flexDirection: 'row', alignItems: 'center', height: 40, justifyContent: 'center' }}
+          style={{ flexDirection: 'row', alignItems: 'center', height: 46, justifyContent: 'center' }}
           activeOpacity={0.85}
           onPress={() => {
             tabEvents?.emitHomeTabPress?.();
@@ -737,7 +737,7 @@ function TopMenu({ setMenuVisible, setGroupsDrawerVisible }: { setMenuVisible: (
         </TouchableOpacity>
       </View>
       {isProfileScreen ? (
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 20 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
           <TouchableOpacity style={styles.topBtn} onPress={() => { logAnalyticsEvent('open_passport'); router.push('/passport' as any); }}>
             <Feather name="briefcase" size={20} color="#000" />
           </TouchableOpacity>
@@ -750,7 +750,7 @@ function TopMenu({ setMenuVisible, setGroupsDrawerVisible }: { setMenuVisible: (
           </TouchableOpacity>
         </View>
       ) : (
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 20 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
           <TouchableOpacity style={styles.topBtn} onPress={() => { logAnalyticsEvent('open_passport'); router.push('/passport' as any); }}>
             <Feather name="briefcase" size={20} color="#000" />
           </TouchableOpacity>
@@ -762,12 +762,12 @@ function TopMenu({ setMenuVisible, setGroupsDrawerVisible }: { setMenuVisible: (
             <Feather name="bell" size={20} color="#000" />
             {renderCountBadge(unreadCount, '#ff3b30', -4, -4)}
           </TouchableOpacity>
-          {/* Three-dot → Groups Drawer */}
+          {/* Users → Groups Drawer */}
           <TouchableOpacity
             style={styles.topBtn}
             onPress={() => { logAnalyticsEvent('open_groups_drawer'); setGroupsDrawerVisible(true); }}
           >
-            <Feather name="more-vertical" size={20} color="#333" />
+            <Feather name="users" size={20} color="#000" />
           </TouchableOpacity>
         </View>
       )}
@@ -794,7 +794,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 10,
+    paddingLeft: 10,
+    paddingRight: 10,
   },
   floatingStoriesContainer: {
     position: 'absolute',

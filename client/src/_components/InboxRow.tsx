@@ -70,6 +70,7 @@ export default function InboxRow({ item, router, unread, formatTime, DEFAULT_AVA
   
   // Fallback for avatar
   const safeAvatar = typeof avatar === 'string' && avatar.trim() !== '' ? avatar : DEFAULT_AVATAR_URL;
+  const isDefaultAvatar = !safeAvatar || safeAvatar === DEFAULT_AVATAR_URL || safeAvatar.includes('avatardefault.webp');
   
   // Get active status text
   const activeStatusText = getFormattedActiveStatus(presence);
@@ -94,23 +95,29 @@ export default function InboxRow({ item, router, unread, formatTime, DEFAULT_AVA
         });
       }}
     >
-      <View style={[{ width: 64, height: 64, borderRadius: 32, alignItems: 'center', justifyContent: 'center', marginRight: 12 }, unread > 0 && { borderWidth: 2, borderColor: '#0A3D62' }]}>
-        <ExpoImage 
-          key={safeAvatar + username}
-          source={{ uri: safeAvatar }} 
-          style={{ 
-            width: 56, 
-            height: 56, 
-            borderRadius: 28, 
-            backgroundColor: '#eee', 
-            borderWidth: 2, 
-            borderColor: '#ccc' 
-          }}
-          contentFit="cover"
-          cachePolicy="memory-disk"
-          transition={0}
-          onError={() => { if (__DEV__) console.log('❌ Avatar image failed to load:', safeAvatar); }}
-        />
+      <View style={{ width: 64, height: 64, borderRadius: 32, alignItems: 'center', justifyContent: 'center', marginRight: 12, overflow: 'hidden' }}>
+        {isDefaultAvatar ? (
+          <View style={{ width: 56, height: 56, borderRadius: 28, backgroundColor: '#788d9a', alignItems: 'center', justifyContent: 'center' }}>
+            <Text style={{ color: '#fff', fontSize: 26, fontWeight: '700' }}>
+              {String(username || 'U').trim().charAt(0).toUpperCase()}
+            </Text>
+          </View>
+        ) : (
+          <ExpoImage 
+            key={safeAvatar + username}
+            source={{ uri: safeAvatar }} 
+            style={{ 
+              width: 56, 
+              height: 56, 
+              borderRadius: 28, 
+              backgroundColor: 'transparent'
+            }}
+            contentFit="cover"
+            cachePolicy="memory-disk"
+            transition={0}
+            onError={() => { if (__DEV__) console.log('❌ Avatar image failed to load:', safeAvatar); }}
+          />
+        )}
       </View>
       <View style={{ flex: 1, borderBottomWidth: 0, paddingRight: 8 }}>
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>

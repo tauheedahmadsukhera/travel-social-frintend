@@ -91,20 +91,37 @@ export const NewCollectionScreen: React.FC<NewCollectionScreenProps> = ({
         </TouchableOpacity>
 
         {newVisibility === 'specific' && tempSelectedGroups.length > 0 && (
-          <View style={styles.collabInfo}>
-            <Ionicons name="people-outline" size={14} color="#0A3D62" />
-            <Text style={styles.collabChips}>
-              Visible to: {groups.filter(g => tempSelectedGroups.includes(g._id)).map(g => g.name).join(', ')}
-            </Text>
+          <View style={{ paddingHorizontal: 16, marginTop: 4 }}>
+            <Text style={{ fontSize: 12, color: '#666', fontWeight: '600', marginBottom: 6 }}>Visible to Groups</Text>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+              {groups.filter(g => tempSelectedGroups.includes(g._id)).map((g, index) => (
+                <View key={index} style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#e8f0fe', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 16 }}>
+                  <Ionicons name="people-outline" size={14} color="#0A3D62" style={{ marginRight: 6 }} />
+                  <Text style={{ fontSize: 13, color: '#0A3D62', fontWeight: '600' }}>{g.name}</Text>
+                </View>
+              ))}
+            </View>
           </View>
         )}
 
         {newCollaborators.length > 0 && (
-          <View style={styles.collabInfo}>
-            <Ionicons name="person-add-outline" size={14} color="#0A3D62" />
-            <Text style={styles.collabChips}>
-              Collaborators: {newCollaborators.map(u => u.displayName || u.username).join(', ')}
-            </Text>
+          <View style={{ paddingHorizontal: 16, marginTop: 4 }}>
+            <Text style={{ fontSize: 12, color: '#666', fontWeight: '600', marginBottom: 6 }}>Collaborators</Text>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+              {newCollaborators.map((u, index) => {
+                const name = u.displayName || u.username || 'Collaborator';
+                return (
+                  <View key={index} style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#f0f2f5', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 16 }}>
+                    {u.avatar ? (
+                      <ExpoImage source={{ uri: u.avatar }} style={{ width: 20, height: 20, borderRadius: 10, marginRight: 6 }} />
+                    ) : (
+                      <Ionicons name="person-circle" size={20} color="#999" style={{ marginRight: 6 }} />
+                    )}
+                    <Text style={{ fontSize: 13, color: '#333', fontWeight: '600' }}>{name}</Text>
+                  </View>
+                );
+              })}
+            </View>
           </View>
         )}
       </ScrollView>
@@ -113,13 +130,13 @@ export const NewCollectionScreen: React.FC<NewCollectionScreenProps> = ({
 };
 
 const styles = StyleSheet.create({
-  newPostThumbContainer: { width: '100%', height: 180, backgroundColor: '#f0f0f0', marginBottom: 20 },
+  newPostThumbContainer: { width: '100%', height: 180, backgroundColor: '#f5f5f5', marginBottom: 20 },
   newPostThumb: { width: '100%', height: '100%' },
   collThumbPlaceholder: { alignItems: 'center', justifyContent: 'center', backgroundColor: '#f5f5f5' },
-  newInputContainer: { flexDirection: 'row', alignItems: 'center', borderBottomWidth: 1, borderBottomColor: '#f0f0f0', marginHorizontal: 16, paddingBottom: 8, marginBottom: 20 },
+  newInputContainer: { flexDirection: 'row', alignItems: 'center', marginHorizontal: 16, paddingBottom: 8, marginBottom: 20 },
   newNameInput: { flex: 1, fontSize: 18, fontWeight: '700', color: '#111', paddingVertical: 8 },
   clearInput: { padding: 4 },
-  newOptionRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: '#f9f9f9' },
+  newOptionRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 10 },
   newOptionLabel: { flex: 1, fontSize: 15, color: '#111', marginLeft: 12 },
   optionRight: { flexDirection: 'row', alignItems: 'center' },
   optionValue: { fontSize: 14, color: '#666', marginRight: 6 },

@@ -156,7 +156,8 @@ router.get('/:userId/passport-tickets', async (req, res) => {
         { userId: { $in: objectIdCandidates } }
       ]
     });
-    res.json({ success: true, data: { count: passport?.ticketCount || 0 } });
+    const count = passport?.stamps?.length ?? passport?.ticketCount ?? 0;
+    res.json({ success: true, data: { count } });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
@@ -216,6 +217,7 @@ router.post('/:userId/passport/locations', verifyToken, async (req, res) => {
       });
     }
 
+    passport.ticketCount = passport.stamps.length;
     await passport.save();
     res.json({ success: true, data: passport });
   } catch (err) {
@@ -475,7 +477,7 @@ router.get('/:userId/aggregated', optionalAuth, async (req, res) => {
       postsCount: postCount || 0,
       followersCount: user.followersCount || 0,
       followingCount: user.followingCount || 0,
-      passportCount: passportData?.ticketCount || passportData?.stamps?.length || 0,
+      passportCount: passportData?.stamps?.length ?? passportData?.ticketCount ?? 0,
       isFollowing,
       followRequestPending,
       isApprovedFollower,

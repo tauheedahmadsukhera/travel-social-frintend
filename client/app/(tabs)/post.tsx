@@ -742,8 +742,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingTop: 16,
     paddingBottom: 8,
-    borderTopWidth: 0.5,
-    borderTopColor: '#e5e5e5',
     marginTop: 16
   },
   cancelText: { color: '#000', fontWeight: '500', fontSize: 16 },

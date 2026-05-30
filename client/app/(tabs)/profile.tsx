@@ -60,8 +60,7 @@ import { ProfilePostMarker } from '@/src/_components/profile/ProfilePostMarker';
 
 import ProfileHeader from '@/src/_components/profile/ProfileHeader';
 import ProfileStats from '@/src/_components/profile/ProfileStats';
-import ProfileActions from '@/src/_components/profile/ProfileActions';
-import ProfileTabs from '@/src/_components/profile/ProfileTabs';
+
 import ProfileSections from '@/src/_components/profile/ProfileSections';
 import ProfileModals from '@/src/features/profile/components/ProfileModals';
 import ProfileGrid from '@/src/features/profile/components/ProfileGrid';
@@ -297,7 +296,7 @@ export default function Profile({ userIdProp }: any) {
   ].filter(Boolean));
 
   const loading = profileLoading;
-  const [passportLocationsCount, setPassportLocationsCount] = useState<number>(0);
+  const passportLocationsCount = Number(profile?.passportCount ?? profile?.locationsCount ?? 0);
   const [selectedSection, setSelectedSection] = useState<string | null>(null);
   const [postViewerVisible, setPostViewerVisible] = useState<boolean>(false);
   const [selectedPostIndex, setSelectedPostIndex] = useState<number>(0);
@@ -577,75 +576,20 @@ export default function Profile({ userIdProp }: any) {
   const renderProfileHeader = useMemo(() => {
     return (
       <View style={styles.content}>
-        <ProfileHeader 
-          profile={profile}
-          userStories={userStories}
-          isOwnProfile={isOwnProfile}
-          isPrivate={!!profile?.isPrivate}
-          approvedFollower={!!profile?.isApprovedFollower}
-          onPressAvatar={() => {
-            hapticLight();
-            if (userStories.length > 0) {
-              setStoriesViewerVisible(true);
-            } else if (isOwnProfile) {
-              handleAvatarPick();
-            }
-          }}
-          onAddStory={handleAddStory}
-          onPressPassport={() => {
-            hapticLight();
-            router.push({ pathname: '/passport', params: { user: viewedUserId } } as any);
-          }}
-        />
-
-        <ProfileStats 
-          locationsCount={passportLocationsCount}
-          postsCount={Number(profile?.postsCount ?? posts.length)}
-          followersCount={Math.max(0, Number(profile?.followersCount ?? profile?.followers ?? 0))}
-          followingCount={Math.max(0, Number(profile?.followingCount ?? profile?.following ?? 0))}
-          onPressLocations={() => {
-            if (!viewedUserId) return;
-            router.push({
-              pathname: '/user/[userId]/locations',
-              params: { userId: String(viewedUserId) }
-            } as any);
-          }}
-          onPressFollowers={() => {
-            router.push(`/friends?userId=${viewedUserId}&tab=followers` as any);
-          }}
-          onPressFollowing={() => {
-            router.push(`/friends?userId=${viewedUserId}&tab=following` as any);
-          }}
-          isPrivate={!!profile?.isPrivate}
-          isOwnProfile={isOwnProfile}
-          approvedFollower={!!profile?.isApprovedFollower}
-        />
-
-        <ProfileActions 
-          isOwnProfile={isOwnProfile}
-          isFollowing={!!profile?.isFollowing}
-          followRequestPending={!!profile?.followRequestPending}
-          followLoading={followLoading}
-          isPrivate={!!profile?.isPrivate}
-          approvedFollower={!!profile?.isApprovedFollower}
-          onFollowToggle={handleFollowToggle}
-          onMessage={handleMessage}
-          onEditProfile={() => {
-            hapticLight();
-            router.push({ pathname: '/edit-profile', params: { userId: viewedUserId } } as any);
-          }}
-          onViewCollections={() => {
-            hapticLight();
-            if (isOwnProfile) {
-              router.push('/(tabs)/saved' as any);
-            } else {
-              setViewCollectionsModal(true);
-            }
-          }}
-        />
-
-        {(!profile?.isPrivate || isOwnProfile || !!profile?.isApprovedFollower) && (
-          <View style={{ marginBottom: 12 }}>
+        {(!profile?.isPrivate || isOwnProfile || !!profile?.isApprovedFollower) && highlights && highlights.length > 0 && (
+          <View style={{ marginBottom: 10 }}>
+            <View style={{ paddingHorizontal: 12, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+              <Text style={{ fontSize: 13, fontWeight: '500', color: '#888', letterSpacing: 0.5 }}>HIGHLIGHTS</Text>
+              {isOwnProfile && (
+                <TouchableOpacity 
+                  style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#f5f5f5', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, gap: 4 }}
+                  onPress={handleAddStory}
+                >
+                  <Feather name="plus" size={12} color="#000" />
+                  <Text style={{ fontSize: 12, fontWeight: '600', color: '#000' }}>Add a story</Text>
+                </TouchableOpacity>
+              )}
+            </View>
             <HighlightCarousel 
               highlights={highlights} 
               onPressHighlight={handlePressHighlight} 
@@ -654,27 +598,99 @@ export default function Profile({ userIdProp }: any) {
           </View>
         )}
 
-        {(!profile?.isPrivate || isOwnProfile || !!profile?.isApprovedFollower) && (
-          <ProfileTabs 
-            activeTab={segmentTab}
-            onChangeTab={(tab) => {
-              setSegmentTab(tab);
-              if (tab !== 'grid') setSelectedSection(null);
-            }}
-            mapEnabled={PROFILE_MAP_ENABLED}
-          />
-        )}
-
-        {(!profile?.isPrivate || isOwnProfile || !!profile?.isApprovedFollower) && segmentTab === 'grid' && (
-          <ProfileSections
-            sections={sections}
-            selectedSection={selectedSection}
-            onSelectSection={setSelectedSection}
-            sectionSourcePosts={sectionSourcePosts}
-            getPostId={getPostId}
+        {/* Edit Button Bubble & Profile Header */}
+        <View style={{ position: 'relative' }}>
+          <ProfileHeader 
+            profile={profile}
+            userStories={userStories}
             isOwnProfile={isOwnProfile}
-            currentUserId={currentUserId}
+            isPrivate={!!profile?.isPrivate}
+            approvedFollower={!!profile?.isApprovedFollower}
+            onPressAvatar={() => {
+              hapticLight();
+              if (userStories.length > 0) {
+                setStoriesViewerVisible(true);
+              } else if (isOwnProfile) {
+                handleAvatarPick();
+              }
+            }}
+            onAddStory={handleAddStory}
+            onPressPassport={() => {
+              hapticLight();
+              router.push({ pathname: '/passport', params: { user: viewedUserId } } as any);
+            }}
+            onEditProfile={() => {
+              hapticLight();
+              router.push({ pathname: '/edit-profile', params: { userId: viewedUserId } } as any);
+            }}
+            isFollowing={!!profile?.isFollowing}
+            followRequestPending={!!profile?.followRequestPending}
+            followLoading={followLoading}
+            onFollowToggle={handleFollowToggle}
+            onMessage={handleMessage}
+            followersCount={Math.max(0, Number(profile?.followersCount ?? profile?.followers ?? 0))}
+            followingCount={Math.max(0, Number(profile?.followingCount ?? profile?.following ?? 0))}
+            onPressFollowers={() => {
+              router.push(`/friends?userId=${viewedUserId}&tab=followers` as any);
+            }}
+            onPressFollowing={() => {
+              router.push(`/friends?userId=${viewedUserId}&tab=following` as any);
+            }}
           />
+        </View>
+
+        <ProfileStats 
+          locationsCount={passportLocationsCount}
+          postsCount={Number(profile?.postsCount ?? posts.length)}
+          taggedCount={taggedPosts?.length ?? 0}
+          collectionsCount={sections?.length ?? 0}
+          onPressLocations={() => {
+            if (!viewedUserId) return;
+            router.push({
+              pathname: '/user/[userId]/locations',
+              params: { userId: String(viewedUserId) }
+            } as any);
+          }}
+          onPressPosts={() => {
+            setSegmentTab('grid');
+            setSelectedSection(null);
+          }}
+          onPressTags={() => {
+            setSegmentTab('tagged');
+            setSelectedSection(null);
+          }}
+          onPressCollections={
+            (!profile?.isPrivate || isOwnProfile || !!profile?.isApprovedFollower)
+              ? () => {
+                  hapticLight();
+                  if (isOwnProfile) {
+                    router.push('/(tabs)/saved' as any);
+                  } else {
+                    setViewCollectionsModal(true);
+                  }
+                }
+              : undefined
+          }
+          isPrivate={!!profile?.isPrivate}
+          isOwnProfile={isOwnProfile}
+          approvedFollower={!!profile?.isApprovedFollower}
+        />
+
+        {(!profile?.isPrivate || isOwnProfile || !!profile?.isApprovedFollower) && segmentTab === 'grid' && sections && sections.length > 0 && (
+          <View>
+            <View style={{ paddingHorizontal: 12 }}>
+              <Text style={{ fontSize: 13, fontWeight: '500', color: '#888', marginBottom: 10, letterSpacing: 0.5 }}>COLLECTIONS</Text>
+            </View>
+            <ProfileSections
+              sections={sections}
+              selectedSection={selectedSection}
+              onSelectSection={setSelectedSection}
+              sectionSourcePosts={sectionSourcePosts}
+              getPostId={getPostId}
+              isOwnProfile={isOwnProfile}
+              currentUserId={currentUserId}
+            />
+          </View>
         )}
       </View>
     );
@@ -738,28 +754,64 @@ export default function Profile({ userIdProp }: any) {
           alignItems: 'center',
           justifyContent: 'space-between',
           paddingHorizontal: 16,
-          paddingTop: 8,
-          paddingBottom: 8,
-          borderBottomWidth: 1,
-          borderBottomColor: '#f0f0f0',
+          paddingTop: 12,
+          paddingBottom: 12,
           backgroundColor: '#fff',
+          minHeight: 48,
         }}>
-          <TouchableOpacity
-            onPress={() => {
-              hapticLight();
-              safeRouterBack();
-            }}
-            style={styles.headerBackBtn}
-          >
-            <Feather name="arrow-left" size={20} color="#000" />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle} numberOfLines={1}>
-            {profile?.username || profile?.name || (profile as any)?.displayName || 'Profile'}
-          </Text>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-            <TouchableOpacity onPress={() => { hapticLight(); router.push('/passport' as any); }} style={styles.headerMenuBtn}>
-              <Feather name="briefcase" size={20} color="#000" />
+          <View style={{ flexDirection: 'row', alignItems: 'center', flexShrink: 1, marginRight: 8 }}>
+            <TouchableOpacity
+              onPress={() => {
+                hapticLight();
+                safeRouterBack();
+              }}
+              style={[styles.headerBackBtn, { marginRight: 8 }]}
+            >
+              <Feather name="arrow-left" size={20} color="#000" />
             </TouchableOpacity>
+            <Text style={styles.headerTitle} numberOfLines={1} ellipsizeMode="tail">
+              {profile?.username || profile?.name || (profile as any)?.displayName || 'Profile'}
+            </Text>
+          </View>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+            <TouchableOpacity 
+              onPress={() => {
+                hapticLight();
+                router.push({ pathname: '/passport', params: { user: viewedUserId } } as any);
+              }} 
+              style={{
+                borderRadius: 16,
+                overflow: 'hidden',
+              }} 
+            >
+              <LinearGradient
+                colors={['#FBBC04', '#FF8D00']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  paddingVertical: 6,
+                  paddingHorizontal: 12,
+                  gap: 6,
+                  height: 36,
+                }}
+              >
+                <Feather name="briefcase" size={15} color="#fff" />
+                <Text style={{ fontSize: 13, fontWeight: '600', color: '#fff' }}>Passport</Text>
+              </LinearGradient>
+            </TouchableOpacity>
+            {(!profile?.isPrivate || !!profile?.isApprovedFollower) && (
+              <TouchableOpacity 
+                onPress={() => {
+                  hapticLight();
+                  handleMessage();
+                }} 
+                style={styles.headerMenuBtn}
+              >
+                <Feather name="message-circle" size={20} color="#000" strokeWidth={2.5} />
+              </TouchableOpacity>
+            )}
             <TouchableOpacity onPress={() => { hapticLight(); setUserMenuVisible(true); }} style={styles.headerMenuBtn}>
               <Feather name="more-vertical" size={20} color="#000" />
             </TouchableOpacity>
@@ -822,7 +874,7 @@ export default function Profile({ userIdProp }: any) {
 const styles = StyleSheet.create({
   offlineBanner: {
     marginHorizontal: 16,
-    marginTop: 8,
+    marginTop: 10,
     marginBottom: 2,
     backgroundColor: '#111',
     borderRadius: 12,
@@ -831,9 +883,9 @@ const styles = StyleSheet.create({
     opacity: 0.92,
   },
   offlineBannerText: { color: '#fff', fontWeight: '700', textAlign: 'center' },
-  headerBackBtn: { padding: 8, marginRight: 8 },
-  headerTitle: { fontSize: 18, fontWeight: 'bold', color: '#222', flex: 1, textAlign: 'center' },
-  headerMenuBtn: { padding: 8, marginLeft: 8, marginTop: 4 },
+  headerBackBtn: { padding: 4 },
+  headerTitle: { fontSize: 18, fontWeight: 'bold', color: '#222', maxWidth: 200, textAlign: 'left' },
+  headerMenuBtn: { padding: 4 },
   menuOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' },
   menuSheet: { backgroundColor: '#fff', borderTopLeftRadius: 24, borderTopRightRadius: 24, overflow: 'hidden' },
   menuSheetContent: { paddingBottom: 20 },

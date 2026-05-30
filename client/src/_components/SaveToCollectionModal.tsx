@@ -244,7 +244,7 @@ const styles = StyleSheet.create({
     backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
     sheet: { backgroundColor: '#fff', borderTopLeftRadius: 20, borderTopRightRadius: 20, minHeight: 400, maxHeight: SCREEN_H * 0.9 },
     dragBar: { width: 40, height: 5, backgroundColor: '#ddd', borderRadius: 3, alignSelf: 'center', marginTop: 10, marginBottom: 5 },
-    header: { flexDirection: 'row', alignItems: 'center', height: 56, borderBottomWidth: 1, borderBottomColor: '#f0f0f0' },
+    header: { flexDirection: 'row', alignItems: 'center', height: 56 },
     headerBtn: { width: 100, paddingHorizontal: 16, justifyContent: 'center' },
     headerLeft: { fontSize: 15, color: '#666' },
     headerRight: { fontSize: 15, color: '#0A3D62', fontWeight: '700', textAlign: 'right' },

@@ -5,9 +5,11 @@ import React, { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  AppState,
   Dimensions,
   Keyboard,
   KeyboardAvoidingView,
+  Linking,
   Modal,
   Platform,
   ScrollView,
@@ -142,6 +144,20 @@ export default function PassportScreen() {
       } catch (e) {}
     };
     init();
+
+    // Re-check permission when app comes back to foreground (e.g. after Settings)
+    const subscription = AppState.addEventListener('change', async (nextState) => {
+      if (nextState === 'active') {
+        try {
+          const { getForegroundPermissionsAsync } = await import('expo-location');
+          const { status } = await getForegroundPermissionsAsync();
+          if (status === 'granted') {
+            setShowTravelHint(false);
+          }
+        } catch (e) {}
+      }
+    });
+    return () => subscription.remove();
   }, []);
 
   useEffect(() => {
@@ -611,7 +627,7 @@ export default function PassportScreen() {
             <Feather name="navigation" size={14} color="#0A3D62" style={{ marginRight: 8, marginTop: 2 }} />
             <View style={{ flex: 1 }}>
               <Text style={styles.travelHintText}>
-                Allow location while using Trips and notifications (optional): we can detect when you enter a new country and suggest a stamp—while the app is open. Open Home once while signed in so we can refresh your position.
+                Turn on location access while using Trips and optional notifications to unlock automatic travel stamps whenever you arrive in a new country while the app is open. After signing in, just open the Home screen once so we can refresh your location and keep your journey up to date.
               </Text>
               <TouchableOpacity 
                 style={styles.enableLocBtn}
@@ -622,11 +638,11 @@ export default function PassportScreen() {
                   if (granted) {
                     setShowTravelHint(false);
                   } else {
-                    Alert.alert('Permission Denied', 'Please enable Location in your device Settings > Apps > Trips.');
+                    Linking.openSettings();
                   }
                 }}
               >
-                <Text style={styles.enableLocBtnText}>Enable Location</Text>
+                <Text style={styles.enableLocBtnText}>Enable location services</Text>
               </TouchableOpacity>
             </View>
             <TouchableOpacity 

@@ -17,7 +17,8 @@ import {
   FlatList,
   Alert,
   Image,
-  KeyboardAvoidingView
+  KeyboardAvoidingView,
+  InteractionManager
 } from "react-native";
 import { Image as ExpoImage } from 'expo-image';
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
@@ -162,15 +163,18 @@ export default function SearchModal() {
 
   // Cache-first bootstrap for regions
   useEffect(() => {
-    (async () => {
-      try {
-        const cached = await getCachedData<Region[]>(REGIONS_CACHE_KEY);
-        if (Array.isArray(cached) && cached.length > 0) {
-          setRegions(cached);
-          setLoadingRegions(false);
-        }
-      } catch { }
-    })();
+    const task = InteractionManager.runAfterInteractions(() => {
+      (async () => {
+        try {
+          const cached = await getCachedData<Region[]>(REGIONS_CACHE_KEY);
+          if (Array.isArray(cached) && cached.length > 0) {
+            setRegions(cached);
+            setLoadingRegions(false);
+          }
+        } catch { }
+      })();
+    });
+    return () => task.cancel();
   }, [REGIONS_CACHE_KEY]);
 
   const inferRegionKey = React.useCallback((item: Region): string => {
@@ -202,7 +206,7 @@ export default function SearchModal() {
         placeId,
         locationName,
         locationAddress: locationName,
-        scope: kind === 'region' ? 'region' : 'place',
+        scope: kind,
         regionId: kind === 'region' ? placeId : undefined,
         regionKey: kind === 'region' ? inferRegionKey(item) : undefined,
       },
@@ -283,7 +287,10 @@ export default function SearchModal() {
 
   useFocusEffect(
     useCallback(() => {
-      fetchRegions();
+      const task = InteractionManager.runAfterInteractions(() => {
+        fetchRegions();
+      });
+      return () => task.cancel();
     }, [fetchRegions])
   );
 
@@ -486,7 +493,7 @@ export default function SearchModal() {
           {/* Search and Region Select */}
           <View style={styles.searchRegionBorderBox}>
             <View style={styles.searchBox}>
-              <Feather name="search" size={20} color="#333" style={styles.searchIcon} />
+              <Feather name="search" size={18} color="#222" style={styles.searchIcon} />
               <TextInput
                 style={styles.input}
                 placeholder={tab === 'people' ? 'Search for traveler' : 'Search a destination'}
@@ -847,15 +854,18 @@ const styles = StyleSheet.create({
   searchBox: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#fff',
-    borderRadius: 30,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    marginBottom: 4,
+    backgroundColor: '#FFFFFF',
+    height: 48,
+    borderRadius: 24,
+    paddingHorizontal: 20,
+    marginBottom: 12,
     shadowColor: '#000',
-    shadowOpacity: 0.1,
-    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
     elevation: 3,
+    borderWidth: 1,
+    borderColor: '#F0F0F0',
   },
   searchIcon: {
     marginRight: 8,
