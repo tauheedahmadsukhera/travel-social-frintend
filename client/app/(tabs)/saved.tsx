@@ -1418,7 +1418,7 @@ const styles = StyleSheet.create({
   newCollBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F0F7FF',
+    backgroundColor: 'rgba(255, 141, 0, 0.12)',
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 12,
