@@ -78,7 +78,7 @@ const ConversationItem: React.FC<ConversationItemProps> = ({
 
       <View style={styles.chatRight}>
         {hasUnread ? <View style={styles.blueDot} /> : <View style={{ width: 10 }} />}
-        <Feather name="camera" size={22} color={hasUnread ? '#262626' : '#c7c7c7'} />
+        <Feather name="camera" size={22} color="#000" />
       </View>
     </TouchableOpacity>
   );
