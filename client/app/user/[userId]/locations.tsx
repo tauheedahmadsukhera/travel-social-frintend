@@ -143,53 +143,13 @@ export default function UserLocationsScreen() {
     });
 
     const result = Array.from(countryMap.values()).map(group => {
-      // Group cities within this country by city name to consolidate duplicates (e.g., Paris showing twice)
-      const cityMap = new Map<string, { stamp: Stamp, count: number, latestTs: number }>();
-      
-      group.data.forEach(stamp => {
-        const cityName = stamp.name || 'Unknown';
-        const normCity = cityName.trim().toLowerCase();
-        
-        const stampTs = stamp.createdAt ? new Date(stamp.createdAt).getTime() : 0;
-        const stampCount = stamp.count || 1;
-        
-        if (!cityMap.has(normCity)) {
-          cityMap.set(normCity, {
-            stamp: { ...stamp },
-            count: 0,
-            latestTs: 0
-          });
-        }
-        
-        const cityData = cityMap.get(normCity)!;
-        cityData.count += stampCount;
-        if (stampTs > cityData.latestTs) {
-          cityData.latestTs = stampTs;
-          // Keep the latest stamp details
-          cityData.stamp = { ...stamp };
-        }
-      });
-      
-      // Convert cityMap values back to grouped stamps with combined counts
-      const uniqueCities = Array.from(cityMap.values()).map(c => {
-        return {
-          ...c.stamp,
-          count: c.count,
-          createdAt: c.latestTs > 0 ? new Date(c.latestTs).toISOString() : c.stamp.createdAt
-        };
-      });
-      
-      // Sort cities by newest visit first
-      uniqueCities.sort((a, b) => {
+      // Sort cities by newest first
+      group.data.sort((a, b) => {
         const ta = a.createdAt ? new Date(a.createdAt).getTime() : 0;
         const tb = b.createdAt ? new Date(b.createdAt).getTime() : 0;
         return tb - ta;
       });
-      
-      return {
-        ...group,
-        data: uniqueCities
-      };
+      return group;
     }).sort((a, b) => b.latest - a.latest);
 
     return result;
@@ -401,9 +361,7 @@ const styles = StyleSheet.create({
   countryHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderBottomWidth: 1,
-    borderBottomColor: '#f3f4f6',
-    paddingBottom: 12,
+    paddingBottom: 6,
     marginBottom: 8,
   },
   stampIconWrap: {
