@@ -70,7 +70,7 @@ router.post('/avatar', verifyToken, upload.single('file'), handleMulterError, as
     res.json({ success: true, url });
   } catch (err) {
     logger.error('Error uploading avatar: %s', err.message);
-    res.status(500).json({ success: false, error: 'Upload failed' });
+    res.status(500).json({ success: false, error: `Upload failed: ${err.message}` });
   }
 });
 
@@ -92,7 +92,7 @@ router.post('/post', verifyToken, upload.single('file'), handleMulterError, asyn
     });
   } catch (err) {
     logger.error('Error uploading post media: %s', err.message);
-    res.status(500).json({ success: false, error: 'Upload failed' });
+    res.status(500).json({ success: false, error: `Upload failed: ${err.message}` });
   }
 });
 
@@ -116,7 +116,7 @@ router.post('/story', verifyToken, uploadStory.single('file'), handleMulterError
     res.json({ success: true, url: result.secure_url, mediaType: result.resource_type, thumbnailUrl });
   } catch (err) {
     logger.error('Error uploading story media: %s', err.message);
-    res.status(500).json({ success: false, error: 'Upload failed' });
+    res.status(500).json({ success: false, error: `Upload failed: ${err.message}` });
   }
 });
 
@@ -143,7 +143,7 @@ router.post('/upload', verifyToken, upload.single('file'), handleMulterError, as
     });
   } catch (err) {
     logger.error('Error in industrial upload: %s', err.message);
-    res.status(500).json({ success: false, error: 'Upload failed' });
+    res.status(500).json({ success: false, error: `Upload failed: ${err.message}` });
   }
 });
 
