@@ -68,8 +68,8 @@ export default function CreatePostScreen() {
             if (selectedImages.includes(uri)) {
               setSelectedImages(selectedImages.filter(i => i !== uri));
             } else {
-              if ((selectedImages || []).length >= 25) {
-                Alert.alert('Limit Reached', 'You can select up to 25 photos or videos.');
+              if ((selectedImages || []).length >= 20) {
+                Alert.alert('Limit Reached', 'You can select up to 20 photos or videos.');
                 return;
               }
               const asset = (galleryAssets || []).find(a => a.uri === uri);

@@ -3,6 +3,7 @@ import { View, TouchableOpacity, Text, Dimensions } from 'react-native';
 import { Image as ExpoImage } from 'expo-image';
 import { FlashList } from '@shopify/flash-list';
 import { Feather } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { GalleryAsset, isVideoUri } from '../../../hooks/useCreatePost';
 
 const { width } = Dimensions.get('window');
@@ -47,7 +48,7 @@ const MediaPicker: React.FC<MediaPickerProps> = ({ assets, selectedImages, onSel
           </View>
         )}
         {isSelected && (
-          <View style={{ position: 'absolute', top: 5, right: 5, width: 22, height: 22, borderRadius: 11, backgroundColor: '#0095f6', borderWidth: 2, borderColor: '#fff', alignItems: 'center', justifyContent: 'center' }}>
+          <View style={{ position: 'absolute', top: 5, right: 5, width: 22, height: 22, borderRadius: 11, backgroundColor: '#FF8D00', borderWidth: 2, borderColor: '#fff', alignItems: 'center', justifyContent: 'center' }}>
             <Text style={{ color: '#fff', fontSize: 10, fontWeight: 'bold' }}>{index + 1}</Text>
           </View>
         )}
@@ -69,9 +70,23 @@ const MediaPicker: React.FC<MediaPickerProps> = ({ assets, selectedImages, onSel
           <TouchableOpacity 
             onPress={onNext} 
             disabled={!canNext}
-            style={{ opacity: canNext ? 1 : 0.3 }}
+            style={{ opacity: canNext ? 1 : 0.4 }}
+            activeOpacity={0.8}
           >
-            <Text style={{ color: '#0095f6', fontWeight: 'bold', fontSize: 16 }}>Next</Text>
+            <LinearGradient
+              colors={['#FBBC04', '#FF8D00']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={{
+                paddingHorizontal: 14,
+                paddingVertical: 6,
+                borderRadius: 14,
+                justifyContent: 'center',
+                alignItems: 'center'
+              }}
+            >
+              <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 14 }}>Next</Text>
+            </LinearGradient>
           </TouchableOpacity>
         </View>
       </View>
