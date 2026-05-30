@@ -190,7 +190,7 @@ export default function UserLocationsScreen() {
               >
                 <View style={styles.premiumCardHeader}>
                   <Feather name="globe" size={20} color="#fff" style={{ opacity: 0.9, marginRight: 8 }} />
-                  <Text style={styles.premiumCardLabel}>TRAVEL FOOTPRINT</Text>
+                  <Text style={styles.premiumCardLabel}>TRAVEL JOURNEY</Text>
                 </View>
                 
                 <View style={styles.premiumStatsRow}>
