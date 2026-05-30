@@ -380,7 +380,7 @@ export default function GroupsDrawer({ visible, onClose }: GroupsDrawerProps) {
                     <View style={styles.drawerHeader}>
                         <View style={styles.drawerHeaderTop}>
                             <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
-                                <Feather name="x" size={20} color="#fff" />
+                                <Feather name="x" size={20} color="#000" />
                             </TouchableOpacity>
                             <Text style={styles.drawerTitle}>My Groups</Text>
                             <View style={{ width: 36 }} />
@@ -393,34 +393,34 @@ export default function GroupsDrawer({ visible, onClose }: GroupsDrawerProps) {
                         <View style={styles.headerCreateRow}>
                             {!hasFriends ? (
                                 <TouchableOpacity
-                                    style={styles.headerCreateBtn}
+                                    style={[styles.headerCreateBtn, { backgroundColor: COLORS.friends.light, borderWidth: 0 }]}
                                     onPress={() => handleCreate('friends')}
                                     activeOpacity={0.82}
                                 >
-                                    <Feather name="plus" size={14} color="#4F8EF7" />
-                                    <Text style={styles.headerCreateBtnText}>Friends</Text>
+                                    <Feather name="plus" size={14} color={COLORS.friends.text} />
+                                    <Text style={[styles.headerCreateBtnText, { color: COLORS.friends.text }]}>Friends</Text>
                                 </TouchableOpacity>
                             ) : null}
                             {!hasFamily ? (
                                 <TouchableOpacity
-                                    style={[styles.headerCreateBtn, { borderColor: '#F97316' + '50' }]}
+                                    style={[styles.headerCreateBtn, { backgroundColor: COLORS.family.light, borderWidth: 0 }]}
                                     onPress={() => handleCreate('family')}
                                     activeOpacity={0.82}
                                 >
-                                    <Feather name="plus" size={14} color="#F97316" />
-                                    <Text style={[styles.headerCreateBtnText, { color: '#C2410C' }]}>Family</Text>
+                                    <Feather name="plus" size={14} color={COLORS.family.text} />
+                                    <Text style={[styles.headerCreateBtnText, { color: COLORS.family.text }]}>Family</Text>
                                 </TouchableOpacity>
                             ) : null}
                             <TouchableOpacity
-                                style={[styles.headerCreateBtn, { borderColor: '#8B5CF6' + '50' }]}
+                                style={[styles.headerCreateBtn, { backgroundColor: COLORS.custom.light, borderWidth: 0 }]}
                                 onPress={() => {
                                     setNewGroupType('custom');
                                     setShowCreateModal(true);
                                 }}
                                 activeOpacity={0.82}
                             >
-                                <Feather name="plus" size={14} color="#8B5CF6" />
-                                <Text style={[styles.headerCreateBtnText, { color: '#fff' }]}>Custom</Text>
+                                <Feather name="plus" size={14} color={COLORS.custom.text} />
+                                <Text style={[styles.headerCreateBtnText, { color: COLORS.custom.text }]}>Custom</Text>
                             </TouchableOpacity>
                         </View>
                     </View>
@@ -492,7 +492,7 @@ export default function GroupsDrawer({ visible, onClose }: GroupsDrawerProps) {
                                             onPress={() => setNewGroupType(t)}
                                             style={[
                                                 styles.typeOption, 
-                                                newGroupType === t && { backgroundColor: COLORS[t].light, borderColor: COLORS[t].bg }
+                                                newGroupType === t && { backgroundColor: COLORS[t].light }
                                             ]}
                                         >
                                             <Text style={[
@@ -545,10 +545,12 @@ const styles = StyleSheet.create({
 
     // Header
     drawerHeader: {
-        backgroundColor: '#0A2540',
+        backgroundColor: '#fff',
         paddingTop: Platform.OS === 'ios' ? 56 : 32,
         paddingBottom: 20,
         paddingHorizontal: 20,
+        borderBottomWidth: 0.5,
+        borderBottomColor: '#f1f1f1',
     },
     drawerHeaderTop: {
         flexDirection: 'row',
@@ -559,15 +561,15 @@ const styles = StyleSheet.create({
     closeBtn: {
         width: 36, height: 36,
         borderRadius: 18,
-        backgroundColor: 'rgba(255,255,255,0.12)',
+        backgroundColor: 'rgba(0,0,0,0.06)',
         alignItems: 'center', justifyContent: 'center',
     },
     drawerTitle: {
-        fontSize: 18, fontWeight: '700', color: '#fff',
+        fontSize: 18, fontWeight: '700', color: '#000',
         letterSpacing: 0.2,
     },
     drawerSubtitle: {
-        fontSize: 13, color: 'rgba(255,255,255,0.55)',
+        fontSize: 13, color: '#666',
         marginBottom: 16,
     },
     headerCreateRow: {
@@ -577,11 +579,10 @@ const styles = StyleSheet.create({
         flexDirection: 'row', alignItems: 'center', gap: 6,
         paddingVertical: 8, paddingHorizontal: 14,
         borderRadius: 20,
-        backgroundColor: 'rgba(255,255,255,0.08)',
-        borderWidth: 1, borderColor: '#4F8EF750',
+        borderWidth: 0,
     },
     headerCreateBtnText: {
-        fontSize: 13, fontWeight: '600', color: '#93C5FD',
+        fontSize: 13, fontWeight: '600',
     },
 
     // Body
@@ -762,7 +763,7 @@ const styles = StyleSheet.create({
     },
     typeOption: {
         flex: 1, paddingVertical: 10, alignItems: 'center',
-        borderRadius: 12, borderWidth: 1.5, borderColor: '#F3F4F6',
+        borderRadius: 12,
         backgroundColor: '#F9FAFB',
     },
     typeOptionText: { fontSize: 13, fontWeight: '600', color: '#6B7280' },
