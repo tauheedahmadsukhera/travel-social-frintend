@@ -227,7 +227,7 @@ export default function UserLocationsScreen() {
                     <Text style={styles.countryTitle}>{group.title}</Text>
                     {group.firstAdded > 0 && (
                       <Text style={styles.countryDate}>
-                        Added on {new Date(group.firstAdded).toLocaleDateString()}
+                        Visited on {new Date(group.firstAdded).toLocaleDateString()}
                       </Text>
                     )}
                   </View>
