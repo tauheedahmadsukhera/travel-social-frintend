@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, ActivityIndicator, Platform, KeyboardAvoidingView, StyleSheet, ScrollView } from 'react-native';
+import { View, Text, TouchableOpacity, ActivityIndicator, Platform, KeyboardAvoidingView, StyleSheet, ScrollView, Alert } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -68,8 +68,16 @@ export default function CreatePostScreen() {
             if (selectedImages.includes(uri)) {
               setSelectedImages(selectedImages.filter(i => i !== uri));
             } else {
-              // Standard behavior: limit to some number or allow multiple
-              setSelectedImages([...selectedImages, uri]);
+              if ((selectedImages || []).length >= 25) {
+                Alert.alert('Limit Reached', 'You can select up to 25 photos or videos.');
+                return;
+              }
+              const asset = (galleryAssets || []).find(a => a.uri === uri);
+              if (asset && asset.mediaType === 'video' && asset.duration && asset.duration > 2520) {
+                Alert.alert('Video Too Long', 'Videos in posts must be 42 minutes or shorter.');
+                return;
+              }
+              setSelectedImages([...(selectedImages || []), uri]);
             }
           }}
           onCamera={handleCamera} 

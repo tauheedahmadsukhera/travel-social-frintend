@@ -99,14 +99,20 @@ export default function PostScreen() {
       }
       
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ['images'],
+        mediaTypes: ['images', 'videos'],
         allowsEditing: true,
         aspect: [4, 5],
         quality: 0.8,
         allowsMultipleSelection: true,
+        selectionLimit: 25,
+        videoMaxDuration: 2520, // 42 minutes in seconds
       });
       
       if (!result.canceled && result.assets && result.assets.length > 0) {
+        if (result.assets.length > 25) {
+          Alert.alert('Limit Reached', 'You can select up to 25 photos or videos.');
+          return;
+        }
         const uris = result.assets.map((asset: any) => asset.uri);
         setSelectedImages(uris);
         setShowImagePicker(false);

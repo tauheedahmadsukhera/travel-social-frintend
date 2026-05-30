@@ -148,7 +148,7 @@ export default function StoryCreatorScreen() {
                 mediaTypes: ImagePicker.MediaTypeOptions.All,
                 allowsEditing: false,
                 quality: 0.9,
-                videoMaxDuration: 60,
+                videoMaxDuration: 720,
             });
             if (!result.canceled && result.assets?.[0]) {
                 const asset = result.assets[0];

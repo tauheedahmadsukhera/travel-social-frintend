@@ -28,7 +28,8 @@ const MediaPreview: React.FC<MediaPreviewProps> = ({ uris, thumbnails, isVideo, 
                 useNativeControls
                 resizeMode={ResizeMode.COVER}
                 isLooping
-                shouldPlay={false}
+                shouldPlay={true}
+                isMuted={true}
                 posterSource={thumbnails[uri] ? { uri: thumbnails[uri] } : undefined}
                 usePoster={!!thumbnails[uri]}
               />

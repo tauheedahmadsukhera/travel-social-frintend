@@ -294,6 +294,7 @@ export const useCreatePost = (params: any = {}) => {
         mediaTypes: ImagePicker.MediaTypeOptions.All,
         allowsEditing: false,
         quality: 1,
+        videoMaxDuration: 2520, // 42 minutes in seconds
       });
 
       if (!result.canceled && result.assets && result.assets.length > 0) {
