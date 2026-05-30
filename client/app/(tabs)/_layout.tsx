@@ -29,7 +29,7 @@ const isLargeDevice = SCREEN_WIDTH >= 414;
 const ICON_SIZE = isSmallDevice ? 18 : (isLargeDevice ? 22 : 20);
 const CHEVRON_SIZE = isSmallDevice ? 18 : 20;
 
-const TAB_ACTIVE_COLOR = '#0A3D62';
+const TAB_ACTIVE_COLOR = '#FF8D00';
 const TAB_INACTIVE_COLOR = '#000000';
 const TAB_LABEL_SIZE = 11;
 const TOP_MENU_HEIGHT = isSmallDevice ? 50 : 56;
