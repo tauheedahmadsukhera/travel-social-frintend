@@ -3,6 +3,7 @@ import { Image as ExpoImage } from 'expo-image';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { FlashList } from '@shopify/flash-list';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { API_BASE_URL } from '../lib/api';
@@ -308,22 +309,35 @@ export default function FriendsScreen() {
 
         {!isMe && (
           <TouchableOpacity
-            style={[
-              styles.followBtn,
-              item.isFollowing ? styles.followingBtn : styles.followBtnPrimary
-            ]}
             onPress={() => handleFollowToggle(item.uid, !!item.isFollowing)}
             disabled={isFollowLoading}
+            activeOpacity={0.8}
           >
-            {isFollowLoading ? (
-              <ActivityIndicator size="small" color={item.isFollowing ? '#000' : '#fff'} />
+            {item.isFollowing ? (
+              <View style={[styles.followBtn, styles.followingBtn]}>
+                {isFollowLoading ? (
+                  <ActivityIndicator size="small" color="#000" />
+                ) : (
+                  <Text style={[styles.followBtnText, styles.followingBtnText]}>
+                    Following
+                  </Text>
+                )}
+              </View>
             ) : (
-              <Text style={[
-                styles.followBtnText,
-                item.isFollowing && styles.followingBtnText
-              ]}>
-                {item.isFollowing ? 'Following' : 'Follow'}
-              </Text>
+              <LinearGradient
+                colors={['#FBBC04', '#FF8D00']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={styles.followBtn}
+              >
+                {isFollowLoading ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <Text style={styles.followBtnText}>
+                    Follow
+                  </Text>
+                )}
+              </LinearGradient>
             )}
           </TouchableOpacity>
         )}
