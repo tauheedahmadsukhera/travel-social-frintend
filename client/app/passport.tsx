@@ -918,9 +918,13 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#eee',
   },
-  tabItemActive: { backgroundColor: '#fff', borderColor: '#000' },
+  tabItemActive: { 
+    backgroundColor: 'rgba(255, 141, 0, 0.08)', 
+    borderColor: '#FF8D00',
+    borderWidth: 1.5,
+  },
   tabText: { fontSize: 14, fontWeight: '600', color: '#666' },
-  tabTextActive: { color: '#000' },
+  tabTextActive: { color: '#FF8D00' },
 
   deleteOverlay: {
     flex: 1,
