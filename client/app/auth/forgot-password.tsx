@@ -212,7 +212,7 @@ const styles = StyleSheet.create({
   },
   backToLoginText: {
     fontSize: 15,
-    color: '#0A3D62',
+    color: '#FF8D00',
     fontWeight: '600',
   },
 });

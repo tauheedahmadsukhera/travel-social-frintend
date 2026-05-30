@@ -44,7 +44,7 @@ export const VisibilitySettingsScreen: React.FC<VisibilitySettingsScreenProps> =
                 <Text style={styles.visSub}>{opt.sub}</Text>
               </View>
               {currentVisibility === opt.key && (
-                <Ionicons name="checkmark" size={20} color="#0A3D62" />
+                <Ionicons name="checkmark" size={20} color="#FF8D00" />
               )}
             </TouchableOpacity>
             <View style={styles.divider} />
@@ -61,7 +61,7 @@ export const VisibilitySettingsScreen: React.FC<VisibilitySettingsScreenProps> =
             <Text style={styles.visSub}>Only members of selected groups can see</Text>
           </View>
           {currentVisibility === 'specific' && (
-            <Ionicons name="checkmark" size={20} color="#0A3D62" />
+            <Ionicons name="checkmark" size={20} color="#FF8D00" />
           )}
         </TouchableOpacity>
 
@@ -69,7 +69,7 @@ export const VisibilitySettingsScreen: React.FC<VisibilitySettingsScreenProps> =
           <View style={styles.groupsContainer}>
             <Text style={styles.groupsLabel}>Select Groups</Text>
             {loadingGroups ? (
-              <ActivityIndicator color="#0A3D62" style={{ marginVertical: 20 }} />
+              <ActivityIndicator color="#FF8D00" style={{ marginVertical: 20 }} />
             ) : groups.length === 0 ? (
               <Text style={styles.noGroupsText}>No groups found</Text>
             ) : (
@@ -85,7 +85,7 @@ export const VisibilitySettingsScreen: React.FC<VisibilitySettingsScreenProps> =
                     <Ionicons
                       name={isSelected ? "checkbox" : "square-outline"}
                       size={20}
-                      color={isSelected ? "#0A3D62" : "#ccc"}
+                      color={isSelected ? "#FF8D00" : "#ccc"}
                     />
                   </TouchableOpacity>
                 );

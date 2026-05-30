@@ -171,7 +171,7 @@ export default function EmailOTPScreen() {
             {/* Email Icon */}
             <View style={styles.iconContainer}>
               <View style={styles.iconCircle}>
-                <Ionicons name="mail" size={40} color="#0A3D62" />
+                <Ionicons name="mail" size={40} color="#FF8D00" />
               </View>
               <Text style={styles.iconText}>Check your email inbox</Text>
             </View>
@@ -293,7 +293,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
   },
   otpInputFilled: {
-    borderColor: '#0A3D62',
+    borderColor: '#FF8D00',
     backgroundColor: '#fff5e6',
   },
   errorText: {
@@ -315,7 +315,7 @@ const styles = StyleSheet.create({
   },
   resendLink: {
     fontSize: 14,
-    color: '#0A3D62',
+    color: '#FF8D00',
     fontWeight: '600',
   },
 });

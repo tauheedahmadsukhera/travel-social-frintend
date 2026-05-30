@@ -34,7 +34,7 @@ export default function EULAScreen() {
         {/* Header */}
         <View style={styles.header}>
           <View style={styles.iconContainer}>
-            <Ionicons name="shield-checkmark" size={40} color="#0A3D62" />
+            <Ionicons name="shield-checkmark" size={40} color="#FF8D00" />
           </View>
           <Text style={styles.title}>Community Guidelines & Terms</Text>
           <Text style={styles.subtitle}>Please review our terms of use to continue to Trips.</Text>
@@ -203,7 +203,7 @@ const styles = StyleSheet.create({
   legalTitle: {
     fontSize: 18,
     fontWeight: '700',
-    color: '#0A3D62',
+    color: '#FF8D00',
   },
   date: {
     fontSize: 13,
@@ -240,7 +240,7 @@ const styles = StyleSheet.create({
   },
   bulletPoint: {
     fontSize: 14,
-    color: '#0A3D62',
+    color: '#FF8D00',
     marginRight: 10,
     fontWeight: 'bold',
   },
@@ -269,12 +269,12 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   acceptButton: {
-    backgroundColor: '#0A3D62',
+    backgroundColor: '#FF8D00',
     paddingVertical: 18,
     borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#0A3D62',
+    shadowColor: '#FF8D00',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.2,
     shadowRadius: 8,

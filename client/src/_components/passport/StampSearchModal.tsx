@@ -52,7 +52,7 @@ export const StampSearchModal: React.FC<StampSearchModalProps> = ({
 
             <View style={styles.searchBarWrapper}>
               <View style={styles.searchBarInner}>
-                <Feather name="search" size={18} color="#0A3D62" />
+                <Feather name="search" size={18} color="#FF8D00" />
                 <TextInput
                   style={styles.searchBarInput}
                   placeholder="Search countries, cities, or places..."
@@ -89,7 +89,7 @@ export const StampSearchModal: React.FC<StampSearchModalProps> = ({
                         <Feather
                           name={s.type === 'country' ? 'globe' : s.type === 'city' ? 'map' : 'map-pin'}
                           size={16}
-                          color="#0A3D62"
+                          color="#FF8D00"
                         />
                       </View>
                       <View style={styles.searchResultText}>

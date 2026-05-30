@@ -239,7 +239,7 @@ const styles = StyleSheet.create({
         borderRadius: 12,
         marginBottom: 12,
     },
-    optionBtnLabel: { fontSize: 14, fontWeight: '600', color: '#0A3D62' },
+    optionBtnLabel: { fontSize: 14, fontWeight: '600', color: '#FF8D00' },
     optionBtnSub: { fontSize: 12, color: '#888', marginTop: 2 },
     btnRow: {
         flexDirection: 'row',
@@ -254,7 +254,7 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         alignItems: 'center',
     },
-    yesBtn: { backgroundColor: '#0A3D62' },
+    yesBtn: { backgroundColor: '#FF8D00' },
     noBtn: { backgroundColor: '#2C5A96' }, // A slightly different blue as in screenshot
     btnText: { color: '#fff', fontSize: 16, fontWeight: '700' },
     cancelBtn: {
@@ -299,10 +299,10 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         alignItems: 'center',
     },
-    radioSelected: { borderColor: '#0A3D62' },
+    radioSelected: { borderColor: '#FF8D00' },
     radioDot: {
         width: 10, height: 10,
         borderRadius: 5,
-        backgroundColor: '#0A3D62',
+        backgroundColor: '#FF8D00',
     },
 });

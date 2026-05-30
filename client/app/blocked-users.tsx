@@ -112,7 +112,7 @@ export default function BlockedUsersScreen() {
 
             {loading ? (
                 <View style={styles.loadingContainer}>
-                    <ActivityIndicator size="large" color="#0A3D62" />
+                    <ActivityIndicator size="large" color="#FF8D00" />
                 </View>
             ) : (
                 <FlatList

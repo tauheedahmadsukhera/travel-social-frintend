@@ -52,7 +52,7 @@ export default function SettingsScreen() {
             );
           }}
         >
-          <Feather name="message-circle" size={18} color="#0A3D62" />
+          <Feather name="message-circle" size={18} color="#FF8D00" />
           <Text style={styles.feedbackText}>Send Feedback / Report Issue</Text>
         </TouchableOpacity>
 
@@ -165,14 +165,14 @@ const styles = StyleSheet.create({
     marginBottom: 0,
     borderWidth: 1,
     borderColor: '#ffe0a3',
-    shadowColor: '#0A3D62',
+    shadowColor: '#FF8D00',
     shadowOpacity: 0.08,
     shadowRadius: 4,
     elevation: 2,
   },
   feedbackText: {
     marginLeft: 10,
-    color: '#0A3D62',
+    color: '#FF8D00',
     fontWeight: '600',
     fontSize: 15,
   },

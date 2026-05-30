@@ -642,7 +642,7 @@ export default function EditSectionsModal({
                 <View style={{ marginTop: 16 }}>
                   <Text style={styles.instructionTitle}>Invite Collaborators</Text>
                   <View style={[styles.searchWrapEdit, { height: 46, borderRadius: 23, backgroundColor: '#f5f7fa', borderWidth: 1, borderColor: '#eef0f2', marginVertical: 8 }]}>
-                    <Ionicons name="search" size={18} color="#0A3D62" style={{ marginRight: 8 }} />
+                    <Ionicons name="search" size={18} color="#FF8D00" style={{ marginRight: 8 }} />
                     <TextInput
                       style={[styles.searchInputEdit, { fontSize: 15 }]}
                       placeholder="Search people to invite..."
@@ -660,7 +660,7 @@ export default function EditSectionsModal({
                   
                   <ScrollView style={{ maxHeight: 200, marginTop: 8 }} keyboardShouldPersistTaps="handled">
                     {searching ? (
-                      <ActivityIndicator size="small" color="#0A3D62" />
+                      <ActivityIndicator size="small" color="#FF8D00" />
                     ) : (collaboratorInput.trim().length > 1 ? searchResults : followers.filter(f => 
                         (f.name || f.username || '').toLowerCase().includes(collaboratorInput.toLowerCase())
                       )).map(f => {
@@ -856,13 +856,13 @@ const SectionRow = ({ item, isOwner, isSelected, onPress, onDelete, onRename, on
 const styles = StyleSheet.create({
     selectedSectionCard: {
       flex: 1,
-      backgroundColor: '#0A3D62',
+      backgroundColor: '#FF8D00',
       borderRadius: 16,
       borderWidth: 2,
-      borderColor: '#0A3D62',
+      borderColor: '#FF8D00',
       padding: 12,
       justifyContent: 'center',
-      shadowColor: '#0A3D62',
+      shadowColor: '#FF8D00',
       shadowOpacity: 0.12,
       shadowRadius: 8,
       shadowOffset: { width: 0, height: 2 },
@@ -943,7 +943,7 @@ const styles = StyleSheet.create({
     fontSize: 15,
   },
   createConfirmBtn: {
-    backgroundColor: '#0A3D62',
+    backgroundColor: '#FF8D00',
     padding: 8,
     borderRadius: 8,
   },
@@ -965,7 +965,7 @@ const styles = StyleSheet.create({
   sectionRowActive: {
     backgroundColor: '#fff4e6',
     borderWidth: 2,
-    borderColor: '#0A3D62',
+    borderColor: '#FF8D00',
   },
   sectionRowDragging: {
     backgroundColor: '#fff',
@@ -998,7 +998,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#f0f0f0',
     alignItems: 'center',
   },
-  modeBtnActive: { backgroundColor: '#0A3D62' },
+  modeBtnActive: { backgroundColor: '#FF8D00' },
   modeBtnText: { fontSize: 13, fontWeight: '500', color: '#000' },
   modeBtnTextActive: { color: '#fff' },
   grid: { flexDirection: 'row', flexWrap: 'wrap', marginTop: 8 },
@@ -1047,7 +1047,7 @@ const styles = StyleSheet.create({
   },
   clearText: { fontSize: 16, color: '#666' },
   saveBtn: {
-    backgroundColor: '#0A3D62',
+    backgroundColor: '#FF8D00',
     paddingHorizontal: 32,
     paddingVertical: 10,
     borderRadius: 8,
@@ -1083,7 +1083,7 @@ const styles = StyleSheet.create({
       gap: 6,
     },
     visOptActive: {
-      backgroundColor: '#0A3D62',
+      backgroundColor: '#FF8D00',
     },
     visOptText: {
       fontSize: 12,
@@ -1112,7 +1112,7 @@ const styles = StyleSheet.create({
       color: '#444',
     },
     groupNameSelectedEdit: {
-      color: '#0A3D62',
+      color: '#FF8D00',
       fontWeight: '600',
     },
     infoText: {

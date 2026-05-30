@@ -282,7 +282,7 @@ const styles = StyleSheet.create({
     flexShrink: 1,
   },
   collectionSheetTextActive: {
-    color: '#0A3D62',
+    color: '#FF8D00',
     fontWeight: '700',
   },
 });

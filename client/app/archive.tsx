@@ -241,7 +241,7 @@ const styles = StyleSheet.create({
   },
   avatarRingUnread: {
     borderWidth: 2,
-    borderColor: '#0A3D62',
+    borderColor: '#FF8D00',
   },
   avatar: {
     width: 56,

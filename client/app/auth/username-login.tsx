@@ -92,7 +92,7 @@ export default function UsernameLoginScreen() {
 
             {loading && (
               <View style={styles.loadingContainer}>
-                <ActivityIndicator size="small" color="#0A3D62" />
+                <ActivityIndicator size="small" color="#FF8D00" />
               </View>
             )}
 
@@ -201,7 +201,7 @@ const styles = StyleSheet.create({
     color: '#666',
   },
   footerLink: {
-    color: '#0A3D62',
+    color: '#FF8D00',
     fontWeight: '600',
   },
 });

@@ -524,7 +524,7 @@ export default function DM() {
     // Only show global loader if we have NO messages and are loading.
     // This allows cached messages to show instantly like Instagram.
     if (loading && messages.length === 0) {
-      return <View style={styles.centered}><ActivityIndicator size="large" color="#0A3D62" /></View>;
+      return <View style={styles.centered}><ActivityIndicator size="large" color="#FF8D00" /></View>;
     }
     
     if (!conversationId && !loading) {

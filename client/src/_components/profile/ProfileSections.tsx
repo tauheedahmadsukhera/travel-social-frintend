@@ -105,7 +105,7 @@ const styles = StyleSheet.create({
   },
   activeImageContainer: {
     borderWidth: 2,
-    borderColor: '#0A3D62',
+    borderColor: '#FF8D00',
   },
   image: {
     width: '100%',
@@ -121,7 +121,7 @@ const styles = StyleSheet.create({
   },
   activeLabel: {
     fontWeight: '700',
-    color: '#0A3D62',
+    color: '#FF8D00',
   },
 });
 

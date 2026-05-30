@@ -155,7 +155,7 @@ export default function CreatePostScreen() {
               }}>
                 <Text style={{ fontSize: 15, fontWeight: '600', color: '#333' }}>Clear all</Text>
               </TouchableOpacity>
-              <TouchableOpacity onPress={handleShare} style={{ backgroundColor: '#0a3d62', paddingHorizontal: 35, paddingVertical: 12, borderRadius: 8 }}>
+              <TouchableOpacity onPress={handleShare} style={{ backgroundColor: '#FF8D00', paddingHorizontal: 35, paddingVertical: 12, borderRadius: 8 }}>
                 <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 15 }}>{isEditMode ? 'Save' : 'Share'}</Text>
               </TouchableOpacity>
             </View>

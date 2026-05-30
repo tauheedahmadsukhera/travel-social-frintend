@@ -43,7 +43,7 @@ export default function OTPSentScreen() {
 
         <View style={styles.iconContainer}>
           <View style={styles.iconCircle}>
-            <Ionicons name="mail" size={50} color="#0A3D62" />
+            <Ionicons name="mail" size={50} color="#FF8D00" />
           </View>
         </View>
 
@@ -151,7 +151,7 @@ const styles = StyleSheet.create({
   },
   resendLink: {
     fontSize: 14,
-    color: '#0A3D62',
+    color: '#FF8D00',
     fontWeight: '600',
   },
   changeMethod: {

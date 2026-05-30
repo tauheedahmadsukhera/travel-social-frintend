@@ -97,7 +97,7 @@ export default function SaveButton({ post, currentUser }: any) {
         <Ionicons
           name={saved ? "bookmark" : "bookmark-outline"}
           size={22}
-          color={saved ? "#0A3D62" : "#222"}
+          color={saved ? "#FF8D00" : "#222"}
         />
       </TouchableOpacity>
 

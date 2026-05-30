@@ -145,7 +145,7 @@ export default function CreateHighlightModal({
               <Text style={styles.headerTitle}>New highlight</Text>
               <TouchableOpacity onPress={handleCreate} disabled={loading || !name.trim()}>
                 {loading ? (
-                  <ActivityIndicator size="small" color="#0A3D62" />
+                  <ActivityIndicator size="small" color="#FF8D00" />
                 ) : (
                   <Text style={[styles.headerActionText, styles.headerSaveText]}>Save</Text>
                 )}

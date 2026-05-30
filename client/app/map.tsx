@@ -579,7 +579,7 @@ export default function MapScreen() {
               setShowSearch(true);
             }}
           >
-            <Ionicons name="search" size={20} color="#0A3D62" />
+            <Ionicons name="search" size={20} color="#FF8D00" />
           </TouchableOpacity>
         )}
 

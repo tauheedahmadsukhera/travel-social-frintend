@@ -80,7 +80,7 @@ export const LocationPickerModal: React.FC<LocationPickerModalProps> = ({
 
             {/* Search Bar */}
             <View style={styles.modalSearchContainer}>
-              <Feather name="search" size={18} color="#0A3D62" style={{ marginRight: 12 }} />
+              <Feather name="search" size={18} color="#FF8D00" style={{ marginRight: 12 }} />
               <TextInput
                 style={styles.modalSearchInput}
                 placeholder="Search places"
@@ -96,7 +96,7 @@ export const LocationPickerModal: React.FC<LocationPickerModalProps> = ({
             {/* Locations list */}
             {locationLoading && nearbyPlaces.length === 0 && !areaGeo ? (
               <View style={styles.modalLoadingContainer}>
-                <ActivityIndicator size="large" color="#0A3D62" />
+                <ActivityIndicator size="large" color="#FF8D00" />
                 <Text style={styles.modalLoadingText}>Fetching nearby locations...</Text>
               </View>
             ) : (
@@ -126,7 +126,7 @@ export const LocationPickerModal: React.FC<LocationPickerModalProps> = ({
                 )}
                 <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 16, marginBottom: 12 }}>
                   <Text style={styles.modallocationLabel}>Nearby places (~200 m)</Text>
-                  {locationLoading && <ActivityIndicator size="small" color="#0A3D62" style={{ marginLeft: 8 }} />}
+                  {locationLoading && <ActivityIndicator size="small" color="#FF8D00" style={{ marginLeft: 8 }} />}
                 </View>
                 {filteredPlaces.length === 0 ? (
                   <View style={styles.modalEmptyInline}>
@@ -151,7 +151,7 @@ export const LocationPickerModal: React.FC<LocationPickerModalProps> = ({
                     >
                       <View style={styles.locationItemLeft}>
                         <View style={styles.locationIcon}>
-                          <Feather name="map-pin" size={18} color="#0A3D62" />
+                          <Feather name="map-pin" size={18} color="#FF8D00" />
                         </View>
                         <View style={styles.locationItemText}>
                           <Text style={styles.locationName}>{place.placeName}</Text>
@@ -212,12 +212,12 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
   },
   modalCloseText: {
-    color: '#0A3D62',
+    color: '#FF8D00',
     fontSize: 16,
     fontWeight: '600',
   },
   modalAddBtn: {
-    backgroundColor: '#0A3D62',
+    backgroundColor: '#FF8D00',
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 20,
@@ -278,7 +278,7 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   cityStampRowSelected: {
-    borderColor: '#0A3D62',
+    borderColor: '#FF8D00',
     backgroundColor: '#F0F6FA',
   },
   cityStampRowLeft: {
@@ -287,7 +287,7 @@ const styles = StyleSheet.create({
   },
   cityStampRowTitle: {
     fontSize: 12,
-    color: '#0A3D62',
+    color: '#FF8D00',
     fontWeight: '700',
     textTransform: 'uppercase',
     marginBottom: 2,
@@ -351,8 +351,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   selectionRadioSelected: {
-    backgroundColor: '#0A3D62',
-    borderColor: '#0A3D62',
+    backgroundColor: '#FF8D00',
+    borderColor: '#FF8D00',
   },
   modalEmptyInline: {
     alignItems: 'center',

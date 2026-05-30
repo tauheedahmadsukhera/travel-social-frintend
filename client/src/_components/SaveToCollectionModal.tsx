@@ -247,7 +247,7 @@ const styles = StyleSheet.create({
     header: { flexDirection: 'row', alignItems: 'center', height: 56 },
     headerBtn: { width: 100, paddingHorizontal: 16, justifyContent: 'center' },
     headerLeft: { fontSize: 15, color: '#666' },
-    headerRight: { fontSize: 15, color: '#0A3D62', fontWeight: '700', textAlign: 'right' },
+    headerRight: { fontSize: 15, color: '#FF8D00', fontWeight: '700', textAlign: 'right' },
     headerRightDisabled: { color: '#ccc' },
     headerTitleWrap: { flex: 1, alignItems: 'center' },
     headerTitle: { fontSize: 17, fontWeight: '800', color: '#111' },

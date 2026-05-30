@@ -407,7 +407,7 @@ const styles = StyleSheet.create({
     color: '#666',
   },
   footerLink: {
-    color: '#0A3D62',
+    color: '#FF8D00',
     fontWeight: '600',
   },
   modalOverlay: {
@@ -436,7 +436,7 @@ const styles = StyleSheet.create({
   },
   modalCloseText: {
     fontSize: 16,
-    color: '#0A3D62',
+    color: '#FF8D00',
     fontWeight: '600',
   },
   countryList: {
@@ -486,7 +486,7 @@ const styles = StyleSheet.create({
     width: 20,
     height: 20,
     borderRadius: 10,
-    backgroundColor: '#0A3D62',
+    backgroundColor: '#FF8D00',
     alignItems: 'center',
     justifyContent: 'center',
     marginLeft: 8,

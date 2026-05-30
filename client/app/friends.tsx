@@ -443,7 +443,7 @@ export default function FriendsScreen() {
       {/* List */}
       {loading ? (
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#0A3D62" />
+          <ActivityIndicator size="large" color="#FF8D00" />
         </View>
       ) : (
         <FlashList
@@ -588,7 +588,7 @@ const styles = StyleSheet.create({
   },
   mutualBadge: {
     fontSize: 11,
-    color: '#0A3D62',
+    color: '#FF8D00',
     marginTop: 2,
     fontWeight: '500',
   },

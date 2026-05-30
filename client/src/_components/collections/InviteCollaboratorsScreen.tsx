@@ -57,7 +57,7 @@ export const InviteCollaboratorsScreen: React.FC<InviteCollaboratorsScreenProps>
       <Ionicons
         name={isSelected(user) ? "checkbox" : "square-outline"}
         size={22}
-        color={isSelected(user) ? "#0A3D62" : "#ccc"}
+        color={isSelected(user) ? "#FF8D00" : "#ccc"}
       />
     </TouchableOpacity>
   );
@@ -94,7 +94,7 @@ export const InviteCollaboratorsScreen: React.FC<InviteCollaboratorsScreenProps>
         style={{ flex: 1 }}
         ListEmptyComponent={
           loading ? (
-            <ActivityIndicator color="#0A3D62" style={{ marginTop: 40 }} />
+            <ActivityIndicator color="#FF8D00" style={{ marginTop: 40 }} />
           ) : (
             <Text style={styles.emptyText}>No users found</Text>
           )

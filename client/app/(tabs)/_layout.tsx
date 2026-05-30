@@ -756,7 +756,7 @@ function TopMenu({ setMenuVisible, setGroupsDrawerVisible }: { setMenuVisible: (
           </TouchableOpacity>
           <TouchableOpacity style={styles.topBtn} onPress={() => { logAnalyticsEvent('open_inbox'); router.push('/inbox' as any); }}>
             <Feather name="message-square" size={20} color="#000" />
-            {renderCountBadge(unreadMsg, '#0A3D62', -4, -4)}
+            {renderCountBadge(unreadMsg, '#FF8D00', -4, -4)}
           </TouchableOpacity>
           <TouchableOpacity style={styles.topBtn} onPress={async () => { logAnalyticsEvent('open_notifications'); setNotificationsModalVisible(true); try { await markAllAsRead(); await fetchNotifications({ force: true }); } catch { } }}>
             <Feather name="bell" size={20} color="#000" />
@@ -987,7 +987,7 @@ const styles = StyleSheet.create({
   },
   notificationType: {
     fontSize: 12,
-    color: '#0A3D62',
+    color: '#FF8D00',
     fontWeight: '600',
     marginBottom: 2,
   },
@@ -999,7 +999,7 @@ const styles = StyleSheet.create({
     width: 10,
     height: 10,
     borderRadius: 5,
-    backgroundColor: '#0A3D62',
+    backgroundColor: '#FF8D00',
     marginLeft: 8,
   },
   emptyNotifications: {

@@ -1230,7 +1230,7 @@ const styles = StyleSheet.create({
     width: 10,
     height: 10,
     borderRadius: 5,
-    backgroundColor: '#0A3D62',
+    backgroundColor: '#FF8D00',
     borderWidth: 1.5,
     borderColor: '#fff',
   },
@@ -1342,7 +1342,7 @@ const styles = StyleSheet.create({
     borderColor: 'transparent',
   },
   subLocationImageSelected: {
-    borderColor: '#0A3D62',
+    borderColor: '#FF8D00',
     borderWidth: 2,
   },
   subLocationName: {

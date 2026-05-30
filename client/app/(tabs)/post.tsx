@@ -528,7 +528,7 @@ export default function PostScreen() {
               />
             </View>
             {loadingUsers ? (
-              <ActivityIndicator color="#0A3D62" style={{ marginVertical: 20 }} />
+              <ActivityIndicator color="#FF8D00" style={{ marginVertical: 20 }} />
             ) : (
               <FlatList
                 data={users}
@@ -657,7 +657,7 @@ const styles = StyleSheet.create({
     fontSize: 16
   },
   shareBtn: {
-    backgroundColor: '#0A3D62',
+    backgroundColor: '#FF8D00',
     borderRadius: 8,
     paddingVertical: 12,
     paddingHorizontal: 32,

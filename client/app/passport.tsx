@@ -624,7 +624,7 @@ export default function PassportScreen() {
 
         {isOwner && !selectedCountry && showTravelHint && (
           <View style={styles.travelHintBox} accessibilityLabel="Background travel detection for passport stamps">
-            <Feather name="navigation" size={14} color="#0A3D62" style={{ marginRight: 8, marginTop: 2 }} />
+            <Feather name="navigation" size={14} color="#FF8D00" style={{ marginRight: 8, marginTop: 2 }} />
             <View style={{ flex: 1 }}>
               <Text style={styles.travelHintText}>
                 Turn on location access while using Trips and optional notifications to unlock automatic travel stamps whenever you arrive in a new country while the app is open. After signing in, just open the Home screen once so we can refresh your location and keep your journey up to date.
@@ -649,7 +649,7 @@ export default function PassportScreen() {
               onPress={() => { hapticLight(); setShowTravelHint(false); }}
               style={{ marginLeft: 8, padding: 4 }}
             >
-              <Ionicons name="close" size={18} color="#0A3D62" />
+              <Ionicons name="close" size={18} color="#FF8D00" />
             </TouchableOpacity>
           </View>
         )}
@@ -706,7 +706,7 @@ export default function PassportScreen() {
 
         {/* Stamps Grid */}
         {loading ? (
-          <ActivityIndicator style={{ marginTop: 50 }} color="#0A3D62" />
+          <ActivityIndicator style={{ marginTop: 50 }} color="#FF8D00" />
         ) : (
           <View style={styles.stampsGrid}>
             {filtered.map((stamp, i) => {
@@ -853,14 +853,14 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
   },
   travelHintText: {
-    color: '#0A3D62',
+    color: '#FF8D00',
     fontSize: 13,
     lineHeight: 18,
     fontWeight: '500',
   },
   enableLocBtn: {
     marginTop: 8,
-    backgroundColor: '#0A3D62',
+    backgroundColor: '#FF8D00',
     paddingVertical: 6,
     paddingHorizontal: 12,
     borderRadius: 12,
@@ -1038,7 +1038,7 @@ const styles = StyleSheet.create({
   },
   listItemType: {
     fontSize: 12,
-    color: '#0A3D62',
+    color: '#FF8D00',
     fontWeight: '600',
     marginBottom: 4,
   },
@@ -1048,7 +1048,7 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   countBadge: {
-    backgroundColor: '#0A3D62',
+    backgroundColor: '#FF8D00',
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 12,
@@ -1203,7 +1203,7 @@ const styles = StyleSheet.create({
   },
   modalCloseText: {
     fontSize: 16,
-    color: '#0A3D62',
+    color: '#FF8D00',
     fontWeight: '600',
   },
   modalTitle: {
@@ -1219,7 +1219,7 @@ const styles = StyleSheet.create({
   },
   modalAddText: {
     fontSize: 16,
-    color: '#0A3D62',
+    color: '#FF8D00',
     fontWeight: '600',
   },
   modalSearchContainer: {
@@ -1331,7 +1331,7 @@ const styles = StyleSheet.create({
   },
   locationItemSelected: {
     backgroundColor: '#f0f4f8',
-    borderColor: '#0A3D62',
+    borderColor: '#FF8D00',
   },
   locationItemLeft: {
     flexDirection: 'row',
@@ -1373,8 +1373,8 @@ const styles = StyleSheet.create({
     marginLeft: 12,
   },
   selectionRadioSelected: {
-    borderColor: '#0A3D62',
-    backgroundColor: '#0A3D62',
+    borderColor: '#FF8D00',
+    backgroundColor: '#FF8D00',
   },
 
   // Redesigned Search Modal Styles

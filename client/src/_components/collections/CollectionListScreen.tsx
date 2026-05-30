@@ -67,7 +67,7 @@ export const CollectionListScreen: React.FC<CollectionListScreenProps> = ({
           <Ionicons
             name={isGloballySaved ? "bookmark" : "bookmark-outline"}
             size={24}
-            color={isGloballySaved ? "#0A3D62" : "#999"}
+            color={isGloballySaved ? "#FF8D00" : "#999"}
           />
         </TouchableOpacity>
       </View>
@@ -78,12 +78,12 @@ export const CollectionListScreen: React.FC<CollectionListScreenProps> = ({
       <View style={{ flex: 1 }}>
         {loading ? (
           <View style={styles.center}>
-            <ActivityIndicator color="#0A3D62" />
+            <ActivityIndicator color="#FF8D00" />
           </View>
         ) : collections.length === 0 ? (
           <View style={[styles.emptyState, { paddingBottom: Math.max(insets.bottom + 16, 24) }]}>
             <View style={styles.emptyIconWrap}>
-              <Feather name="bookmark" size={36} color="#0A3D62" />
+              <Feather name="bookmark" size={36} color="#FF8D00" />
             </View>
             <Text style={styles.emptyTitle}>Organize the post you love</Text>
             <Text style={styles.emptySubtitle}>
@@ -114,7 +114,7 @@ export const CollectionListScreen: React.FC<CollectionListScreenProps> = ({
                   </View>
                   <Text style={styles.collName}>{col.name}</Text>
                   {isSavedInCol(col) ? (
-                    <Ionicons name="checkmark-circle" size={24} color="#0A3D62" />
+                    <Ionicons name="checkmark-circle" size={24} color="#FF8D00" />
                   ) : (
                     <Ionicons name="add-circle-outline" size={24} color="#ccc" />
                   )}
@@ -142,7 +142,7 @@ const styles = StyleSheet.create({
   emptyIconWrap: { width: 72, height: 72, borderRadius: 36, backgroundColor: '#f0f4f8', alignItems: 'center', justifyContent: 'center', marginBottom: 16 },
   emptyTitle: { fontSize: 18, fontWeight: '800', color: '#111', textAlign: 'center', marginBottom: 8 },
   emptySubtitle: { fontSize: 14, color: '#666', textAlign: 'center', lineHeight: 20, marginBottom: 24 },
-  emptyBtn: { backgroundColor: '#0A3D62', paddingHorizontal: 20, paddingVertical: 12, borderRadius: 10 },
+  emptyBtn: { backgroundColor: '#FF8D00', paddingHorizontal: 20, paddingVertical: 12, borderRadius: 10 },
   emptyBtnText: { color: '#fff', fontWeight: '700', fontSize: 15 },
   collectionsList: { paddingHorizontal: 16, paddingBottom: 20 },
   collRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10 },

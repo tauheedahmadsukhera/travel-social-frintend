@@ -72,7 +72,7 @@ const styles = StyleSheet.create({
   headerSection: { paddingBottom: 12, paddingTop: 0, backgroundColor: '#fff', marginBottom: 0 },
   chip: { alignItems: 'center', marginRight: 12 },
   chipIconWrap: { width: 64, height: 64, borderRadius: 14, backgroundColor: '#f5f5f5', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
-  chipIconWrapActive: { borderColor: '#0A3D62', borderWidth: 2.5 },
+  chipIconWrapActive: { borderColor: '#FF8D00', borderWidth: 2.5 },
   chipText: { color: '#000000', marginTop: 5, fontSize: 11, textAlign: 'center' },
   chipTextActive: { color: '#000000', fontWeight: '800' },
   categoryImage: { width: 64, height: 64, borderRadius: 14 },
@@ -326,7 +326,7 @@ export default function Home() {
   const listFooter = useMemo(() => (
     loadingMore ? (
       <View style={{ height: 100, alignItems: 'center', justifyContent: 'center' }}>
-        <ActivityIndicator size="small" color="#0A3D62" />
+        <ActivityIndicator size="small" color="#FF8D00" />
       </View>
     ) : <View style={{ height: 16 }} />
   ), [loadingMore]);
@@ -352,7 +352,7 @@ export default function Home() {
           layout.size = 60 + mediaHeight + 50 + 60 + 20;
         }}
         drawDistance={SCREEN_HEIGHT * 5}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#0A3D62" />}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#FF8D00" />}
       />
     </View>
   );

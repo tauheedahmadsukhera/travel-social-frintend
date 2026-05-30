@@ -726,11 +726,11 @@ export default function SavedScreen() {
 
   // Grid
   const renderGrid = () => {
-    if (loading) return <ActivityIndicator color="#0A3D62" style={{ marginTop: 60 }} size="large" />;
+    if (loading) return <ActivityIndicator color="#FF8D00" style={{ marginTop: 60 }} size="large" />;
     if (displayedPosts.length === 0) return (
       <View style={styles.emptyWrap}>
         <View style={styles.emptyIconContainer}>
-          <Ionicons name="bookmark-outline" size={42} color="#0A3D62" />
+          <Ionicons name="bookmark-outline" size={42} color="#FF8D00" />
         </View>
         <Text style={styles.emptyTitle}>
           {activeCollection ? 'No posts in this collection' : 'No saved posts yet'}
@@ -824,8 +824,8 @@ export default function SavedScreen() {
               <Feather name="image" size={16} color="#ccc" />
             </View>
           )}
-          <Text style={[styles.allLabel, !activeCollection && { color: '#0A3D62', fontWeight: '700' }]}>All</Text>
-          {!activeCollection && <Feather name="check" size={16} color="#0A3D62" style={{ marginLeft: 'auto' }} />}
+          <Text style={[styles.allLabel, !activeCollection && { color: '#FF8D00', fontWeight: '700' }]}>All</Text>
+          {!activeCollection && <Feather name="check" size={16} color="#FF8D00" style={{ marginLeft: 'auto' }} />}
         </TouchableOpacity>
 
         {/* Collections header */}
@@ -840,7 +840,7 @@ export default function SavedScreen() {
                 setCollDropdownOpen(false);
               }}
             >
-              <Feather name="plus" size={14} color="#0A3D62" />
+              <Feather name="plus" size={14} color="#FF8D00" />
               <Text style={styles.newCollText}>New</Text>
             </TouchableOpacity>
           )}
@@ -873,12 +873,12 @@ export default function SavedScreen() {
                     )}
 
                     {/* Name */}
-                    <Text style={[styles.collName, active && { color: '#0A3D62', fontWeight: '700' }]} numberOfLines={1}>
+                    <Text style={[styles.collName, active && { color: '#FF8D00', fontWeight: '700' }]} numberOfLines={1}>
                       {col.name}
                     </Text>
 
                     {/* Active check */}
-                    {active && <Feather name="check" size={16} color="#0A3D62" style={{ marginRight: 8 }} />}
+                    {active && <Feather name="check" size={16} color="#FF8D00" style={{ marginRight: 8 }} />}
                   </TouchableOpacity>
 
                   {/* ⊗ Delete (owner only) */}
@@ -1101,7 +1101,7 @@ export default function SavedScreen() {
                 </View>
                 
                 <View style={[styles.searchWrapEdit, { height: 46, borderRadius: 23, backgroundColor: '#f5f7fa', borderWidth: 1, borderColor: '#eef0f2' }]}>
-                  <Ionicons name="search" size={18} color="#0A3D62" />
+                  <Ionicons name="search" size={18} color="#FF8D00" />
                   <TextInput
                     style={[styles.searchInputEdit, { fontSize: 15 }]}
                     placeholder="Search people to invite..."
@@ -1118,7 +1118,7 @@ export default function SavedScreen() {
                 </View>
 
                 {searching ? (
-                  <ActivityIndicator color="#0A3D62" style={{ marginTop: 20 }} />
+                  <ActivityIndicator color="#FF8D00" style={{ marginTop: 20 }} />
                 ) : (
                   <ScrollView style={{ flex: 1 }} keyboardShouldPersistTaps="handled">
                     {(followerSearch.trim().length > 1 ? searchResults : followers.filter(f => 
@@ -1167,7 +1167,7 @@ export default function SavedScreen() {
           activeOpacity={0.8}
         >
           <Text style={styles.dropBtnLabel}>Collections</Text>
-          <Feather name="chevron-down" size={14} color="#0A3D62" />
+          <Feather name="chevron-down" size={14} color="#FF8D00" />
         </TouchableOpacity>
       </View>
 
@@ -1309,7 +1309,7 @@ const styles = StyleSheet.create({
     paddingVertical: 7,
     borderRadius: 16,
   },
-  dropBtnLabel: { fontSize: 13, fontWeight: '600', color: '#0A3D62' },
+  dropBtnLabel: { fontSize: 13, fontWeight: '600', color: '#FF8D00' },
 
   // Grid
   grid: { padding: 1 },
@@ -1351,11 +1351,11 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   emptyBtn: {
-    backgroundColor: '#0A3D62',
+    backgroundColor: '#FF8D00',
     paddingHorizontal: 24,
     paddingVertical: 12,
     borderRadius: 25,
-    shadowColor: '#0A3D62',
+    shadowColor: '#FF8D00',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.2,
     shadowRadius: 8,
@@ -1424,7 +1424,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     gap: 4,
   },
-  newCollText: { fontSize: 13, color: '#0A3D62', fontWeight: '700' },
+  newCollText: { fontSize: 13, color: '#FF8D00', fontWeight: '700' },
 
   // Collection row inside sheet
   collRow: {
@@ -1461,7 +1461,7 @@ const styles = StyleSheet.create({
   },
   editCancel: { fontSize: 15, color: '#555', fontWeight: '500' },
   editTitle: { fontSize: 16, fontWeight: '700', color: '#111' },
-  editSave: { fontSize: 15, color: '#0A3D62', fontWeight: '700' },
+  editSave: { fontSize: 15, color: '#FF8D00', fontWeight: '700' },
   editCover: {
     width: 130, height: 130,
     borderRadius: 14,
@@ -1503,8 +1503,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginLeft: 12,
   },
-  radioCircleActive: { borderColor: '#0A3D62' },
-  radioDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: '#0A3D62' },
+  radioCircleActive: { borderColor: '#FF8D00' },
+  radioDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: '#FF8D00' },
 
   // New Edit sheet styles
   collabInfoInline: {
@@ -1516,7 +1516,7 @@ const styles = StyleSheet.create({
   },
   collabChipsInline: {
     fontSize: 12,
-    color: '#0A3D62',
+    color: '#FF8D00',
     fontWeight: '500',
     flex: 1,
     marginHorizontal: 16,
@@ -1546,7 +1546,7 @@ const styles = StyleSheet.create({
     color: '#444',
   },
   groupNameSelectedEdit: {
-    color: '#0A3D62',
+    color: '#FF8D00',
     fontWeight: '700',
   },
   searchWrapEdit: {

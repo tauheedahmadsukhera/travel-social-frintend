@@ -367,7 +367,7 @@ const styles = StyleSheet.create({
   },
   forgotPasswordText: {
     fontSize: 13,
-    color: '#0A3D62',
+    color: '#FF8D00',
     fontWeight: '600',
   },
   input: {
@@ -396,7 +396,7 @@ const styles = StyleSheet.create({
     color: '#666',
   },
   footerLink: {
-    color: '#0A3D62',
+    color: '#FF8D00',
     fontWeight: '600',
   },
   phoneInputWrapper: {

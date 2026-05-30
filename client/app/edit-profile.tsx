@@ -272,7 +272,7 @@ export default function EditProfile() {
     // Show loading while either auth context or profile data is still loading
     return (
       <SafeAreaView style={[styles.safe, { alignItems: 'center', justifyContent: 'center' }]} edges={["top", "bottom"]}>
-        <ActivityIndicator size="large" color="#0A3D62" />
+        <ActivityIndicator size="large" color="#FF8D00" />
         <Text style={{ marginTop: 16, color: '#666', fontSize: 14 }}>Loading your profile...</Text>
       </SafeAreaView>
     );
@@ -491,7 +491,7 @@ export default function EditProfile() {
       {loading && !authLoading && (
         <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.3)', justifyContent: 'center', alignItems: 'center', zIndex: 999 }}>
           <View style={{ backgroundColor: '#fff', borderRadius: 12, padding: 20, alignItems: 'center' }}>
-            <ActivityIndicator size="large" color="#0A3D62" />
+            <ActivityIndicator size="large" color="#FF8D00" />
             <Text style={{ marginTop: 12, color: '#666', fontSize: 14 }}>Loading profile data...</Text>
           </View>
         </View>
@@ -500,7 +500,7 @@ export default function EditProfile() {
   );
 }
 
-const PRIMARY = '#0A3D62';
+const PRIMARY = '#FF8D00';
 const SECONDARY = '#111';
 
 const styles = StyleSheet.create({

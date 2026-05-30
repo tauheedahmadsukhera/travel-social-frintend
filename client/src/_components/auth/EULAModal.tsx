@@ -35,7 +35,7 @@ export const EULAModal: React.FC<EULAModalProps> = ({
           {/* Header */}
           <View style={styles.header}>
             <View style={styles.iconContainer}>
-              <Ionicons name="shield-checkmark" size={32} color="#0A3D62" />
+              <Ionicons name="shield-checkmark" size={32} color="#FF8D00" />
             </View>
             <Text style={styles.title}>Trips – Terms of Use</Text>
             <Text style={styles.date}>Effective: April 30, 2026</Text>
@@ -249,7 +249,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#0A3D62',
+    color: '#FF8D00',
     marginBottom: 6,
   },
   sectionText: {
@@ -264,7 +264,7 @@ const styles = StyleSheet.create({
   },
   bulletPoint: {
     fontSize: 14,
-    color: '#0A3D62',
+    color: '#FF8D00',
     marginRight: 8,
     fontWeight: 'bold',
   },
@@ -278,7 +278,7 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   acceptButton: {
-    backgroundColor: '#0A3D62',
+    backgroundColor: '#FF8D00',
     paddingVertical: 16,
     borderRadius: 16,
     alignItems: 'center',

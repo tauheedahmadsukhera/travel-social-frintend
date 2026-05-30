@@ -159,7 +159,7 @@ export default function UsernameSignUpScreen() {
                   editable={!loading}
                 />
                 {checkingUsername && (
-                  <ActivityIndicator size="small" color="#0A3D62" style={styles.inputIcon} />
+                  <ActivityIndicator size="small" color="#FF8D00" style={styles.inputIcon} />
                 )}
                 {!checkingUsername && usernameAvailable === true && username.length >= 3 && (
                   <Ionicons name="checkmark-circle" size={20} color="#4CAF50" style={styles.inputIcon} />
@@ -210,7 +210,7 @@ export default function UsernameSignUpScreen() {
 
             {loading && (
               <View style={styles.loadingContainer}>
-                <ActivityIndicator size="small" color="#0A3D62" />
+                <ActivityIndicator size="small" color="#FF8D00" />
               </View>
             )}
           </View>
@@ -247,7 +247,7 @@ const styles = StyleSheet.create({
   },
   checkIcon: {
     fontSize: 32,
-    color: '#0A3D62',
+    color: '#FF8D00',
     marginBottom: 12,
   },
   avatarContainer: {
@@ -273,7 +273,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: 0,
     right: '35%',
-    backgroundColor: '#0A3D62',
+    backgroundColor: '#FF8D00',
     width: 32,
     height: 32,
     borderRadius: 16,
@@ -311,7 +311,7 @@ const styles = StyleSheet.create({
   },
   hint: {
     fontSize: 12,
-    color: '#0A3D62',
+    color: '#FF8D00',
     marginTop: 4,
   },
   loadingContainer: {

@@ -235,7 +235,7 @@ export const THEME = {
   accentColor: '#764ba2',
   errorColor: '#e74c3c',
   successColor: '#2ecc71',
-  warningColor: '#0A3D62',
+  warningColor: '#FF8D00',
   infoColor: '#3498db',
   backgroundColor: '#ffffff',
   textColor: '#000000',

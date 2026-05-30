@@ -96,8 +96,8 @@ export const NewCollectionScreen: React.FC<NewCollectionScreenProps> = ({
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
               {groups.filter(g => tempSelectedGroups.includes(g._id)).map((g, index) => (
                 <View key={index} style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#e8f0fe', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 16 }}>
-                  <Ionicons name="people-outline" size={14} color="#0A3D62" style={{ marginRight: 6 }} />
-                  <Text style={{ fontSize: 13, color: '#0A3D62', fontWeight: '600' }}>{g.name}</Text>
+                  <Ionicons name="people-outline" size={14} color="#FF8D00" style={{ marginRight: 6 }} />
+                  <Text style={{ fontSize: 13, color: '#FF8D00', fontWeight: '600' }}>{g.name}</Text>
                 </View>
               ))}
             </View>
@@ -141,5 +141,5 @@ const styles = StyleSheet.create({
   optionRight: { flexDirection: 'row', alignItems: 'center' },
   optionValue: { fontSize: 14, color: '#666', marginRight: 6 },
   collabInfo: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, marginTop: 12 },
-  collabChips: { flex: 1, fontSize: 13, color: '#0A3D62', marginLeft: 8, fontWeight: '600' },
+  collabChips: { flex: 1, fontSize: 13, color: '#FF8D00', marginLeft: 8, fontWeight: '600' },
 });

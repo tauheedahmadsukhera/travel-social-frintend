@@ -85,7 +85,7 @@ const PassportSection: React.FC<PassportSectionProps> = ({ userId, isOwner }) =>
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#0A3D62" />
+        <ActivityIndicator size="large" color="#FF8D00" />
         <Text style={styles.loadingText}>Loading your passport...</Text>
       </View>
     );
@@ -134,7 +134,7 @@ const PassportSection: React.FC<PassportSectionProps> = ({ userId, isOwner }) =>
       {/* Passport Stamps Grid */}
       <View style={styles.stampsHeader}>
         <Text style={styles.stampsTitle}>Travel Stamps</Text>
-        <Feather name="award" size={20} color="#0A3D62" />
+        <Feather name="award" size={20} color="#FF8D00" />
       </View>
 
       {stamps.length === 0 ? (
@@ -155,7 +155,7 @@ const PassportSection: React.FC<PassportSectionProps> = ({ userId, isOwner }) =>
             >
               <View style={styles.stampCircle}>
                 <LinearGradient
-                  colors={['#0A3D62', '#e74c3c']}
+                  colors={['#FF8D00', '#e74c3c']}
                   style={styles.stampGrad}
                 >
                   <CountryFlag countryCode={stamp.countryCode || 'XX'} size={30} />
@@ -248,7 +248,7 @@ const styles = StyleSheet.create({
   statNumber: {
     fontSize: 28,
     fontWeight: '700',
-    color: '#0A3D62',
+    color: '#FF8D00',
     marginBottom: 4,
   },
   statLabel: {
@@ -328,7 +328,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4,
     paddingVertical: 1,
   },
-  counterText: { fontSize: 9, fontWeight: '800', color: '#0A3D62' },
+  counterText: { fontSize: 9, fontWeight: '800', color: '#FF8D00' },
   stampName: { fontSize: 13, fontWeight: '700', color: '#111', marginTop: 6, textAlign: 'center' },
   stampType: { fontSize: 10, color: '#888', marginTop: 1, textTransform: 'capitalize' },
 });

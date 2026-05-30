@@ -519,7 +519,7 @@ export default function SearchModal() {
               >
                 {loadingRegions ? (
                   <View style={{ alignItems: 'center', justifyContent: 'center', height: 150 }}>
-                    <ActivityIndicator size="large" color="#0A3D62" />
+                    <ActivityIndicator size="large" color="#FF8D00" />
                   </View>
                 ) : (
                   <View style={styles.regionGridWrap}>
@@ -834,7 +834,7 @@ const styles = StyleSheet.create({
   searchBtnBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#0A3D62',
+    backgroundColor: '#FF8D00',
     borderRadius: 10,
     paddingHorizontal: 18,
     paddingVertical: 8,
@@ -904,7 +904,7 @@ const styles = StyleSheet.create({
     borderColor: '#ddd',
   },
   searchBtn: {
-    backgroundColor: '#0A3D62',
+    backgroundColor: '#FF8D00',
   },
   actionBtnText: {
     fontSize: 16,

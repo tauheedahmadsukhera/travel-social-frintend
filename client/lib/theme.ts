@@ -36,7 +36,7 @@ export const LIGHT_COLORS: ThemeColors = {
   border: '#e0e0e0',
   error: '#ff4757',
   success: '#31a24c',
-  warning: '#0A3D62',
+  warning: '#FF8D00',
   info: '#3498db',
 };
 

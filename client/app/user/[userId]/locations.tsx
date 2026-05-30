@@ -161,7 +161,7 @@ export default function UserLocationsScreen() {
 
       {loading ? (
         <View style={styles.center}>
-          <ActivityIndicator size="large" color="#0A3D62" />
+          <ActivityIndicator size="large" color="#FF8D00" />
         </View>
       ) : !canView ? (
         <View style={styles.center}>
@@ -172,7 +172,7 @@ export default function UserLocationsScreen() {
         <FlatList
           data={groupedLocations}
           keyExtractor={(item, index) => `${item.title}-${index}`}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#0A3D62" />}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#FF8D00" />}
           ListHeaderComponent={
             <View style={styles.listHeader}>
               <Text style={styles.countText}>{locations.length}</Text>
@@ -185,7 +185,7 @@ export default function UserLocationsScreen() {
                 <View style={styles.countryHeader}>
                   <View style={styles.stampIconWrap}>
                     <LinearGradient
-                      colors={['#0A3D62', '#e74c3c']}
+                      colors={['#FF8D00', '#e74c3c']}
                       style={styles.stampIconGrad}
                     >
                       <CountryFlag countryCode={group.countryCode} size={24} />
@@ -296,7 +296,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 3,
     elevation: 2,
   },
-  miniBadgeText: { fontSize: 8, fontWeight: '800', color: '#0A3D62' },
+  miniBadgeText: { fontSize: 8, fontWeight: '800', color: '#FF8D00' },
   countryTitle: { fontSize: 16, fontWeight: '700', color: '#222' },
   
   cityRow: {

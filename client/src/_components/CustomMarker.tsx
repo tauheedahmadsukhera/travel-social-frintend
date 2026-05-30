@@ -18,7 +18,7 @@ export const CustomMarker: React.FC<CustomMarkerProps> = ({ imageUrl, size = 70 
           width: size,
           height: size,
           borderRadius: size / 6,
-          backgroundColor: '#0A3D62',
+          backgroundColor: '#FF8D00',
           justifyContent: 'center',
           alignItems: 'center',
           overflow: 'hidden',
@@ -53,7 +53,7 @@ export const CustomMarker: React.FC<CustomMarkerProps> = ({ imageUrl, size = 70 
           borderTopWidth: pointerSize,
           borderLeftColor: 'transparent',
           borderRightColor: 'transparent',
-          borderTopColor: '#0A3D62',
+          borderTopColor: '#FF8D00',
           marginTop: -2,
         }}
       />

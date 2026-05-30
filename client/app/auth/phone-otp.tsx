@@ -128,7 +128,7 @@ export default function PhoneOTPScreen() {
             {/* SMS Icon */}
             <View style={styles.iconContainer}>
               <View style={styles.iconCircle}>
-                <Ionicons name="chatbubble-ellipses" size={40} color="#0A3D62" />
+                <Ionicons name="chatbubble-ellipses" size={40} color="#FF8D00" />
               </View>
               <Text style={styles.iconText}>Check your SMS messages</Text>
             </View>
@@ -249,7 +249,7 @@ const styles = StyleSheet.create({
     color: '#000',
   },
   otpInputFilled: {
-    borderColor: '#0A3D62',
+    borderColor: '#FF8D00',
     backgroundColor: '#fff',
   },
   otpInputError: {
@@ -274,7 +274,7 @@ const styles = StyleSheet.create({
   },
   resendLink: {
     fontSize: 14,
-    color: '#0A3D62',
+    color: '#FF8D00',
     fontWeight: '600',
   },
 });

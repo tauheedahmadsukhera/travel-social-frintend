@@ -267,7 +267,7 @@ const styles = StyleSheet.create({
   },
   forgotPassword: {
     fontSize: 14,
-    color: '#0A3D62',
+    color: '#FF8D00',
     marginBottom: 20,
   },
   loginButton: {
@@ -289,7 +289,7 @@ const styles = StyleSheet.create({
     color: '#666',
   },
   footerLink: {
-    color: '#0A3D62',
+    color: '#FF8D00',
     fontWeight: '600',
   },
 });

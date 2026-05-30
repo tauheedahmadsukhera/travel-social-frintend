@@ -309,7 +309,7 @@ export default function UserPostsScreen() {
   if (loading && posts.length === 0) {
     return (
       <SafeAreaView style={styles.loading}>
-        <ActivityIndicator size="large" color="#0A3D62" />
+        <ActivityIndicator size="large" color="#FF8D00" />
       </SafeAreaView>
     );
   }
@@ -352,7 +352,7 @@ export default function UserPostsScreen() {
         ListFooterComponent={
           loadingMore ? (
             <View style={styles.footer}>
-              <ActivityIndicator size="small" color="#0A3D62" />
+              <ActivityIndicator size="small" color="#FF8D00" />
             </View>
           ) : null
         }

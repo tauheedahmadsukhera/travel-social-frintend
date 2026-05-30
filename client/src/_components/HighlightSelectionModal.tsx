@@ -92,7 +92,7 @@ export default function HighlightSelectionModal({
           </View>
 
           {loading ? (
-            <ActivityIndicator size="large" color="#0A3D62" style={{ marginVertical: 40 }} />
+            <ActivityIndicator size="large" color="#FF8D00" style={{ marginVertical: 40 }} />
           ) : hasHighlights ? (
             <FlatList
               data={highlights}

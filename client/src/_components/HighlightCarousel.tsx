@@ -23,7 +23,7 @@ const HighlightCarousel: React.FC<HighlightCarouselProps> = ({ highlights, onPre
     return (
       <TouchableOpacity style={styles.highlightBubble} onPress={onAddHighlight}>
         <View style={styles.addButton}>
-          <Ionicons name="add" size={24} color="#0A3D62" />
+          <Ionicons name="add" size={24} color="#FF8D00" />
         </View>
         <Text style={styles.title} numberOfLines={1}>New</Text>
       </TouchableOpacity>
