@@ -476,14 +476,9 @@ export default function TabsLayout() {
                     activeOpacity={0.7}
                     onPress={() => { logAnalyticsEvent('open_settings'); setMenuVisible(false); router.push('/settings'); }}
                   >
-                    <LinearGradient
-                      colors={['#FBBC04', '#FF8D00']}
-                      start={{ x: 0, y: 0 }}
-                      end={{ x: 1, y: 0 }}
-                      style={styles.iconContainer}
-                    >
-                      <Feather name="settings" size={ICON_SIZE} color="#fff" />
-                    </LinearGradient>
+                    <View style={styles.iconContainer}>
+                      <Feather name="settings" size={ICON_SIZE} color="#FF8D00" />
+                    </View>
                     <Text style={styles.igText}>Settings</Text>
                     <Feather name="chevron-right" size={CHEVRON_SIZE} color="#ccc" style={styles.chevron} />
                   </TouchableOpacity>
@@ -496,14 +491,9 @@ export default function TabsLayout() {
                     activeOpacity={0.7}
                     onPress={() => { logAnalyticsEvent('open_saved'); setMenuVisible(false); router.push('/saved'); }}
                   >
-                    <LinearGradient
-                      colors={['#FBBC04', '#FF8D00']}
-                      start={{ x: 0, y: 0 }}
-                      end={{ x: 1, y: 0 }}
-                      style={styles.iconContainer}
-                    >
-                      <Feather name="bookmark" size={ICON_SIZE} color="#fff" />
-                    </LinearGradient>
+                    <View style={styles.iconContainer}>
+                      <Feather name="bookmark" size={ICON_SIZE} color="#FF8D00" />
+                    </View>
                     <Text style={styles.igText}>Saved Posts</Text>
                     <Feather name="chevron-right" size={CHEVRON_SIZE} color="#ccc" style={styles.chevron} />
                   </TouchableOpacity>
@@ -516,14 +506,9 @@ export default function TabsLayout() {
                     activeOpacity={0.7}
                     onPress={() => { logAnalyticsEvent('open_privacy'); setMenuVisible(false); router.push('/legal/privacy' as any); }}
                   >
-                    <LinearGradient
-                      colors={['#FBBC04', '#FF8D00']}
-                      start={{ x: 0, y: 0 }}
-                      end={{ x: 1, y: 0 }}
-                      style={styles.iconContainer}
-                    >
-                      <Feather name="shield" size={ICON_SIZE} color="#fff" />
-                    </LinearGradient>
+                    <View style={styles.iconContainer}>
+                      <Feather name="shield" size={ICON_SIZE} color="#FF8D00" />
+                    </View>
                     <Text style={styles.igText}>Privacy Policy</Text>
                     <Feather name="chevron-right" size={CHEVRON_SIZE} color="#ccc" style={styles.chevron} />
                   </TouchableOpacity>
@@ -535,14 +520,9 @@ export default function TabsLayout() {
                     activeOpacity={0.7}
                     onPress={() => { logAnalyticsEvent('open_terms'); setMenuVisible(false); router.push('/legal/terms' as any); }}
                   >
-                    <LinearGradient
-                      colors={['#FBBC04', '#FF8D00']}
-                      start={{ x: 0, y: 0 }}
-                      end={{ x: 1, y: 0 }}
-                      style={styles.iconContainer}
-                    >
-                      <Feather name="file-text" size={ICON_SIZE} color="#fff" />
-                    </LinearGradient>
+                    <View style={styles.iconContainer}>
+                      <Feather name="file-text" size={ICON_SIZE} color="#FF8D00" />
+                    </View>
                     <Text style={styles.igText}>Terms of Service</Text>
                     <Feather name="chevron-right" size={CHEVRON_SIZE} color="#ccc" style={styles.chevron} />
                   </TouchableOpacity>
@@ -912,6 +892,7 @@ const styles = StyleSheet.create({
     width: isSmallDevice ? 32 : (isLargeDevice ? 40 : 36),
     height: isSmallDevice ? 32 : (isLargeDevice ? 40 : 36),
     borderRadius: isSmallDevice ? 16 : (isLargeDevice ? 20 : 18),
+    backgroundColor: '#f0f3ff',
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: isSmallDevice ? 10 : 12,
