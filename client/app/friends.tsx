@@ -309,35 +309,22 @@ export default function FriendsScreen() {
 
         {!isMe && (
           <TouchableOpacity
+            style={[
+              styles.followBtn,
+              item.isFollowing ? styles.followingBtn : styles.followBtnPrimary
+            ]}
             onPress={() => handleFollowToggle(item.uid, !!item.isFollowing)}
             disabled={isFollowLoading}
-            activeOpacity={0.8}
           >
-            {item.isFollowing ? (
-              <View style={[styles.followBtn, styles.followingBtn]}>
-                {isFollowLoading ? (
-                  <ActivityIndicator size="small" color="#000" />
-                ) : (
-                  <Text style={[styles.followBtnText, styles.followingBtnText]}>
-                    Following
-                  </Text>
-                )}
-              </View>
+            {isFollowLoading ? (
+              <ActivityIndicator size="small" color={item.isFollowing ? '#000' : '#fff'} />
             ) : (
-              <LinearGradient
-                colors={['#FBBC04', '#FF8D00']}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-                style={styles.followBtn}
-              >
-                {isFollowLoading ? (
-                  <ActivityIndicator size="small" color="#fff" />
-                ) : (
-                  <Text style={styles.followBtnText}>
-                    Follow
-                  </Text>
-                )}
-              </LinearGradient>
+              <Text style={[
+                styles.followBtnText,
+                item.isFollowing && styles.followingBtnText
+              ]}>
+                {item.isFollowing ? 'Following' : 'Follow'}
+              </Text>
             )}
           </TouchableOpacity>
         )}
@@ -614,7 +601,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   followBtnPrimary: {
-    backgroundColor: '#0095f6',
+    backgroundColor: '#FF8D00',
   },
   followingBtn: {
     backgroundColor: '#f0f0f0',
