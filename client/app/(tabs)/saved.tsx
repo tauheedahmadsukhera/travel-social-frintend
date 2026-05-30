@@ -713,7 +713,7 @@ export default function SavedScreen() {
 
   // ── Title ─────────────────────────────────────────────────────────────────
 
-  const pageTitle = activeCollection?.name || 'All Collection';
+  const pageTitle = activeCollection?.name || 'All Collections';
 
   // ── Thumb helper ──────────────────────────────────────────────────────────
 
