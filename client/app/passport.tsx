@@ -1,4 +1,5 @@
 import { Feather, Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import AsyncStorage from '@/lib/storage';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useMemo, useState } from 'react';
@@ -783,11 +784,19 @@ export default function PassportScreen() {
       {isOwner && (
         <View style={styles.fabContainer} pointerEvents="box-none">
           <TouchableOpacity 
-            style={styles.fabPill} 
+            style={styles.fabPillShadow} 
             onPress={handleOpenLocationPicker}
+            activeOpacity={0.85}
           >
-            <Ionicons name="locate" size={18} color="#fff" />
-            <Text style={styles.fabText}>Add a stamp</Text>
+            <LinearGradient
+              colors={['#FBBC04', '#FF8D00']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={styles.fabPillGradient}
+            >
+              <Ionicons name="locate" size={18} color="#fff" />
+              <Text style={styles.fabText}>Add a stamp</Text>
+            </LinearGradient>
           </TouchableOpacity>
         </View>
       )}
@@ -1152,19 +1161,21 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  fabPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#000',
-    paddingHorizontal: 22,
-    paddingVertical: 12,
-    borderRadius: 30,
-    gap: 10,
+  fabPillShadow: {
     elevation: 8,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
+    borderRadius: 30,
+  },
+  fabPillGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 22,
+    paddingVertical: 12,
+    borderRadius: 30,
+    gap: 10,
   },
   fabText: {
     color: '#fff',
