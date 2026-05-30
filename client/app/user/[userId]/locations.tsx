@@ -165,6 +165,7 @@ export default function UserLocationsScreen() {
         </View>
       ) : !canView ? (
         <View style={styles.center}>
+          <Feather name="lock" size={48} color="#FF8D00" style={{ marginBottom: 12 }} />
           <Text style={styles.privateTitle}>Private Account</Text>
           <Text style={styles.privateText}>Follow this user to see their locations.</Text>
         </View>
@@ -174,9 +175,32 @@ export default function UserLocationsScreen() {
           keyExtractor={(item, index) => `${item.title}-${index}`}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#FF8D00" />}
           ListHeaderComponent={
-            <View style={styles.listHeader}>
-              <Text style={styles.countText}>{locations.length}</Text>
-              <Text style={styles.countLabel}>Places Visited</Text>
+            <View style={styles.premiumCardContainer}>
+              <LinearGradient
+                colors={['#FF8D00', '#FF4500']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.premiumCard}
+              >
+                <View style={styles.premiumCardHeader}>
+                  <Feather name="globe" size={20} color="#fff" style={{ opacity: 0.9, marginRight: 8 }} />
+                  <Text style={styles.premiumCardLabel}>TRAVEL FOOTPRINT</Text>
+                </View>
+                
+                <View style={styles.premiumStatsRow}>
+                  <View style={styles.premiumStatItem}>
+                    <Text style={styles.premiumStatValue}>{groupedLocations.length}</Text>
+                    <Text style={styles.premiumStatLabel}>Countries</Text>
+                  </View>
+                  
+                  <View style={styles.premiumStatDivider} />
+                  
+                  <View style={styles.premiumStatItem}>
+                    <Text style={styles.premiumStatValue}>{locations.length}</Text>
+                    <Text style={styles.premiumStatLabel}>Places Visited</Text>
+                  </View>
+                </View>
+              </LinearGradient>
             </View>
           }
           renderItem={({ item: group }) => {
@@ -184,17 +208,14 @@ export default function UserLocationsScreen() {
               <View style={styles.countryGroup}>
                 <View style={styles.countryHeader}>
                   <View style={styles.stampIconWrap}>
-                    <LinearGradient
-                      colors={['#FF8D00', '#e74c3c']}
-                      style={styles.stampIconGrad}
-                    >
-                      <CountryFlag countryCode={group.countryCode} size={24} />
-                      {group.count > 1 && (
-                        <View style={styles.miniBadge}>
-                          <Text style={styles.miniBadgeText}>{group.count}</Text>
-                        </View>
-                      )}
-                    </LinearGradient>
+                    <View style={styles.stampIconGrad}>
+                      <CountryFlag countryCode={group.countryCode} size={22} />
+                    </View>
+                    {group.count > 1 && (
+                      <View style={styles.miniBadge}>
+                        <Text style={styles.miniBadgeText}>{group.count}</Text>
+                      </View>
+                    )}
                   </View>
                   <View style={{ flex: 1, marginLeft: 12 }}>
                     <Text style={styles.countryTitle}>{group.title}</Text>
@@ -208,7 +229,7 @@ export default function UserLocationsScreen() {
                   
                   return (
                     <View key={`${city._id}-${cIndex}`} style={styles.cityRow}>
-                      <View style={styles.cityDot} />
+                      <Feather name="map-pin" size={14} color="#FF8D00" style={{ marginRight: 10 }} />
                       <View style={styles.cityInfo}>
                         <Text style={styles.cityTitle}>{city.name}</Text>
                         {(regionText || dateText) ? (
@@ -217,7 +238,7 @@ export default function UserLocationsScreen() {
                       </View>
                       {city.count > 1 && (
                         <View style={styles.cityBadge}>
-                          <Text style={styles.cityBadgeText}>{city.count}</Text>
+                          <Text style={styles.cityBadgeText}>{city.count} visits</Text>
                         </View>
                       )}
                     </View>
@@ -228,11 +249,12 @@ export default function UserLocationsScreen() {
           }}
           ListEmptyComponent={
             <View style={styles.center}>
+              <Feather name="map" size={48} color="#FF8D00" style={{ marginBottom: 12, opacity: 0.5 }} />
               <Text style={styles.emptyTitle}>No Locations Yet</Text>
               <Text style={styles.emptyText}>Add a stamp in Passport to see it here.</Text>
             </View>
           }
-          contentContainerStyle={groupedLocations.length === 0 ? { flexGrow: 1 } : undefined}
+          contentContainerStyle={groupedLocations.length === 0 ? { flexGrow: 1 } : { paddingBottom: 32 }}
         />
       )}
     </SafeAreaView>
@@ -240,95 +262,155 @@ export default function UserLocationsScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#fff' },
+  container: { flex: 1, backgroundColor: '#f8f9fa' },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 12,
-    paddingVertical: 12,
-    borderBottomWidth: 0.5,
-    borderBottomColor: '#e0e0e0',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    backgroundColor: '#fff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#f1f1f1',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.02,
+    shadowRadius: 5,
   },
-  backBtn: { padding: 8, width: 40 },
-  title: { fontSize: 18, fontWeight: '700', color: '#222' },
-  center: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 16 },
-  listHeader: { paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 0.5, borderBottomColor: '#eee' },
-  countText: { fontSize: 20, fontWeight: '800', color: '#222' },
-  countLabel: { fontSize: 12, color: '#666', marginTop: 2 },
+  backBtn: { padding: 4 },
+  title: { fontSize: 18, fontWeight: '700', color: '#1f2937' },
+  center: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32, paddingVertical: 60 },
+  
+  premiumCardContainer: {
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 8,
+  },
+  premiumCard: {
+    borderRadius: 16,
+    padding: 20,
+    shadowColor: '#FF8D00',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 6,
+  },
+  premiumCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  premiumCardLabel: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#fff',
+    letterSpacing: 1.2,
+  },
+  premiumStatsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-around',
+  },
+  premiumStatItem: {
+    alignItems: 'center',
+    flex: 1,
+  },
+  premiumStatValue: {
+    fontSize: 26,
+    fontWeight: '800',
+    color: '#fff',
+  },
+  premiumStatLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: 'rgba(255, 255, 255, 0.8)',
+    marginTop: 4,
+  },
+  premiumStatDivider: {
+    width: 1,
+    height: 32,
+    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+  },
   
   countryGroup: {
-    borderBottomWidth: 0.5,
-    borderBottomColor: '#f0f0f0',
-    paddingVertical: 8,
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    marginHorizontal: 16,
+    marginVertical: 8,
+    padding: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.03,
+    shadowRadius: 8,
+    elevation: 2,
+    borderWidth: 1,
+    borderColor: '#f3f4f6',
   },
   countryHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f3f4f6',
+    paddingBottom: 12,
+    marginBottom: 8,
   },
   stampIconWrap: {
-    width: 60,
-    height: 60,
-    borderRadius: 10,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     backgroundColor: '#fff',
-    padding: 3,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-  },
-  stampIconGrad: {
-    flex: 1,
-    borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#ffe6cc',
     position: 'relative',
+  },
+  stampIconGrad: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: 'rgba(255, 141, 0, 0.06)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
   },
   miniBadge: {
     position: 'absolute',
-    bottom: -2,
-    right: -2,
-    backgroundColor: '#fff',
-    borderRadius: 6,
-    paddingHorizontal: 3,
-    elevation: 2,
+    top: -4,
+    right: -4,
+    backgroundColor: '#FF8D00',
+    borderRadius: 8,
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    borderWidth: 1.5,
+    borderColor: '#fff',
   },
-  miniBadgeText: { fontSize: 8, fontWeight: '800', color: '#FF8D00' },
-  countryTitle: { fontSize: 16, fontWeight: '700', color: '#222' },
+  miniBadgeText: { fontSize: 8, fontWeight: '800', color: '#fff' },
+  countryTitle: { fontSize: 16, fontWeight: '700', color: '#1f2937' },
   
   cityRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingLeft: 88, // 16 (padding) + 60 (icon) + 12 (margin)
-    paddingRight: 16,
     paddingVertical: 8,
-  },
-  cityDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: '#e74c3c',
-    marginRight: 10,
+    paddingLeft: 4,
   },
   cityInfo: {
     flex: 1,
   },
-  cityTitle: { fontSize: 15, fontWeight: '600', color: '#333' },
-  cityDate: { fontSize: 12, color: '#666', marginTop: 2 },
+  cityTitle: { fontSize: 14, fontWeight: '600', color: '#374151' },
+  cityDate: { fontSize: 11, color: '#9ca3af', marginTop: 2 },
   cityBadge: {
-    backgroundColor: '#f0f0f0',
-    borderRadius: 10,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
+    backgroundColor: '#fff4eb',
+    borderRadius: 12,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
     marginLeft: 8,
   },
-  cityBadgeText: { fontSize: 10, fontWeight: '700', color: '#555' },
+  cityBadgeText: { fontSize: 10, fontWeight: '700', color: '#FF8D00' },
 
-  emptyTitle: { fontSize: 16, fontWeight: '700', color: '#222' },
-  emptyText: { fontSize: 13, color: '#777', marginTop: 6, textAlign: 'center' },
-  privateTitle: { fontSize: 16, fontWeight: '700', color: '#222' },
-  privateText: { fontSize: 13, color: '#777', marginTop: 6, textAlign: 'center' },
+  emptyTitle: { fontSize: 16, fontWeight: '700', color: '#1f2937', marginTop: 12 },
+  emptyText: { fontSize: 13, color: '#6b7280', marginTop: 6, textAlign: 'center' },
+  privateTitle: { fontSize: 16, fontWeight: '700', color: '#1f2937', marginTop: 12 },
+  privateText: { fontSize: 13, color: '#6b7280', marginTop: 6, textAlign: 'center' },
 });
