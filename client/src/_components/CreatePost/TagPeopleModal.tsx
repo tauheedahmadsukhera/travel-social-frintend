@@ -84,7 +84,7 @@ const TagPeopleModal: React.FC<TagPeopleModalProps> = ({
 
             <View style={{ flex: 1, paddingHorizontal: 20 }}>
               {loadingUserResults ? (
-                <ActivityIndicator size="small" color="#0095f6" style={{ marginTop: 20 }} />
+                <ActivityIndicator size="small" color="#FF8D00" style={{ marginTop: 20 }} />
               ) : (
                 <FlatList
                   data={userResults}
@@ -110,7 +110,7 @@ const TagPeopleModal: React.FC<TagPeopleModalProps> = ({
                           {!!item.userName && <Text style={{ fontSize: 13, color: '#666', marginTop: 2 }} numberOfLines={1}>@{item.userName}</Text>}
                         </View>
                         {isSelected && (
-                          <View style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: '#0095f6', alignItems: 'center', justifyContent: 'center' }}>
+                          <View style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: '#FF8D00', alignItems: 'center', justifyContent: 'center' }}>
                             <Feather name="check" size={14} color="#fff" />
                           </View>
                         )}
@@ -127,7 +127,7 @@ const TagPeopleModal: React.FC<TagPeopleModalProps> = ({
                 </TouchableOpacity>
                 <TouchableOpacity
                   onPress={onClose}
-                  style={{ backgroundColor: '#0095f6', borderRadius: 8, paddingHorizontal: 24, paddingVertical: 10 }}
+                  style={{ backgroundColor: '#FF8D00', borderRadius: 8, paddingHorizontal: 24, paddingVertical: 10 }}
                 >
                   <Text style={{ color: '#fff', fontWeight: '600', fontSize: 15 }}>Save</Text>
                 </TouchableOpacity>

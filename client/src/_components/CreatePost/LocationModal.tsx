@@ -87,7 +87,7 @@ const LocationModal: React.FC<LocationModalProps> = ({
 
             <View style={{ flex: 1, paddingHorizontal: 20 }}>
               {loadingLocationResults ? (
-                <ActivityIndicator size="small" color="#0095f6" style={{ marginTop: 20 }} />
+                <ActivityIndicator size="small" color="#FF8D00" style={{ marginTop: 20 }} />
               ) : (
                 <FlatList
                   data={locationResults}
@@ -127,7 +127,7 @@ const LocationModal: React.FC<LocationModalProps> = ({
                 </TouchableOpacity>
                 <TouchableOpacity
                   onPress={onClose}
-                  style={{ backgroundColor: '#0095f6', borderRadius: 8, paddingHorizontal: 24, paddingVertical: 10 }}
+                  style={{ backgroundColor: '#FF8D00', borderRadius: 8, paddingHorizontal: 24, paddingVertical: 10 }}
                 >
                   <Text style={{ color: '#fff', fontWeight: '600', fontSize: 15 }}>Save</Text>
                 </TouchableOpacity>

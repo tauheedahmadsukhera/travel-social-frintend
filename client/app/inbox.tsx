@@ -804,7 +804,7 @@ function Inbox() {
       return (
         <SafeAreaView style={[styles.container, { alignItems: 'center', justifyContent: 'center' }]}>
           {userLoading ? (
-            <ActivityIndicator size="large" color="#007aff" />
+            <ActivityIndicator size="large" color="#FF8D00" />
           ) : (
             <Text style={{ color: '#999', fontSize: 18, marginTop: 40 }}>
               Please sign in to view your messages.
@@ -993,7 +993,7 @@ function Inbox() {
                 {`Status: Connected as ${userId?.substring(0, 8)}... (Found: ${conversations?.length || 0})`}
               </Text>
               <TouchableOpacity 
-                style={{ backgroundColor: '#3797f0', paddingHorizontal: 20, paddingVertical: 10, borderRadius: 8, marginBottom: 12 }}
+                style={{ backgroundColor: '#FF8D00', paddingHorizontal: 20, paddingVertical: 10, borderRadius: 8, marginBottom: 12 }}
                 onPress={() => { hapticLight(); setCreateGroupVisible(true); }}
               >
                 <Text style={{ color: '#fff', fontWeight: '600' }}>Start Chatting</Text>
@@ -1002,7 +1002,7 @@ function Inbox() {
                 style={{ paddingHorizontal: 20, paddingVertical: 10 }}
                 onPress={() => { hapticLight(); refreshInbox(); }}
               >
-                <Text style={{ color: '#3797f0', fontWeight: '600' }}>Refresh Chats</Text>
+                <Text style={{ color: '#FF8D00', fontWeight: '600' }}>Refresh Chats</Text>
               </TouchableOpacity>
             </View>
           ) : null
@@ -1012,7 +1012,7 @@ function Inbox() {
           <RefreshControl
             refreshing={polledLoading && (!conversations || conversations.length === 0)}
             onRefresh={refreshInbox}
-            tintColor="#007aff"
+            tintColor="#FF8D00"
           />
         }
         estimatedItemSize={80}
@@ -1083,7 +1083,7 @@ const styles = StyleSheet.create({
     borderColor: '#fff',
   },
   avatarUnreadRing: {
-    borderColor: '#3797f0',
+    borderColor: '#FF8D00',
     borderWidth: 3,
   },
   unreadDot: {
@@ -1093,7 +1093,7 @@ const styles = StyleSheet.create({
     width: 12,
     height: 12,
     borderRadius: 6,
-    backgroundColor: '#3797f0',
+    backgroundColor: '#FF8D00',
     borderWidth: 2,
     borderColor: '#fff',
     zIndex: 2,
@@ -1250,7 +1250,7 @@ const styles = StyleSheet.create({
   createGroupBtn: {
     marginTop: 12,
     borderRadius: 12,
-    backgroundColor: '#0095f6',
+    backgroundColor: '#FF8D00',
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 13,
@@ -1270,7 +1270,7 @@ const styles = StyleSheet.create({
   },
   actionText: {
     marginLeft: 6,
-    color: '#007aff',
+    color: '#FF8D00',
     fontWeight: '600',
     fontSize: 14,
   },
@@ -1380,7 +1380,7 @@ const styles = StyleSheet.create({
   },
   avatarRingUnread: {
     borderWidth: 2,
-    borderColor: '#007aff'
+    borderColor: '#FF8D00'
   },
   avatar: {
     width: 56,
@@ -1428,7 +1428,7 @@ const styles = StyleSheet.create({
     fontWeight: '600'
   },
   unreadBadge: {
-    backgroundColor: '#007aff',
+    backgroundColor: '#FF8D00',
     minWidth: 20,
     height: 20,
     borderRadius: 10,
@@ -1560,7 +1560,7 @@ const styles = StyleSheet.create({
     width: 10,
     height: 10,
     borderRadius: 5,
-    backgroundColor: '#3797f0',
+    backgroundColor: '#FF8D00',
   },
   headerRow: {
     flexDirection: 'row',

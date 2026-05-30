@@ -262,7 +262,7 @@ export const CreateGroupModal: React.FC<CreateGroupModalProps> = ({
                     <Feather
                       name={selected ? 'check-circle' : 'circle'}
                       size={18}
-                      color={selected ? '#0095f6' : '#9ca3af'}
+                      color={selected ? '#FF8D00' : '#9ca3af'}
                     />
                   </TouchableOpacity>
                 );
@@ -403,7 +403,7 @@ const styles = StyleSheet.create({
   createGroupBtn: {
     marginTop: 12,
     borderRadius: 12,
-    backgroundColor: '#0095f6',
+    backgroundColor: '#FF8D00',
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 13,

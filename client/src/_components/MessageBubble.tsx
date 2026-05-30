@@ -4,6 +4,7 @@ import { Image as ExpoImage } from 'expo-image';
 import { Audio } from 'expo-av';
 import * as FileSystem from 'expo-file-system';
 import { Feather, Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { DEFAULT_AVATAR_URL } from '@/lib/api';
 import { apiService } from '@/src/_services/apiService';
 
@@ -469,6 +470,14 @@ function MessageBubbleInner({
               }
             ]}
           >
+            {isSelf && (resolvedMediaType !== 'post' && resolvedMediaType !== 'story') && (
+              <LinearGradient
+                colors={['#FBBC04', '#FF8D00']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={StyleSheet.absoluteFillObject}
+              />
+            )}
             {resolvedMediaType === 'image' && resolvedMediaUrl && (
               <TouchableOpacity onPress={() => onPressImage?.(resolvedMediaUrl)}>
                 <Image source={{ uri: resolvedMediaUrl }} style={styles.msgImage} />
@@ -750,8 +759,9 @@ const styles = StyleSheet.create({
     borderBottomLeftRadius: 4,
   },
   msgBubbleRight: {
-    backgroundColor: '#0095f6',
+    backgroundColor: '#FF8D00',
     borderBottomRightRadius: 4,
+    overflow: 'hidden',
   },
   msgBubbleCompact: {
     borderRadius: 18,
@@ -808,7 +818,7 @@ const styles = StyleSheet.create({
     padding: 6,
     marginBottom: 4,
     borderLeftWidth: 3,
-    borderLeftColor: '#3797f0',
+    borderLeftColor: '#FF8D00',
   },
   replyBoxSelf: {
     backgroundColor: 'rgba(255,255,255,0.15)',

@@ -114,7 +114,7 @@ const VisibilityModal: React.FC<VisibilityModalProps> = ({
                 }}
               >
                 <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                  <View style={{ width: 44, height: 44, borderRadius: 12, backgroundColor: isSelected ? '#0095f6' : '#f0f0f0', alignItems: 'center', justifyContent: 'center', marginRight: 16 }}>
+                  <View style={{ width: 44, height: 44, borderRadius: 12, backgroundColor: isSelected ? '#FF8D00' : '#f0f0f0', alignItems: 'center', justifyContent: 'center', marginRight: 16 }}>
                     <Feather name={iconName as any} size={20} color={isSelected ? '#fff' : '#000'} />
                   </View>
                   <View>
@@ -127,7 +127,7 @@ const VisibilityModal: React.FC<VisibilityModalProps> = ({
                   </View>
                 </View>
                 {isSelected && (
-                  <View style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: '#0095f6', alignItems: 'center', justifyContent: 'center' }}>
+                  <View style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: '#FF8D00', alignItems: 'center', justifyContent: 'center' }}>
                     <Feather name="check" size={14} color="#fff" />
                   </View>
                 )}
@@ -141,7 +141,7 @@ const VisibilityModal: React.FC<VisibilityModalProps> = ({
             </TouchableOpacity>
             <TouchableOpacity
               onPress={onClose}
-              style={{ backgroundColor: '#0095f6', borderRadius: 8, paddingHorizontal: 24, paddingVertical: 10 }}
+              style={{ backgroundColor: '#FF8D00', borderRadius: 8, paddingHorizontal: 24, paddingVertical: 10 }}
             >
               <Text style={{ color: '#fff', fontWeight: '600', fontSize: 15 }}>Save</Text>
             </TouchableOpacity>

@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, TextInput, TouchableOpacity, StyleSheet, Text, Animated } from 'react-native';
 import { Feather, Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 
 type DMInputProps = {
   input: string;
@@ -56,9 +57,14 @@ const DMInput: React.FC<DMInputProps> = ({
       <View style={styles.inputRow}>
         {!input.trim() && !recording && (
           <TouchableOpacity style={styles.iconBtn} onPress={onCameraPress}>
-            <View style={styles.cameraCircle}>
+            <LinearGradient
+              colors={['#FBBC04', '#FF8D00']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={styles.cameraCircle}
+            >
               <Feather name="camera" size={20} color="#fff" />
-            </View>
+            </LinearGradient>
           </TouchableOpacity>
         )}
 
@@ -123,7 +129,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     marginBottom: 10,
     borderLeftWidth: 4,
-    borderLeftColor: '#0095f6',
+    borderLeftColor: '#FF8D00',
   },
   replyContent: {
     flex: 1,
@@ -131,7 +137,7 @@ const styles = StyleSheet.create({
   replyLabel: {
     fontSize: 11,
     fontWeight: '800',
-    color: '#0095f6',
+    color: '#FF8D00',
     marginBottom: 2,
     textTransform: 'uppercase',
   },
@@ -150,7 +156,6 @@ const styles = StyleSheet.create({
     width: 38,
     height: 38,
     borderRadius: 19,
-    backgroundColor: '#0095f6',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -181,7 +186,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4,
   },
   sendBtnText: {
-    color: '#0095f6',
+    color: '#FF8D00',
     fontWeight: '700',
     fontSize: 16,
   },

@@ -3,7 +3,7 @@ const { z } = require('zod');
 const createGroupSchema = z.object({
   body: z.object({
     name: z.string().min(1, 'Group name is required'),
-    type: z.enum(['custom', 'social', 'travel']).optional().default('custom'),
+    type: z.enum(['friends', 'family', 'custom']).optional().default('custom'),
     members: z.array(z.string()).optional(),
   })
 });
@@ -11,7 +11,7 @@ const createGroupSchema = z.object({
 const updateGroupSchema = z.object({
   body: z.object({
     name: z.string().min(1).optional(),
-    type: z.enum(['custom', 'social', 'travel']).optional(),
+    type: z.enum(['friends', 'family', 'custom']).optional(),
     members: z.array(z.string()).optional(),
   })
 });

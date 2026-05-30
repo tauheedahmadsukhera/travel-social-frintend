@@ -138,7 +138,7 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: '#0095f6',
+    backgroundColor: '#FF8D00',
     marginRight: 12,
   },
   onlineDot: {

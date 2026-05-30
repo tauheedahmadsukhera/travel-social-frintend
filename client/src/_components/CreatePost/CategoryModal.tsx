@@ -122,7 +122,7 @@ const CategoryModal: React.FC<CategoryModalProps> = ({
                 </TouchableOpacity>
                 <TouchableOpacity
                   onPress={onClose}
-                  style={{ backgroundColor: '#0095f6', borderRadius: 8, paddingHorizontal: 24, paddingVertical: 10 }}
+                  style={{ backgroundColor: '#FF8D00', borderRadius: 8, paddingHorizontal: 24, paddingVertical: 10 }}
                 >
                   <Text style={{ color: '#fff', fontWeight: '600', fontSize: 15 }}>Save</Text>
                 </TouchableOpacity>

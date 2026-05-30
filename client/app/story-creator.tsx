@@ -496,7 +496,7 @@ const styles = StyleSheet.create({
     // Next button
     nextBtn: {
         flexDirection: 'row', alignItems: 'center', gap: 2,
-        backgroundColor: '#0095f6', paddingHorizontal: 14, paddingVertical: 7, borderRadius: 20,
+        backgroundColor: '#FF8D00', paddingHorizontal: 14, paddingVertical: 7, borderRadius: 20,
     },
     nextBtnDisabled: { opacity: 0.4 },
     nextBtnText: { color: '#fff', fontSize: 14, fontWeight: '700' },
@@ -587,11 +587,11 @@ const styles = StyleSheet.create({
         paddingHorizontal: 4, paddingVertical: 2, gap: 3,
     },
     videoDuration: { color: '#000', fontSize: 10, fontWeight: '600' },
-    selectedOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,149,246,0.15)' },
+    selectedOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(255,141,0,0.15)' },
     selectedDot: {
         position: 'absolute', top: 6, right: 6,
         width: 22, height: 22, borderRadius: 11,
-        backgroundColor: '#0095f6', alignItems: 'center', justifyContent: 'center',
+        backgroundColor: '#FF8D00', alignItems: 'center', justifyContent: 'center',
         borderWidth: 1.5, borderColor: '#fff',
     },
 
@@ -609,7 +609,7 @@ const styles = StyleSheet.create({
     },
     doneBtn: {
         paddingHorizontal: 16, paddingVertical: 8,
-        backgroundColor: '#0095f6', borderRadius: 20,
+        backgroundColor: '#FF8D00', borderRadius: 20,
     },
     doneBtnText: { color: '#fff', fontWeight: '700', fontSize: 15 },
     textEditorPreview: {

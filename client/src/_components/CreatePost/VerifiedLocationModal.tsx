@@ -124,7 +124,7 @@ const VerifiedLocationModal: React.FC<VerifiedLocationModalProps> = ({
                       return <Text style={{ color: '#888', marginBottom: 12, textAlign: 'left' }}>Enable location permissions to see nearby verified places.</Text>;
                     }
                     if (uiItem.type === 'loading') {
-                      return <ActivityIndicator size="small" color="#0095f6" style={{ marginVertical: 10 }} />;
+                      return <ActivityIndicator size="small" color="#FF8D00" style={{ marginVertical: 10 }} />;
                     }
                     return null;
                   }
@@ -143,11 +143,11 @@ const VerifiedLocationModal: React.FC<VerifiedLocationModalProps> = ({
                         <Feather name="map-pin" size={18} color="#000" />
                       </View>
                       <View style={{ flex: 1 }}>
-                        <Text style={{ fontSize: 15, fontWeight: '600', color: isSelected ? '#0095f6' : '#111' }}>{(item as any).name}</Text>
+                        <Text style={{ fontSize: 15, fontWeight: '600', color: isSelected ? '#FF8D00' : '#111' }}>{(item as any).name}</Text>
                         <Text style={{ color: '#666', fontSize: 13, marginTop: 2 }}>{(item as any).address}</Text>
                       </View>
                       {isSelected && (
-                        <Feather name="check" size={20} color="#0095f6" style={{ marginLeft: 10 }} />
+                        <Feather name="check" size={20} color="#FF8D00" style={{ marginLeft: 10 }} />
                       )}
                     </TouchableOpacity>
                   );
@@ -173,7 +173,7 @@ const VerifiedLocationModal: React.FC<VerifiedLocationModalProps> = ({
                   </TouchableOpacity>
                   <TouchableOpacity
                     onPress={onClose}
-                    style={{ backgroundColor: '#0095f6', borderRadius: 8, paddingHorizontal: 20, paddingVertical: 10 }}
+                    style={{ backgroundColor: '#FF8D00', borderRadius: 8, paddingHorizontal: 20, paddingVertical: 10 }}
                   >
                     <Text style={{ color: '#fff', fontWeight: '600', fontSize: 15 }}>Save</Text>
                   </TouchableOpacity>

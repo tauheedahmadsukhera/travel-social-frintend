@@ -531,7 +531,7 @@ export default function DM() {
        return (
          <View style={styles.centered}>
            <Text style={{ color: '#94a3b8', marginBottom: 12 }}>Could not start chat</Text>
-           <TouchableOpacity onPress={() => router.back()} style={{ backgroundColor: '#3797f0', padding: 10, borderRadius: 8 }}>
+           <TouchableOpacity onPress={() => router.back()} style={{ backgroundColor: '#FF8D00', padding: 10, borderRadius: 8 }}>
              <Text style={{ color: '#fff' }}>Go Back</Text>
            </TouchableOpacity>
          </View>
