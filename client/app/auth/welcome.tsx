@@ -72,7 +72,7 @@ export default function WelcomeScreen() {
         bounces={false}
       >
         <View style={styles.content}>
-          <AuthBrandHeader variant="welcome" subtitle="Please login to your account" />
+          <AuthBrandHeader variant="welcome" subtitle="Discover the planets!" />
 
           {/* Main Action Buttons */}
           <View style={styles.buttonContainer}>
