@@ -92,7 +92,7 @@ export default function UserLocationsScreen() {
     String(val || '').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 
   const groupedLocations = useMemo(() => {
-    const countryMap = new Map<string, { title: string, countryCode: string, data: Stamp[], latest: number, hasCountryStamp: boolean, count: number }>();
+    const countryMap = new Map<string, { title: string, countryCode: string, data: Stamp[], latest: number, firstAdded: number, hasCountryStamp: boolean, count: number }>();
 
     locations.forEach(stamp => {
       let cName = '';
@@ -110,6 +110,7 @@ export default function UserLocationsScreen() {
           countryCode: stamp.countryCode || 'XX',
           data: [],
           latest: 0,
+          firstAdded: 0,
           hasCountryStamp: false,
           count: 0
         });
@@ -126,7 +127,12 @@ export default function UserLocationsScreen() {
       }
 
       const ts = stamp.createdAt ? new Date(stamp.createdAt).getTime() : 0;
-      if (ts > cData.latest) cData.latest = ts;
+      if (ts > 0) {
+        if (ts > cData.latest) cData.latest = ts;
+        if (cData.firstAdded === 0 || ts < cData.firstAdded) {
+          cData.firstAdded = ts;
+        }
+      }
 
       if (stamp.type === 'country') {
         cData.hasCountryStamp = true;
@@ -219,6 +225,11 @@ export default function UserLocationsScreen() {
                   </View>
                   <View style={{ flex: 1, marginLeft: 12 }}>
                     <Text style={styles.countryTitle}>{group.title}</Text>
+                    {group.firstAdded > 0 && (
+                      <Text style={styles.countryDate}>
+                        Added on {new Date(group.firstAdded).toLocaleDateString()}
+                      </Text>
+                    )}
                   </View>
                 </View>
 
@@ -388,6 +399,7 @@ const styles = StyleSheet.create({
   },
   miniBadgeText: { fontSize: 8, fontWeight: '800', color: '#fff' },
   countryTitle: { fontSize: 16, fontWeight: '700', color: '#1f2937' },
+  countryDate: { fontSize: 11, color: '#9ca3af', marginTop: 2 },
   
   cityRow: {
     flexDirection: 'row',
