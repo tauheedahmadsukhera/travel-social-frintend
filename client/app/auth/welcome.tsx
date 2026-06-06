@@ -72,7 +72,7 @@ export default function WelcomeScreen() {
         bounces={false}
       >
         <View style={styles.content}>
-          <AuthBrandHeader variant="welcome" subtitle="Discover the planets!" />
+          <AuthBrandHeader variant="welcome" subtitle="Discover the planet !" />
 
           {/* Main Action Buttons */}
           <View style={styles.buttonContainer}>
@@ -135,7 +135,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center', // Vertically center all layout blocks
   },
   buttonContainer: {
-    marginTop: 15,
+    marginTop: 4,
     marginBottom: 3,
   },
   mainButton: {

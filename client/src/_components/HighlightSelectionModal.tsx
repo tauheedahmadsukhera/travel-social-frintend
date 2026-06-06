@@ -151,7 +151,7 @@ const styles = StyleSheet.create({
   newBtnText: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#007aff',
+    color: '#FF8D00',
   },
   listContent: {
     paddingHorizontal: 20,
@@ -210,7 +210,7 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
   createButton: {
-    backgroundColor: '#2b5a9e',
+    backgroundColor: '#FF8D00',
     paddingVertical: 14,
     paddingHorizontal: 30,
     borderRadius: 10,

@@ -219,7 +219,7 @@ export default function PhoneLoginScreen() {
               <View style={styles.passwordInputWrapper}>
                 <TextInput
                   style={styles.passwordInput}
-                  placeholder="Enter your password"
+                  placeholder="Please enter a password"
                   placeholderTextColor="#999"
                   value={password}
                   onChangeText={setPassword}

@@ -92,11 +92,7 @@ const VisibilityModal: React.FC<VisibilityModalProps> = ({
             const isSelected = option.groupId
               ? selectedGroupId === option.groupId
               : visibility === 'Everyone' && !selectedGroupId;
-            const iconName =
-              option.type === 'everyone' ? 'globe'
-                : option.type === 'friends' ? 'users'
-                  : option.type === 'family' ? 'home'
-                    : 'layers';
+            const iconName = option.type === 'everyone' ? 'globe' : 'users';
             return (
               <TouchableOpacity
                 key={option.groupId || `everyone-${idx}`}

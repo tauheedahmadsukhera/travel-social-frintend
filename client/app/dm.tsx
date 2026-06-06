@@ -313,7 +313,17 @@ export default function DM() {
 
     try {
       let uploadRes: any;
-      if (typeof uri === 'string' && uri.startsWith('file://')) {
+      const isLocalUri = typeof uri === 'string' && (
+        uri.startsWith('file://') ||
+        uri.startsWith('ph://') ||
+        uri.startsWith('assets-library://') ||
+        uri.startsWith('content://') ||
+        uri.startsWith('/')
+      );
+      if (isLocalUri) {
+        uploadRes = await uploadMedia(uri, type as any);
+      } else if (typeof uri === 'string' && (uri.startsWith('http://') || uri.startsWith('https://'))) {
+        // Remote URI — uploadMedia handles downloading/re-uploading
         uploadRes = await uploadMedia(uri, type as any);
       } else {
         const base64 = await FileSystem.readAsStringAsync(uri, { encoding: FileSystem.EncodingType.Base64 });

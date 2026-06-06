@@ -34,6 +34,7 @@ export default function PostScreen() {
   const [taggedUsers, setTaggedUsers] = useState<any[]>([]);
   const [selectedImages, setSelectedImages] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
+  const [aspectRatio, setAspectRatio] = useState<number | undefined>(undefined);
 
   const [showImagePicker, setShowImagePicker] = useState(false);
   const [showLocationModal, setShowLocationModal] = useState(false);
@@ -115,6 +116,10 @@ export default function PostScreen() {
         }
         const uris = result.assets.map((asset: any) => asset.uri);
         setSelectedImages(uris);
+        const firstAsset = result.assets[0];
+        if (firstAsset.width && firstAsset.height) {
+          setAspectRatio(firstAsset.width / firstAsset.height);
+        }
         setShowImagePicker(false);
       }
     } catch (err) {
@@ -139,7 +144,24 @@ export default function PostScreen() {
     
     setLoading(true);
     try {
-      const result = await createPost(user.uid, selectedImages, caption, location?.name || '');
+      const isVideo = selectedImages.length > 0 && (selectedImages[0].toLowerCase().endsWith('.mp4') || selectedImages[0].toLowerCase().endsWith('.mov') || selectedImages[0].toLowerCase().includes('video'));
+      const result = await createPost(
+        user.uid,
+        selectedImages,
+        caption,
+        location?.name || '',
+        isVideo ? 'video' : 'image',
+        location || undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        aspectRatio
+      );
       if (result && typeof result.success === 'boolean' && result.success) {
         hapticSuccess();
         showSuccess('Post created successfully!', {

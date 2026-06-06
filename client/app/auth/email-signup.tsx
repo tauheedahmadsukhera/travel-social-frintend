@@ -1,21 +1,41 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
-import React, { useState } from 'react';
-import { StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import React, { useEffect, useState } from 'react';
+import { ActivityIndicator, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { signUpUser } from '../../lib/firebaseHelpers';
+import { checkUsernameAvailability } from '../../services/usernameAuthService';
 import { AuthBrandHeader } from '@/src/_components/auth/AuthBrandHeader';
 import { AuthKeyboardScroll } from '@/src/_components/auth/AuthKeyboardScroll';
 import CustomButton from '@/src/_components/auth/CustomButton';
-import SocialButton from '@/src/_components/auth/SocialButton';
 import { safeRouterBack } from '@/lib/safeRouterBack';
 
 export default function EmailSignUpScreen() {
   const router = useRouter();
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [loading, setLoading] = useState(false);
+  const { prefillEmail } = useLocalSearchParams<{ prefillEmail?: string }>();
+  const [email, setEmail] = useState(prefillEmail || '');
+  const [username, setUsername] = useState('');
+  const [name, setName] = useState('');
+  const [checkingUsername, setCheckingUsername] = useState(false);
+  const [usernameAvailable, setUsernameAvailable] = useState<boolean | null>(null);
   const [error, setError] = useState('');
+
+  // Check username availability with debounce
+  useEffect(() => {
+    if (!username || username.trim().length < 3) {
+      setUsernameAvailable(null);
+      return;
+    }
+
+    const timer = setTimeout(async () => {
+      setCheckingUsername(true);
+      const available = await checkUsernameAvailability(username);
+      setUsernameAvailable(available);
+      setCheckingUsername(false);
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, [username]);
 
   const handleNext = async () => {
     setError('');
@@ -26,30 +46,21 @@ export default function EmailSignUpScreen() {
       return;
     }
 
-    if (!password || password.length < 6) {
-      setError('Password must be at least 6 characters');
+    if (!username || username.trim().length < 3) {
+      setError('Username must be at least 3 characters');
       return;
     }
 
-    setLoading(true);
-
-    try {
-      // Use email username as name for now
-      const username = email.split('@')[0];
-
-      // Enable email verification (send verification email)
-      const result = await signUpUser(email, password, username);
-
-      if (result.success) {
-        router.replace('/(tabs)/home');
-      } else {
-        setError(result.error || 'Sign up failed');
-      }
-    } catch (err: any) {
-      setError(err.message || 'Sign up failed');
-    } finally {
-      setLoading(false);
+    if (usernameAvailable === false) {
+      setError('Username is not available');
+      return;
     }
+
+    // Go to next step: enter password
+    router.push({
+      pathname: '/auth/password-signup',
+      params: { email, username, name }
+    });
   };
 
   return (
@@ -68,15 +79,14 @@ export default function EmailSignUpScreen() {
 
             {/* Title Section */}
             <View style={styles.titleSection}>
-              <AuthBrandHeader subtitle={`Let's keep it quick, 2 steps and you're in.`} />
+              <AuthBrandHeader subtitle="Start your journey." />
             </View>
 
             {/* Email Input */}
             <View style={styles.inputContainer}>
-              <Text style={styles.label}>By Email</Text>
               <TextInput
-                style={styles.input}
-                placeholder="Enter your email"
+                style={[styles.input, prefillEmail ? styles.inputLocked : null]}
+                placeholder="Please enter your email"
                 placeholderTextColor="#999"
                 value={email}
                 onChangeText={setEmail}
@@ -84,21 +94,55 @@ export default function EmailSignUpScreen() {
                 autoCapitalize="none"
                 autoCorrect={false}
                 spellCheck={false}
+                editable={!prefillEmail}
               />
             </View>
 
-            {/* Password Input */}
+
+
+            {/* Username Input */}
             <View style={styles.inputContainer}>
-              <Text style={styles.label}>Enter password</Text>
+              <View style={styles.inputWrapper}>
+                <TextInput
+                  style={[styles.input, styles.usernameInput]}
+                  placeholder="Please enter a username"
+                  placeholderTextColor="#999"
+                  value={username}
+                  onChangeText={setUsername}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  spellCheck={false}
+                />
+                {checkingUsername && (
+                  <ActivityIndicator size="small" color="#FF8D00" style={styles.inputIcon} />
+                )}
+                {!checkingUsername && usernameAvailable === true && username.length >= 3 && (
+                  <Ionicons name="checkmark-circle" size={20} color="#4CAF50" style={styles.inputIcon} />
+                )}
+                {!checkingUsername && usernameAvailable === false && username.length >= 3 && (
+                  <Ionicons name="close-circle" size={20} color="#f44336" style={styles.inputIcon} />
+                )}
+              </View>
+              {username.length >= 3 && usernameAvailable === false && (
+                <Text style={[styles.hint, { color: '#f44336' }]}>This username is not available</Text>
+              )}
+              {username.length >= 3 && usernameAvailable === true && (
+                <Text style={[styles.hint, { color: '#4CAF50' }]}>Username is available!</Text>
+              )}
+              {username.length > 0 && username.length < 3 && (
+                <Text style={styles.hint}>Username must be at least 3 characters</Text>
+              )}
+            </View>
+
+            {/* Name Input */}
+            <View style={styles.inputContainer}>
               <TextInput
                 style={styles.input}
-                placeholder="Enter password"
+                placeholder="Please enter your name (optional)"
                 placeholderTextColor="#999"
-                value={password}
-                onChangeText={setPassword}
-                secureTextEntry
+                value={name}
+                onChangeText={setName}
                 autoCorrect={false}
-                spellCheck={false}
               />
             </View>
 
@@ -116,37 +160,11 @@ export default function EmailSignUpScreen() {
 
             {/* Next Button */}
             <CustomButton
-              title={loading ? "Creating account..." : "Next"}
+              title="Next"
               onPress={handleNext}
               variant="primary"
               style={styles.nextButton}
-              loading={loading}
-              disabled={loading}
             />
-
-            {/* Social Login Options */}
-            <View style={styles.socialSection}>
-              <SocialButton
-                provider="google"
-                onPress={() => router.push('/auth/welcome')}
-                style={styles.socialButton}
-              />
-              <SocialButton
-                provider="apple"
-                onPress={() => router.push('/auth/welcome')}
-                style={styles.socialButton}
-              />
-              <SocialButton
-                provider="tiktok"
-                onPress={() => router.push('/auth/welcome')}
-                style={styles.socialButton}
-              />
-              <SocialButton
-                provider="snapchat"
-                onPress={() => router.push('/auth/welcome')}
-                style={styles.socialButton}
-              />
-            </View>
 
             {/* Footer */}
             <View style={styles.footer}>
@@ -206,6 +224,28 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#000',
   },
+  inputLocked: {
+    backgroundColor: '#ececec',
+    color: '#555',
+  },
+  inputWrapper: {
+    position: 'relative',
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  usernameInput: {
+    flex: 1,
+    paddingRight: 45,
+  },
+  inputIcon: {
+    position: 'absolute',
+    right: 15,
+  },
+  hint: {
+    fontSize: 12,
+    color: '#FF8D00',
+    marginTop: 4,
+  },
   errorText: {
     color: '#e74c3c',
     fontSize: 14,
@@ -214,12 +254,6 @@ const styles = StyleSheet.create({
   nextButton: {
     marginBottom: 15,
     marginTop: 5,
-  },
-  socialSection: {
-    marginBottom: 15,
-  },
-  socialButton: {
-    marginBottom: 8,
   },
   footer: {
     alignItems: 'center',

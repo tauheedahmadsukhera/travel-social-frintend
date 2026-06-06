@@ -42,6 +42,8 @@ export type GalleryAsset = {
   uri: string;
   mediaType: 'photo' | 'video';
   duration?: number;
+  width?: number;
+  height?: number;
 };
 
 export const isVideoUri = (uri: string, galleryAssets?: GalleryAsset[]) => {
@@ -65,6 +67,7 @@ export const useCreatePost = (params: any = {}) => {
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
   const [userGroups, setUserGroups] = useState<any[]>([]);
   const [selectedImages, setSelectedImages] = useState<string[]>([]);
+  const [cameraAssetDimensions, setCameraAssetDimensions] = useState<{ uri: string; width: number; height: number } | null>(null);
   const [location, setLocation] = useState<LocationType | null>(null);
   const [verifiedLocation, setVerifiedLocation] = useState<LocationType | null>(null);
   const [taggedUsers, setTaggedUsers] = useState<UserType[]>([]);
@@ -116,7 +119,9 @@ export const useCreatePost = (params: any = {}) => {
         id: String(a.id),
         uri: String(a.uri),
         mediaType: (a.mediaType === 'video' ? 'video' : 'photo') as "photo" | "video",
-        duration: a.duration
+        duration: a.duration,
+        width: a.width,
+        height: a.height
       }));
       setGalleryAssets(prev => after ? [...prev, ...mapped] : mapped);
       setGalleryEndCursor(page.endCursor);
@@ -298,7 +303,15 @@ export const useCreatePost = (params: any = {}) => {
       });
 
       if (!result.canceled && result.assets && result.assets.length > 0) {
-        setSelectedImages([result.assets[0].uri]);
+        const firstAsset = result.assets[0];
+        setSelectedImages([firstAsset.uri]);
+        if (firstAsset.width && firstAsset.height) {
+          setCameraAssetDimensions({
+            uri: firstAsset.uri,
+            width: firstAsset.width,
+            height: firstAsset.height
+          });
+        }
         setStep('preview');
       }
     } catch (e) {
@@ -330,6 +343,17 @@ export const useCreatePost = (params: any = {}) => {
 
       const isVideo = isVideoUri(selectedImages[0], galleryAssets);
       
+      const firstUri = selectedImages[0];
+      let finalAspectRatio: number | undefined = undefined;
+      if (cameraAssetDimensions && cameraAssetDimensions.uri === firstUri) {
+        finalAspectRatio = cameraAssetDimensions.width / cameraAssetDimensions.height;
+      } else {
+        const matchedAsset = galleryAssets.find(a => a.uri === firstUri);
+        if (matchedAsset && matchedAsset.width && matchedAsset.height) {
+          finalAspectRatio = matchedAsset.width / matchedAsset.height;
+        }
+      }
+      
       let res;
       if (params.editPostId) {
         res = await updatePost(
@@ -346,7 +370,9 @@ export const useCreatePost = (params: any = {}) => {
           [], // mentions
           visibility,
           selectedGroupId ? [selectedGroupId] : [],
-          postType === 'STORY' ? 'story' : 'post'
+          postType === 'STORY' ? 'story' : 'post',
+          undefined, // thumbnailUrlRaw
+          finalAspectRatio
         );
       } else {
         res = await createPost(
@@ -362,7 +388,9 @@ export const useCreatePost = (params: any = {}) => {
           [], // mentions
           visibility,
           selectedGroupId ? [selectedGroupId] : [],
-          postType === 'STORY' ? 'story' : 'post'
+          postType === 'STORY' ? 'story' : 'post',
+          undefined, // thumbnailUrlRaw
+          finalAspectRatio
         );
       }
 

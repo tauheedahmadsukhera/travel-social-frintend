@@ -111,7 +111,7 @@ const PostItem: React.FC<{ item: PostType }> = ({ item }) => {
           <Feather name="message-circle" size={22} color="#222" />
         </TouchableOpacity>
         <TouchableOpacity style={{ marginRight: 24 }} onPress={handleShare}>
-          <Feather name="send" size={22} color="#007aff" />
+          <Feather name="send" size={22} color="#FF8D00" />
         </TouchableOpacity>
         <View style={{ flex: 1 }} />
         <SaveButton post={{ ...item, saved }} />

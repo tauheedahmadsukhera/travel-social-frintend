@@ -712,7 +712,7 @@ export default function Profile({ userIdProp }: any) {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
         <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-          <ActivityIndicator size="large" color="#007aff" />
+          <ActivityIndicator size="large" color="#FF8D00" />
           <Text style={{ marginTop: 10, color: '#999' }}>Loading auth...</Text>
         </View>
       </SafeAreaView>
@@ -726,7 +726,7 @@ export default function Profile({ userIdProp }: any) {
         <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
           <Text style={{ fontSize: 18, color: '#999', marginBottom: 20 }}>Please log in to view your profile</Text>
           <TouchableOpacity
-            style={{ backgroundColor: '#007aff', paddingHorizontal: 30, paddingVertical: 12, borderRadius: 8 }}
+            style={{ backgroundColor: '#FF8D00', paddingHorizontal: 30, paddingVertical: 12, borderRadius: 8 }}
             onPress={() => {
               hapticLight();
               router.push('/login' as any);
@@ -821,7 +821,7 @@ export default function Profile({ userIdProp }: any) {
 
       {loading && (
         <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 99, backgroundColor: 'rgba(255,255,255,0.7)', justifyContent: 'center', alignItems: 'center' }}>
-          <ActivityIndicator size="large" color="#007aff" />
+          <ActivityIndicator size="large" color="#FF8D00" />
         </View>
       )}
 
@@ -915,7 +915,7 @@ const styles = StyleSheet.create({
   linkRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 4 },
   linkIconWrap: { width: 22, alignItems: 'center', justifyContent: 'center', marginRight: 8 },
   linkFavicon: { width: 16, height: 16, borderRadius: 4 },
-  linkText: { flex: 1, fontSize: 12, color: '#007aff' },
+  linkText: { flex: 1, fontSize: 12, color: '#FF8D00' },
   location: { fontSize: 12, color: '#666', marginTop: 3 },
   phone: { fontSize: 12, color: '#666', marginTop: 3 },
   interests: { fontSize: 12, color: '#666', marginTop: 3, fontStyle: 'italic' },

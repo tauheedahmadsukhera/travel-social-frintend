@@ -71,7 +71,7 @@ export default function UsernameLoginScreen() {
               <Text style={styles.label}>Enter your username</Text>
               <TextInput
                 style={styles.input}
-                placeholder="Enter"
+                placeholder="Please enter your username"
                 placeholderTextColor="#999"
                 value={username}
                 onChangeText={setUsername}

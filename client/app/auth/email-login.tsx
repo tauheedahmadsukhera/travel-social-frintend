@@ -130,7 +130,7 @@ export default function EmailLoginScreen() {
               <TextInput
                 testID="email-input"
                 style={styles.input}
-                placeholder="Enter"
+                placeholder="Please enter your email"
                 placeholderTextColor="#999"
                 value={email}
                 onChangeText={setEmail}
@@ -147,7 +147,7 @@ export default function EmailLoginScreen() {
               <TextInput
                 testID="password-input"
                 style={styles.input}
-                placeholder="Enter"
+                placeholder="Please enter a password"
                 placeholderTextColor="#999"
                 value={password}
                 onChangeText={setPassword}

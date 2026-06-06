@@ -26,7 +26,7 @@ const MediaPreview: React.FC<MediaPreviewProps> = ({ uris, thumbnails, isVideo, 
                 source={{ uri }}
                 style={{ flex: 1 }}
                 useNativeControls
-                resizeMode={ResizeMode.COVER}
+                resizeMode={ResizeMode.CONTAIN}
                 isLooping
                 shouldPlay={true}
                 isMuted={true}

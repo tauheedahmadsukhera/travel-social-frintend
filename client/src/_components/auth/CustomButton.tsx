@@ -1,7 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import React from 'react';
 import { ActivityIndicator, StyleSheet, Text, TextStyle, TouchableOpacity, ViewStyle, View } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
 
 interface CustomButtonProps {
 	title: string;
@@ -69,33 +68,16 @@ export default function CustomButton({
 			disabled={disabled || loading}
 			activeOpacity={0.8}
 		>
-			{(variant === 'primary' || variant === 'secondary') && (
-				<LinearGradient
-					colors={['#FBBC04', '#FF8D00']}
-					start={{ x: 0, y: 0 }}
-					end={{ x: 1, y: 0 }}
-					style={[
-						StyleSheet.absoluteFill,
-						{ borderRadius: 8 },
-						variant === 'secondary' && { padding: 1.5 }
-					]}
-				>
-					{variant === 'secondary' && (
-						<View style={{ flex: 1, backgroundColor: '#fff', borderRadius: 6.5 }} />
-					)}
-				</LinearGradient>
-			)}
-
 			{loading ? (
 				<ActivityIndicator color={variant === 'primary' ? '#fff' : (variant === 'secondary' ? '#FF8D00' : '#000')} />
 			) : (
 				<View style={styles.buttonContent}>
 					{icon && (
-						<Ionicons 
-							name={icon} 
-							size={20} 
-							color={iconColor || defaultIconColor} 
-							style={styles.icon} 
+						<Ionicons
+							name={icon}
+							size={20}
+							color={iconColor || defaultIconColor}
+							style={styles.icon}
 						/>
 					)}
 					<Text style={[getTextStyle(), textStyle]}>{title}</Text>
@@ -112,22 +94,22 @@ const styles = StyleSheet.create({
 		alignItems: 'center',
 		justifyContent: 'center',
 		paddingHorizontal: 20,
-		// Ensure inner absolute fill components respect borders if needed, but not strictly required
 	},
 	buttonContent: {
 		flexDirection: 'row',
 		alignItems: 'center',
 		justifyContent: 'center',
-		zIndex: 1, // Ensure text and icon appear above the absolute LinearGradient
 	},
 	icon: {
 		marginRight: 10,
 	},
 	primaryButton: {
-		borderWidth: 0,
+		backgroundColor: '#FF8D00',
 	},
 	secondaryButton: {
-		borderWidth: 0,
+		backgroundColor: '#fff',
+		borderWidth: 2,
+		borderColor: '#FF8D00',
 	},
 	outlineButton: {
 		backgroundColor: 'transparent',

@@ -16,7 +16,7 @@ const AcceptDeclineButtons: React.FC<AcceptDeclineButtonsProps> = ({ item, onAct
     <>
       <TouchableOpacity
         style={{
-          backgroundColor: '#007aff',
+          backgroundColor: '#FF8D00',
           paddingVertical: 6,
           paddingHorizontal: 18,
           borderRadius: 8,

@@ -221,13 +221,14 @@ export default function RootLayout() {
                 <Stack.Screen name="index" options={{ animation: 'none' }} />
                 <Stack.Screen name="auth/welcome" />
                 <Stack.Screen name="auth/login-options" />
+                <Stack.Screen name="auth/login-password" />
                 <Stack.Screen name="auth/phone-login" />
                 <Stack.Screen name="auth/email-login" />
-                <Stack.Screen name="auth/username-login" />
+
                 <Stack.Screen name="auth/signup-options" />
                 <Stack.Screen name="auth/phone-signup" />
                 <Stack.Screen name="auth/email-signup" />
-                <Stack.Screen name="auth/username-signup" />
+                <Stack.Screen name="auth/password-signup" />
                 <Stack.Screen name="auth/phone-otp" />
                 <Stack.Screen name="auth/forgot-password" />
                 <Stack.Screen name="auth/reset-otp" />

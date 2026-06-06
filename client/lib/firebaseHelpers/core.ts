@@ -160,7 +160,8 @@ export async function signInWithEmailPassword(
 export async function registerWithEmailPassword(
   email: string,
   password: string,
-  displayName?: string
+  displayName?: string,
+  username?: string
 ): Promise<{ success: boolean; user?: any; error?: any }> {
   try {
     console.log('[registerWithEmailPassword] Firebase register:', email);
@@ -182,7 +183,8 @@ export async function registerWithEmailPassword(
       firebaseUid: firebaseUser.uid,
       email: firebaseUser.email,
       displayName: displayName || email.split('@')[0],
-      avatar: firebaseUser.photoURL
+      avatar: firebaseUser.photoURL,
+      username: username || undefined
     });
 
     if (!response.success) {
@@ -191,7 +193,8 @@ export async function registerWithEmailPassword(
         firebaseUid: firebaseUser.uid,
         email: firebaseUser.email,
         displayName: displayName || email.split('@')[0],
-        avatar: firebaseUser.photoURL
+        avatar: firebaseUser.photoURL,
+        username: username || undefined
       });
     }
 
@@ -326,12 +329,12 @@ export async function signInUser(email: string, password: string) {
 /**
  * Sign up new user with Firebase then create in backend
  */
-export async function signUpUser(email: string, password: string, displayName?: string) {
+export async function signUpUser(email: string, password: string, displayName?: string, username?: string) {
   try {
     console.log('[signUpUser] Attempting to register:', email);
 
     // Use Firebase auth service (which calls backend)
-    const result = await registerWithEmailPassword(email, password, displayName);
+    const result = await registerWithEmailPassword(email, password, displayName, username);
 
     if (result.success) {
       console.log('[signUpUser] ✅ Registration successful');
@@ -570,13 +573,55 @@ export async function toggleUserPrivacy(uid: string, isPrivate: boolean) {
 }
 
 // ============= MEDIA =============
-export async function uploadMedia(uri: string, mediaType: 'image' | 'video' = 'image', path?: string): Promise<{ success: boolean; url?: string; error?: string }> {
+
+// Compress video if it exceeds maxSizeBytes (default 9MB to stay within Cloudinary 10MB limit)
+async function compressVideoIfNeeded(uri: string, maxSizeBytes: number = 9 * 1024 * 1024): Promise<string> {
+  try {
+    const FileSystem = require('expo-file-system');
+    const info = await FileSystem.getInfoAsync(uri, { size: true });
+    const fileSize = info?.size || 0;
+    
+    if (fileSize <= maxSizeBytes) {
+      console.log(`[compressVideo] ✅ File size ${(fileSize / 1024 / 1024).toFixed(1)}MB is within limit, no compression needed`);
+      return uri;
+    }
+    
+    console.log(`[compressVideo] 🔄 File size ${(fileSize / 1024 / 1024).toFixed(1)}MB exceeds ${(maxSizeBytes / 1024 / 1024).toFixed(0)}MB limit, compressing...`);
+    
+    const { Video: VideoCompressor } = require('react-native-compressor');
+    const compressedUri = await VideoCompressor.compress(uri, {
+      compressionMethod: 'auto',
+      maxSize: 720,
+      bitrate: 2000000, // 2 Mbps
+    });
+    
+    const compressedInfo = await FileSystem.getInfoAsync(compressedUri, { size: true });
+    console.log(`[compressVideo] ✅ Compressed from ${(fileSize / 1024 / 1024).toFixed(1)}MB to ${((compressedInfo?.size || 0) / 1024 / 1024).toFixed(1)}MB`);
+    
+    return compressedUri;
+  } catch (err: any) {
+    console.warn('[compressVideo] ⚠️ Compression failed, using original:', err?.message);
+    return uri;
+  }
+}
+
+export async function uploadMedia(
+  uri: string,
+  mediaType: 'image' | 'video' = 'image',
+  path?: string
+): Promise<{ success: boolean; url?: string; error?: string; width?: number; height?: number; aspectRatio?: number }> {
   try {
     console.log(`[uploadMedia] 📤 Starting ${mediaType} upload from URI:`, uri);
 
     // Fast path: all local uploads via multipart (industry standard)
     if (uri.startsWith('file://') || uri.startsWith('content://') || uri.startsWith('/') || !uri.includes('://')) {
-      const multipartResult = await uploadWithMultipart(uri, mediaType, path);
+      // Compress video if needed to stay within Cloudinary limits
+      let finalUri = uri;
+      if (mediaType === 'video') {
+        finalUri = await compressVideoIfNeeded(uri);
+      }
+      
+      const multipartResult = await uploadWithMultipart(finalUri, mediaType, path);
       if (multipartResult?.success && multipartResult?.url) {
         return multipartResult;
       }
@@ -593,7 +638,13 @@ export async function uploadMedia(uri: string, mediaType: 'image' | 'video' = 'i
         const { uri: downloadedUri } = await FileSystem.downloadAsync(uri, localUri);
         console.log('[uploadMedia] ✅ Downloaded to:', downloadedUri);
         
-        return uploadWithMultipart(downloadedUri, mediaType, path);
+        // Compress video if needed
+        let finalDownloaded = downloadedUri;
+        if (mediaType === 'video') {
+          finalDownloaded = await compressVideoIfNeeded(downloadedUri);
+        }
+        
+        return uploadWithMultipart(finalDownloaded, mediaType, path);
       } catch (err: any) {
         console.error('[uploadMedia] ❌ Remote download error:', err.message);
         throw err;
@@ -603,7 +654,7 @@ export async function uploadMedia(uri: string, mediaType: 'image' | 'video' = 'i
       console.log('[uploadMedia] 🍏 Detected iOS Photo Library URI, resolving to local file...');
       try {
         const assetId = uri.startsWith('ph://') 
-          ? uri.replace('ph://', '').split('/')[0] 
+          ? uri.replace('ph:///', '').split('/')[0] 
           : uri;
         
         const assetInfo = await MediaLibrary.getAssetInfoAsync(assetId);
@@ -635,7 +686,7 @@ async function uploadWithMultipart(
   uri: string,
   mediaType: 'image' | 'video',
   path?: string
-): Promise<{ success: boolean; url?: string; error?: string }> {
+): Promise<{ success: boolean; url?: string; error?: string; width?: number; height?: number; aspectRatio?: number }> {
   try {
     const token = await AsyncStorage.getItem('token');
     const endpointUrl = `${API_BASE_URL}/upload/upload`;
@@ -687,7 +738,13 @@ async function uploadWithMultipart(
       return { success: false, error: 'No URL returned from multipart upload' };
     }
 
-    return { success: true, url };
+    return { 
+      success: true, 
+      url,
+      width: response?.data?.width || response?.width,
+      height: response?.data?.height || response?.height,
+      aspectRatio: response?.data?.aspectRatio || response?.aspectRatio
+    };
   } catch (err: any) {
     return { success: false, error: err?.message || 'Multipart upload failed' };
   }
@@ -715,6 +772,11 @@ async function uploadStoryMedia(uri: string, userId: string, mediaType: 'image' 
       } catch (err) {
         console.warn('[uploadStoryMedia] Failed to resolve iOS asset:', err);
       }
+    }
+
+    // Compress video if needed to stay within Cloudinary limits
+    if (mediaType === 'video') {
+      finalUri = await compressVideoIfNeeded(finalUri);
     }
 
     const endpointUrl = `${API_BASE_URL}/upload/story`;
@@ -933,6 +995,7 @@ export async function createPost(
       return uniqueLocationKeys(normalized);
     };
 
+    let detectedUploadRatio = undefined;
     const mediaUrls = [];
     for (const uri of mediaUris || []) {
       // If it's already an uploaded image from our server/cloudinary, don't re-upload
@@ -943,6 +1006,9 @@ export async function createPost(
       const upload = await uploadMedia(uri, mediaType);
       if (!upload?.url) throw new Error(upload?.error || 'Upload failed');
       mediaUrls.push(upload.url);
+      if (upload.aspectRatio && !detectedUploadRatio) {
+        detectedUploadRatio = upload.aspectRatio;
+      }
     }
 
     const locationKeys = buildLocationKeys();
@@ -974,7 +1040,7 @@ export async function createPost(
       type: postType,
       allowedFollowers: allowedFollowers.length > 0 ? allowedFollowers : undefined,
       isPrivate: allowedFollowers.length > 0,  // mark as private when group is selected
-      aspectRatio,
+      aspectRatio: aspectRatio || detectedUploadRatio,
     };
     if (uploadedThumbnailUrl) {
       payload.thumbnailUrl = uploadedThumbnailUrl;
@@ -1430,6 +1496,7 @@ export async function updatePost(
       return uniqueLocationKeys(normalized);
     };
 
+    let detectedUploadRatio = undefined;
     const mediaUrls = [];
     for (const uri of mediaUris || []) {
       if (uri.startsWith('http') && (uri.includes('cloudinary.com') || uri.includes(API_BASE_URL.replace('/api', '')))) {
@@ -1439,6 +1506,9 @@ export async function updatePost(
       const upload = await uploadMedia(uri, mediaType);
       if (!upload?.url) throw new Error(upload?.error || 'Upload failed');
       mediaUrls.push(upload.url);
+      if (upload.aspectRatio && !detectedUploadRatio) {
+        detectedUploadRatio = upload.aspectRatio;
+      }
     }
 
     const locationKeys = buildLocationKeys();
@@ -1459,7 +1529,7 @@ export async function updatePost(
       type: postType,
       allowedFollowers: allowedFollowers.length > 0 ? allowedFollowers : undefined,
       isPrivate: allowedFollowers.length > 0,
-      aspectRatio,
+      aspectRatio: aspectRatio || detectedUploadRatio,
     };
 
     if (thumbnailUrlRaw) payload.thumbnailUrl = thumbnailUrlRaw;

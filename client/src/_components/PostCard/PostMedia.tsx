@@ -12,7 +12,7 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 // ─── INSTAGRAM ASPECT RATIO LOGIC ───────────────────────────────────────────
 export const getDisplayRatio = (aspectRatio?: number): number => {
   const ratio = aspectRatio || 1;
-  return Math.max(0.56, Math.min(ratio, 2.0));
+  return Math.max(0.45, Math.min(ratio, 2.0));
 };
 
 export const getMediaHeight = (aspectRatio?: number): number => {
@@ -70,7 +70,7 @@ const VideoItem: React.FC<VideoItemProps> = ({
   toggleMute,
   videoRef,
   onPress,
-  resizeMode = ResizeMode.COVER,
+  resizeMode = ResizeMode.CONTAIN,
   onRatioDetected,
   thumbnailUrl
 }) => {
@@ -92,7 +92,7 @@ const VideoItem: React.FC<VideoItemProps> = ({
         <ExpoImage
           source={{ uri: thumbUri }}
           style={{ position: 'absolute', width: SCREEN_WIDTH, height: containerHeight, zIndex: 1 }}
-          contentFit="cover"
+          contentFit="contain"
           cachePolicy="memory-disk"
           transition={0}
         />
@@ -107,13 +107,15 @@ const VideoItem: React.FC<VideoItemProps> = ({
         isMuted={isMuted}
         useNativeControls={false}
         onLoad={() => setIsLoaded(true)}
+        onReadyForDisplay={(event: any) => {
+          if (onRatioDetected && event.naturalSize && event.naturalSize.height > 0) {
+            onRatioDetected(event.naturalSize.width / event.naturalSize.height);
+          }
+        }}
         onPlaybackStatusUpdate={(status: any) => {
           if (status.isLoaded) {
             if (status.didJustFinish && !status.isLooping) {
               setIsPlaying(false);
-            }
-            if (onRatioDetected && status.naturalSize && status.naturalSize.height > 0) {
-              onRatioDetected(status.naturalSize.width / status.naturalSize.height);
             }
           }
         }}
@@ -226,10 +228,17 @@ const PostMedia: React.FC<PostMediaProps> = ({
   const lastTap = useRef<number>(0);
   const flatListRef = useRef<FlatList>(null);
 
+  const firstItem = media[0];
+
   // Auto-pause when screen loses focus
   useEffect(() => {
     if (!isFocused) setIsPlaying(false);
   }, [isFocused]);
+
+  // Reset detected ratio when the media changes (prevents recycled items using stale ratios)
+  useEffect(() => {
+    setDetectedRatio(null);
+  }, [firstItem?.url]);
 
   const handlePress = useCallback((index: number, isVideo: boolean = false) => {
     const now = Date.now();
@@ -241,8 +250,6 @@ const PostMedia: React.FC<PostMediaProps> = ({
     }
     lastTap.current = now;
   }, [onDoubleTap, onMediaPress]);
-
-  const firstItem = media[0];
   const displayRatio = getDisplayRatio(detectedRatio || firstItem?.aspectRatio);
   const displayHeight = mediaHeight || (SCREEN_WIDTH / displayRatio);
 
@@ -252,7 +259,7 @@ const PostMedia: React.FC<PostMediaProps> = ({
       || item.url?.toLowerCase().includes('.mov')
       || item.url?.includes('video/upload');
 
-    const containerHeight = mediaHeight || getMediaHeight(media[0]?.aspectRatio);
+    const containerHeight = mediaHeight || getMediaHeight(detectedRatio || media[0]?.aspectRatio);
     const normalizedIndex = index % media.length;
     const shouldAutoPlay = isFocused && normalizedIndex === localActiveIndex;
 
@@ -268,6 +275,8 @@ const PostMedia: React.FC<PostMediaProps> = ({
           toggleMute={toggleMute}
           videoRef={normalizedIndex === localActiveIndex ? videoRef : undefined}
           onPress={() => handlePress(index, true)}
+          resizeMode={ResizeMode.CONTAIN}
+          onRatioDetected={setDetectedRatio}
           thumbnailUrl={item.thumbnailUrl}
         />
       );
@@ -282,7 +291,7 @@ const PostMedia: React.FC<PostMediaProps> = ({
         thumbnailUrl={item.thumbnailUrl}
       />
     );
-  }, [media, mediaHeight, isFocused, localActiveIndex, isPlaying, isMuted, toggleMute, videoRef, handlePress]);
+  }, [media, mediaHeight, isFocused, localActiveIndex, isPlaying, isMuted, toggleMute, videoRef, handlePress, detectedRatio]);
 
   const loopedMedia = useMemo(() => {
     if (media.length <= 1) return media;

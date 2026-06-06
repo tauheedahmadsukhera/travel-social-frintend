@@ -149,7 +149,7 @@ export default function PhoneSignUpScreen() {
 
         {/* Title Section */}
         <View style={styles.titleSection}>
-          <AuthBrandHeader subtitle={`Let's keep it quick, 2 steps and you're in.`} />
+          <AuthBrandHeader subtitle="Start your journey." />
         </View>
 
         {/* Form */}
@@ -182,7 +182,7 @@ export default function PhoneSignUpScreen() {
           <Text style={[styles.label, { marginTop: 16 }]}>Email address</Text>
           <TextInput
             style={styles.input}
-            placeholder="Enter your email"
+            placeholder="Please enter your email"
             placeholderTextColor="#999"
             value={email}
             onChangeText={setEmail}
@@ -307,6 +307,7 @@ const styles = StyleSheet.create({
   backButton: {
     width: 40,
     height: 40,
+    alignItems: 'center',
     justifyContent: 'center',
   },
   titleSection: {

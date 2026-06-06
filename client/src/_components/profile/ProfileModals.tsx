@@ -168,8 +168,8 @@ export const UserMenuModal: React.FC<UserMenuModalProps> = ({
             )}
 
             <TouchableOpacity style={styles.menuItem} onPress={onShare}>
-              <View style={[styles.menuIconContainer, { backgroundColor: '#F0F7FF' }]}>
-                <Feather name="share-2" size={18} color="#007AFF" />
+              <View style={[styles.menuIconContainer, { backgroundColor: '#FFF3E8' }]}>
+                <Feather name="share-2" size={18} color="#FF8D00" />
               </View>
               <Text style={styles.menuItemText}>Share Profile</Text>
             </TouchableOpacity>

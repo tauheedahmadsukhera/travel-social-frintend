@@ -29,7 +29,7 @@ const FollowButton: React.FC<FollowButtonProps> = ({ status, loading, onPress })
 
 const styles = StyleSheet.create({
   button: {
-    backgroundColor: '#007AFF',
+    backgroundColor: '#FF8D00',
     paddingVertical: 10,
     paddingHorizontal: 24,
     borderRadius: 24,

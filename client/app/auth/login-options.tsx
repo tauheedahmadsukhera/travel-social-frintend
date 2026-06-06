@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { handleSocialAuthResult, signInWithApple, signInWithGoogle, signInWithSnapchat, signInWithTikTok } from '../../services/socialAuthService';
 import { AuthBrandHeader } from '@/src/_components/auth/AuthBrandHeader';
@@ -12,39 +12,41 @@ import { safeRouterBack } from '@/lib/safeRouterBack';
 export default function LoginOptionsScreen() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
+  const [identifier, setIdentifier] = useState('');
+  const [error, setError] = useState('');
 
-  const handleGoogleSignIn = async () => {
-    setLoading(true);
-    const result = await signInWithGoogle();
-    await handleSocialAuthResult(result, router);
-    setLoading(false);
-  };
-
-  const handleAppleSignIn = async () => {
-    setLoading(true);
-    const result = await signInWithApple();
-    await handleSocialAuthResult(result, router);
-    setLoading(false);
-  };
-
-  const handleTikTokSignIn = async () => {
-    setLoading(true);
-    try {
-      const result = await signInWithTikTok();
-      if (result.success) {
-        await handleSocialAuthResult(result, router);
-      }
-    } catch (error) {
-      console.error('TikTok sign-in error:', error);
+  const handleNext = () => {
+    setError('');
+    if (!identifier.trim()) {
+      setError('Please enter your email or username');
+      return;
     }
-    setLoading(false);
+    router.push({
+      pathname: '/auth/login-password',
+      params: { identifier: identifier.trim() },
+    });
   };
 
-  const handleSnapchatSignIn = async () => {
+  const handleSocialLogin = async (provider: 'google' | 'apple' | 'tiktok' | 'snapchat') => {
     setLoading(true);
-    const result = await signInWithSnapchat();
-    await handleSocialAuthResult(result, router);
-    setLoading(false);
+    setError('');
+    try {
+      let result;
+      if (provider === 'google') result = await signInWithGoogle();
+      else if (provider === 'apple') result = await signInWithApple();
+      else if (provider === 'tiktok') result = await signInWithTikTok();
+      else result = await signInWithSnapchat();
+
+      if (result?.success) {
+        await handleSocialAuthResult(result, router);
+      } else {
+        setError('Social login failed. Please try again.');
+      }
+    } catch (err: any) {
+      setError('Something went wrong.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -52,155 +54,95 @@ export default function LoginOptionsScreen() {
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
+        bounces={false}
+        keyboardShouldPersistTaps="handled"
       >
         <View style={styles.content}>
-          {/* Balanced Header & Logo Section */}
-          <View style={styles.headerRow}>
-            <TouchableOpacity
-              onPress={() => safeRouterBack()}
-              style={styles.backButton}
-            >
+          {/* Header */}
+          <View style={styles.header}>
+            <TouchableOpacity onPress={() => safeRouterBack()} style={styles.backButton}>
               <Ionicons name="arrow-back" size={24} color="#000" />
             </TouchableOpacity>
-            
-            <View style={styles.logoContainer}>
-              <AuthBrandHeader subtitle="How would you like to login?" />
-            </View>
-
-            {/* Empty placeholder to balance the back button width */}
-            <View style={styles.headerPlaceholder} />
           </View>
 
-          {/* Login Method Selection */}
-          <View style={styles.methodContainer}>
+          {/* Brand Header */}
+          <AuthBrandHeader subtitle="Welcome back." />
+
+          {/* Form */}
+          <View style={styles.formContainer}>
+            <TextInput
+              style={styles.input}
+              placeholder="Please enter your email or username"
+              placeholderTextColor="#999"
+              value={identifier}
+              onChangeText={setIdentifier}
+              keyboardType={identifier.includes('@') ? 'email-address' : 'default'}
+              autoCapitalize="none"
+              autoCorrect={false}
+              spellCheck={false}
+              editable={!loading}
+            />
+
+            {error ? <Text style={styles.errorText}>{error}</Text> : null}
+
             <CustomButton
-              title="Phone"
-              onPress={() => router.push('/auth/phone-login')}
+              title="Next"
+              onPress={handleNext}
               variant="primary"
-              style={styles.methodButton}
+              style={styles.nextButton}
+              disabled={loading}
             />
 
-            <CustomButton
-              title="Email"
-              onPress={() => router.push('/auth/email-login')}
-              variant="primary"
-              style={styles.methodButton}
-            />
-
-            <CustomButton
-              title="Username"
-              onPress={() => router.push('/auth/username-login')}
-              variant="secondary"
-              style={styles.methodButton}
-            />
-          </View>
-
-          {/* Social Login Options */}
-          <View style={styles.socialSection}>
-            <SocialButton
-              provider="google"
-              onPress={handleGoogleSignIn}
-              style={styles.socialButton}
-            />
-            <SocialButton
-              provider="apple"
-              onPress={handleAppleSignIn}
-              style={styles.socialButton}
-            />
-            <SocialButton
-              provider="tiktok"
-              onPress={handleTikTokSignIn}
-              style={styles.socialButton}
-            />
-            <SocialButton
-              provider="snapchat"
-              onPress={handleSnapchatSignIn}
-              style={styles.socialButton}
-            />
-          </View>
-
-          {/* Footer */}
-          <View style={styles.footer}>
-            <Text style={styles.footerText}>
+            <Text style={styles.noAccountText}>
               Don't have an account?{' '}
-              <Text
-                style={styles.footerLink}
-                onPress={() => router.push('/auth/signup-options')}
-              >
+              <Text style={styles.footerLink} onPress={() => router.push('/auth/signup-options')}>
                 Sign up
               </Text>
             </Text>
-            <Text style={{ fontSize: 12, color: '#666', textAlign: 'center', marginTop: 15 }}>
-              By logging in, you agree to our{' '}
-              <Text style={{ fontWeight: '600' }} onPress={() => router.push('/legal/terms' as any)}>Terms of Service</Text> and{' '}
-              <Text style={{ fontWeight: '600' }} onPress={() => router.push('/legal/privacy' as any)}>Privacy Policy</Text>.
-            </Text>
+          </View>
+
+          {/* Social Login */}
+          <View style={styles.socialSection}>
+            <SocialButton provider="google" onPress={() => handleSocialLogin('google')} style={styles.socialButton} />
+            <SocialButton provider="apple" onPress={() => handleSocialLogin('apple')} style={styles.socialButton} />
+            <SocialButton provider="tiktok" onPress={() => handleSocialLogin('tiktok')} style={styles.socialButton} />
+            <SocialButton provider="snapchat" onPress={() => handleSocialLogin('snapchat')} style={styles.socialButton} />
           </View>
         </View>
       </ScrollView>
+
+      {/* Terms Footer */}
+      <View style={styles.footer}>
+        <Text style={{ fontSize: 12, color: '#666', textAlign: 'center' }}>
+          By logging in, you agree to our{' '}
+          <Text style={{ fontWeight: '600' }} onPress={() => router.push('/legal/terms' as any)}>Terms of Service</Text> and{' '}
+          <Text style={{ fontWeight: '600' }} onPress={() => router.push('/legal/privacy' as any)}>Privacy Policy</Text>.
+        </Text>
+      </View>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#fff',
-  },
-  scrollContent: {
-    flexGrow: 1,
-  },
-  content: {
-    flex: 1,
+  container: { flex: 1, backgroundColor: '#fff' },
+  scrollContent: { flexGrow: 1 },
+  content: { flex: 1, padding: 20, paddingBottom: 80 },
+  header: { marginBottom: 10 },
+  backButton: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
+  formContainer: { marginTop: 15, marginBottom: 15 },
+  input: {
+    backgroundColor: '#f5f5f5',
+    borderRadius: 8,
     padding: 16,
-    paddingBottom: 10,
+    fontSize: 16,
+    color: '#000',
+    marginBottom: 12,
   },
-  headerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 20,
-    minHeight: 50,
-    width: '100%',
-  },
-  backButton: {
-    width: 44,
-    height: 44,
-    alignItems: 'flex-start',
-    justifyContent: 'center',
-  },
-  logoContainer: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 24, // Shifted left to reduce space on icon side
-  },
-  headerPlaceholder: {
-    width: 44,
-  },
-  methodContainer: {
-    marginBottom: 15,
-  },
-  methodButton: {
-    marginBottom: 8,
-  },
-  socialSection: {
-    marginBottom: 15,
-  },
-  socialButton: {
-    marginBottom: 8,
-  },
-  footer: {
-    alignItems: 'center',
-    marginTop: 'auto',
-    paddingBottom: 10,
-  },
-  footerText: {
-    fontSize: 14,
-    color: '#666',
-  },
-  footerLink: {
-    color: '#FF8D00',
-    fontWeight: '600',
-  },
+  errorText: { color: '#e74c3c', fontSize: 14, marginBottom: 10 },
+  nextButton: { marginBottom: 14 },
+  noAccountText: { fontSize: 14, color: '#666', textAlign: 'center', marginTop: 4 },
+  socialSection: { marginBottom: 15 },
+  socialButton: { marginBottom: 8 },
+  footer: { position: 'absolute', bottom: 20, left: 20, right: 20, alignItems: 'center' },
+  footerLink: { color: '#FF8D00', fontWeight: '600' },
 });

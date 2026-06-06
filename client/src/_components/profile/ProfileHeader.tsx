@@ -322,7 +322,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#007aff',
+    backgroundColor: '#FF8D00',
     height: 48,
     borderRadius: 12,
   },
@@ -360,7 +360,7 @@ const styles = StyleSheet.create({
   },
   websiteText: {
     fontSize: 14,
-    color: '#007aff',
+    color: '#FF8D00',
     textAlign: 'center',
   },
   location: {

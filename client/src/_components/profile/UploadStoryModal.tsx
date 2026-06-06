@@ -123,7 +123,7 @@ export const UploadStoryModal: React.FC<UploadStoryModalProps> = ({
                       }
                     }}
                   >
-                    <Feather name="edit-2" size={16} color="#007aff" />
+                    <Feather name="edit-2" size={16} color="#FF8D00" />
                     <Text style={styles.changeMediaText}>Change</Text>
                   </TouchableOpacity>
                 </View>
@@ -173,7 +173,7 @@ export const UploadStoryModal: React.FC<UploadStoryModalProps> = ({
                               setLocationSuggestions([]);
                             }}
                           >
-                            <Feather name="map-pin" size={16} color="#007aff" style={{ marginRight: 8 }} />
+                            <Feather name="map-pin" size={16} color="#FF8D00" style={{ marginRight: 8 }} />
                             <View style={{ flex: 1 }}>
                               <Text style={styles.locationName}>{item.name}</Text>
                               <Text style={styles.locationAddress} numberOfLines={1}>{item.address}</Text>
@@ -189,7 +189,7 @@ export const UploadStoryModal: React.FC<UploadStoryModalProps> = ({
               {/* Upload Progress */}
               {uploading && (
                 <View style={styles.uploadingArea}>
-                  <ActivityIndicator size="small" color="#007aff" style={{ marginBottom: 8 }} />
+                  <ActivityIndicator size="small" color="#FF8D00" style={{ marginBottom: 8 }} />
                   <Text style={styles.uploadingText}>Uploading {uploadProgress}%</Text>
                   <View style={styles.uploadingBarBg}>
                     <View style={[styles.uploadingBar, { width: `${uploadProgress}%` }]} />
@@ -289,7 +289,7 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   changeMediaText: {
-    color: '#007aff',
+    color: '#FF8D00',
     fontSize: 15,
     fontWeight: '600',
   },
@@ -352,12 +352,12 @@ const styles = StyleSheet.create({
   },
   uploadingBar: {
     height: 6,
-    backgroundColor: '#007aff',
+    backgroundColor: '#FF8D00',
     borderRadius: 3,
   },
   shareButton: {
     width: '100%',
-    backgroundColor: '#007aff',
+    backgroundColor: '#FF8D00',
     paddingVertical: 14,
     borderRadius: 12,
     alignItems: 'center',

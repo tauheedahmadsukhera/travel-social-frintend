@@ -94,7 +94,7 @@ export default function ForgotPasswordScreen() {
                 <Ionicons name="mail-outline" size={20} color="#999" style={styles.inputIcon} />
                 <TextInput
                   style={styles.input}
-                  placeholder="Enter your email"
+                  placeholder="Please enter your email"
                   placeholderTextColor="#999"
                   value={email}
                   onChangeText={setEmail}

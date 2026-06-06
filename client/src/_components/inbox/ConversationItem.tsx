@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { Image as ExpoImage } from 'expo-image';
 import { Feather } from '@expo/vector-icons';
 import { DEFAULT_AVATAR_URL } from '@/lib/api';
@@ -11,6 +11,8 @@ type ConversationItemProps = {
   onLongPress: (item: any) => void;
   formatTime: (ts: any) => string;
   profilesById: Record<string, any>;
+  onCameraPress?: (item: any) => void;
+  isSendingMedia?: boolean;
 };
 
 const ConversationItem: React.FC<ConversationItemProps> = ({
@@ -20,6 +22,8 @@ const ConversationItem: React.FC<ConversationItemProps> = ({
   onLongPress,
   formatTime,
   profilesById,
+  onCameraPress,
+  isSendingMedia,
 }) => {
   const isGroup = !!item?.isGroup;
   const otherUserId = item?.otherUserId || item.participants?.find((uid: string) => uid !== userId);
@@ -78,7 +82,19 @@ const ConversationItem: React.FC<ConversationItemProps> = ({
 
       <View style={styles.chatRight}>
         {hasUnread ? <View style={styles.blueDot} /> : <View style={{ width: 10 }} />}
-        <Feather name="camera" size={22} color="#000" />
+        {isSendingMedia ? (
+          <ActivityIndicator size="small" color="#FF8D00" style={{ marginRight: 4 }} />
+        ) : (
+          <TouchableOpacity
+            onPress={(e) => {
+              e.stopPropagation();
+              onCameraPress?.(item);
+            }}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          >
+            <Feather name="camera" size={22} color="#000" />
+          </TouchableOpacity>
+        )}
       </View>
     </TouchableOpacity>
   );

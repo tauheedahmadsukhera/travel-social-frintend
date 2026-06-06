@@ -28,16 +28,23 @@ const uploadStory = multer({
  */
 async function uploadToCloudinary(fileBuffer, folder, resourceType = 'auto', options = {}) {
   return new Promise((resolve, reject) => {
+    const uploadOptions = {
+      folder: folder,
+      resource_type: resourceType,
+      upload_preset: process.env.CLOUDINARY_UPLOAD_PRESET || undefined,
+      transformation: [
+        { quality: 'auto' },
+        { fetch_format: 'auto' }
+      ]
+    };
+
+    // Enable chunked upload for large files (bypasses 10MB single upload limit)
+    if (fileBuffer.length > 6 * 1024 * 1024) {
+      uploadOptions.chunk_size = 6 * 1024 * 1024; // 6MB chunks
+    }
+
     const uploadStream = cloudinary.uploader.upload_stream(
-      {
-        folder: folder,
-        resource_type: resourceType,
-        upload_preset: process.env.CLOUDINARY_UPLOAD_PRESET || undefined,
-        transformation: [
-          { quality: 'auto' },
-          { fetch_format: 'auto' }
-        ]
-      },
+      uploadOptions,
       (error, result) => {
         if (error) {
           logger.error('❌ Cloudinary upload error: %O', error);

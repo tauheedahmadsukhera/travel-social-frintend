@@ -39,12 +39,12 @@ export const highlightManager = {
       // Ensure attached (backend sometimes ignores on create)
       let attachedOk = false;
       for (let attempt = 1; attempt <= 4; attempt++) {
-        try {
-          const r: any = await addStoryToHighlightApi(highlightId, storyId);
-          attachedOk = r?.success !== false;
-          if (attachedOk) break;
-        } catch { }
-        await sleep(220 * attempt);
+         try {
+           const r: any = await addStoryToHighlightApi(highlightId, storyId, normalizedStory);
+           attachedOk = r?.success !== false;
+           if (attachedOk) break;
+         } catch { }
+         await sleep(220 * attempt);
       }
 
       // Keep permanent locally
@@ -76,7 +76,7 @@ export const highlightManager = {
     let lastErr: any = null;
     for (let attempt = 1; attempt <= 3; attempt++) {
       try {
-        const r: any = await addStoryToHighlightApi(highlightId, storyId);
+        const r: any = await addStoryToHighlightApi(highlightId, storyId, normalizedStory);
         ok = r?.success !== false;
         if (ok) break;
         lastErr = r?.error || r;

@@ -24,15 +24,13 @@
         "image": "latest"
       },
       "android": {
-        "buildType": "app-bundle",
-        "resourceClass": "large"
+        "buildType": "app-bundle"
       }
     },
     "production-apk": {
       "autoIncrement": true,
       "android": {
-        "buildType": "apk",
-        "resourceClass": "large"
+        "buildType": "apk"
       }
     }
   },

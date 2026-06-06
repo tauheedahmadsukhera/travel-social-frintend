@@ -188,7 +188,10 @@ router.post('/highlights/:highlightId/stories', verifyToken, async (req, res) =>
   try {
     const { highlightId } = req.params;
     const authenticatedUserId = req.userId;
-    const { storyId } = req.body;
+
+    // Accept both { storyId } and { storySnapshot: { storyId, ... } } from the client
+    const clientSnapshot = req.body.storySnapshot || null;
+    const storyId = req.body.storyId || clientSnapshot?.storyId || clientSnapshot?.id || null;
     
     if (!storyId) return res.status(400).json({ success: false, error: 'storyId is required' });
 
@@ -197,7 +200,7 @@ router.post('/highlights/:highlightId/stories', verifyToken, async (req, res) =>
     
     if (!highlight) return res.status(404).json({ success: false, error: 'Highlight not found' });
 
-    // Fetch story doc once and store a snapshot into highlight.items so the highlight survives 24h expiry.
+    // Build snapshot: prefer DB lookup, then client-supplied snapshot, then just storyId
     let storySnapshot = null;
     try {
       const Story = mongoose.model('Story');
@@ -221,6 +224,19 @@ router.post('/highlights/:highlightId/stories', verifyToken, async (req, res) =>
       }
     } catch {
       storySnapshot = null;
+    }
+
+    // If DB lookup didn't find it, use the client-supplied snapshot
+    if (!storySnapshot && clientSnapshot) {
+      storySnapshot = {
+        id: String(clientSnapshot.storyId || clientSnapshot.id || storyId),
+        storyId: String(clientSnapshot.storyId || clientSnapshot.id || storyId),
+        imageUrl: clientSnapshot.imageUrl || null,
+        videoUrl: clientSnapshot.videoUrl || null,
+        mediaUrl: clientSnapshot.imageUrl || clientSnapshot.videoUrl || null,
+        mediaType: clientSnapshot.mediaType || (clientSnapshot.videoUrl ? 'video' : 'image'),
+        createdAt: clientSnapshot.createdAt || new Date(),
+      };
     }
     
     // Add to items array if it doesn't exist

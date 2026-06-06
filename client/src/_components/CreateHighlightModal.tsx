@@ -182,7 +182,7 @@ export default function CreateHighlightModal({
                   <Text style={styles.settingText}>Visibility</Text>
                 </View>
                 <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                  <Text style={{ color: '#007aff', fontSize: 15, marginRight: 8, fontWeight: '500' }}>{visibility}</Text>
+                  <Text style={{ color: '#FF8D00', fontSize: 15, marginRight: 8, fontWeight: '500' }}>{visibility}</Text>
                   <Ionicons name="chevron-forward" size={20} color="#666" />
                 </View>
               </TouchableOpacity>

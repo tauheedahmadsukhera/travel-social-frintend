@@ -14,23 +14,23 @@ const providerConfig = {
 	google: {
 		icon: 'logo-google' as keyof typeof Ionicons.glyphMap,
 		label: 'Continue with Google',
-		bgColor: '#fff',
+		bgColor: '#f2f2f2',
 		textColor: '#000',
 		iconColor: '#DB4437',
 	},
 	apple: {
 		icon: 'logo-apple' as keyof typeof Ionicons.glyphMap,
 		label: 'Continue with Apple',
-		bgColor: '#000',
-		textColor: '#fff',
-		iconColor: '#fff',
+		bgColor: '#f2f2f2',
+		textColor: '#000',
+		iconColor: '#000',
 	},
 	tiktok: {
 		icon: 'logo-tiktok' as keyof typeof Ionicons.glyphMap,
 		label: 'Continue with TikTok',
-		bgColor: '#000',
-		textColor: '#fff',
-		iconColor: '#fff',
+		bgColor: '#f2f2f2',
+		textColor: '#000',
+		iconColor: '#000',
 	},
 	snapchat: {
 		icon: 'logo-snapchat' as keyof typeof Ionicons.glyphMap,
@@ -73,8 +73,6 @@ const styles = StyleSheet.create({
 		borderRadius: 8,
 		marginBottom: 12,
 		paddingHorizontal: 16,
-		borderWidth: 1,
-		borderColor: '#d1d1d1',
 	},
 	appleButton: {
 		// The Apple button doesn't need internal text/icon as it's built-in

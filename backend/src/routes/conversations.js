@@ -1747,7 +1747,7 @@ router.post('/:conversationId/messages/media', verifyToken, validate(sendMessage
 router.post('/stories', verifyToken, async (req, res) => {
   try {
     const Story = mongoose.model('Story');
-    const { userId, mediaUrl, mediaType, caption, userName, userAvatar } = req.body;
+    const { userId, mediaUrl, mediaType, caption, userName, userAvatar, locationData, postMetadata, visibility, allowedFollowers, isPrivate } = req.body;
 
     if (!userId || !mediaUrl) {
       return res.status(400).json({ success: false, error: 'userId and mediaUrl required' });
@@ -1760,6 +1760,11 @@ router.post('/stories', verifyToken, async (req, res) => {
       caption,
       userName,
       userAvatar,
+      locationData,
+      postMetadata,
+      visibility,
+      allowedFollowers,
+      isPrivate: isPrivate || visibility !== 'Everyone',
       views: [],
       likes: [],
       comments: [],

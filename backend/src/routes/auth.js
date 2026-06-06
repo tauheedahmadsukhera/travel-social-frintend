@@ -53,7 +53,7 @@ const User = require('../models/User');
  */
 router.post('/register-firebase', validate(registerFirebaseSchema), async (req, res) => {
   try {
-    const { idToken, firebaseUid: clientUid, email, displayName, avatar } = req.body;
+    const { idToken, firebaseUid: clientUid, email, displayName, avatar, username } = req.body;
 
     // SECURITY: Verify Firebase ID Token on backend
     let firebaseUid = clientUid;
@@ -96,6 +96,7 @@ router.post('/register-firebase', validate(registerFirebaseSchema), async (req, 
         email: email ? email.toLowerCase() : `${firebaseUid}@trips.app`,
         displayName: displayName || (email ? email.split('@')[0] : 'User'),
         avatar: avatar || null,
+        username: username ? username.toLowerCase().trim() : undefined,
         followersCount: 0,
         followingCount: 0
       });
@@ -104,6 +105,9 @@ router.post('/register-firebase', validate(registerFirebaseSchema), async (req, 
     } else {
       user.displayName = displayName || user.displayName;
       user.avatar = avatar || user.avatar;
+      if (username && !user.username) {
+        user.username = username.toLowerCase().trim();
+      }
       user.updatedAt = new Date();
       await user.save();
       logger.info(`✅ User updated in MongoDB: ${user.email}`);

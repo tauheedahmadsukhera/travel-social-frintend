@@ -21,5 +21,4 @@ admin/
 # Large assets (only keep assets/images/ since it's needed for icons)
 assets/fake data/
 assets/fake profile/
-assets/cities/
-assets/countries/
+assets/region/

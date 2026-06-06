@@ -43,6 +43,12 @@ import { highlightManager } from '../../lib/highlightManager';
 
 const { width, height } = Dimensions.get('window');
 
+const FONT_STYLES: Record<string, { fontFamily?: string; letterSpacing?: number; textTransform?: 'uppercase' | 'none' }> = {
+    classic: { fontFamily: Platform.OS === 'ios' ? 'Georgia' : 'serif' },
+    modern: { fontFamily: undefined, letterSpacing: 1 },
+    strong: { fontFamily: undefined, letterSpacing: 2, textTransform: 'uppercase' },
+};
+
 interface Story {
   id: string;
   userId: string;
@@ -56,6 +62,12 @@ interface Story {
   likes?: string[];
   comments?: StoryComment[];
   isPostShare?: boolean;
+  location?: string;
+  locationData?: {
+    name?: string;
+    address?: string;
+    placeId?: string;
+  };
   postMetadata?: {
     postId: string;
     userName: string;
@@ -390,6 +402,7 @@ export default function StoriesViewer({ stories, onClose, initialIndex = 0 }: { 
   const isOwnCurrentStory = String(currentStory?.userId || '') === String(currentUser?.uid || '');
   const isLiked = (currentStory?.likes || [])?.includes(currentUser?.uid || '') || false;
   const likesCount = currentStory?.likes?.length || 0;
+  const locationName = currentStory?.locationData?.name || currentStory?.location || (typeof currentStory?.locationData === 'string' ? currentStory.locationData : '');
 
   if (!currentStory) {
     return (
@@ -641,6 +654,50 @@ export default function StoriesViewer({ stories, onClose, initialIndex = 0 }: { 
                       <Text style={{ color: '#fff', fontSize: 14 }}>Story media unavailable</Text>
                     </View>
                   )}
+
+                  {/* Text overlays rendered on top of media */}
+                  {(currentStory as any)?.postMetadata?.textOverlays ? (() => {
+                    let parsedOverlays = [];
+                    try {
+                      parsedOverlays = JSON.parse((currentStory as any).postMetadata.textOverlays);
+                    } catch (e) {
+                      console.warn('Failed to parse story text overlays:', e);
+                    }
+                    if (!Array.isArray(parsedOverlays) || parsedOverlays.length === 0) return null;
+                    return (
+                      <View style={{ position: 'absolute', width: width, height: width * 1.1, top: (height - width * 1.1) / 2, left: 0, zIndex: 10 }} pointerEvents="none">
+                        {parsedOverlays.map((o: any) => {
+                          const fs = FONT_STYLES[o.fontStyle] || FONT_STYLES.classic;
+                          return (
+                            <View
+                              key={o.id}
+                              style={{
+                                position: 'absolute',
+                                left: o.x * width,
+                                top: o.y * (width * 1.1),
+                              }}
+                            >
+                              <Text
+                                style={{
+                                  fontSize: 24,
+                                  fontWeight: '700',
+                                  color: o.color,
+                                  fontFamily: fs.fontFamily,
+                                  letterSpacing: fs.letterSpacing,
+                                  textTransform: fs.textTransform as any,
+                                  textShadowColor: 'rgba(0,0,0,0.5)',
+                                  textShadowOffset: { width: 1, height: 1 },
+                                  textShadowRadius: 4,
+                                }}
+                              >
+                                {o.text}
+                              </Text>
+                            </View>
+                          );
+                        })}
+                      </View>
+                    );
+                  })() : null}
                 </View>
               )}
             </View>
@@ -842,7 +899,7 @@ export default function StoriesViewer({ stories, onClose, initialIndex = 0 }: { 
                   hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                   style={{ minWidth: 80, alignItems: 'flex-end' }}
                 >
-                  <Text style={{ fontSize: 15, color: newHighlightName.trim() ? '#111' : '#bbb', fontWeight: '700' }}>Save</Text>
+                  <Text style={{ fontSize: 15, color: newHighlightName.trim() ? '#007aff' : '#bbb', fontWeight: '700' }}>Save</Text>
                 </TouchableOpacity>
               </View>
 
@@ -1013,6 +1070,16 @@ const viewerStyles = StyleSheet.create({
     marginRight: 10,
     borderWidth: 1.5,
     borderColor: '#fff',
+  },
+  headerLocation: {
+    color: '#FF8D00',
+    fontWeight: '700',
+    fontSize: 10,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    textShadowColor: 'rgba(0,0,0,0.6)',
+    textShadowRadius: 3,
+    marginBottom: 2,
   },
   headerName: {
     color: '#fff',

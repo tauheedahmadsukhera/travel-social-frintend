@@ -31,8 +31,13 @@ router.post('/upload', verifyToken, upload.single('file'), async (req, res) => {
     if (req.file) {
       // Multipart upload - file is in memory buffer
       uploadSource = await new Promise((resolve, reject) => {
+        const uploadOpts = { folder: 'trave-social', resource_type: resourceType };
+        // Enable chunked upload for large files (>6MB) to bypass Cloudinary single-upload limits
+        if (req.file.buffer.length > 6 * 1024 * 1024) {
+          uploadOpts.chunk_size = 6 * 1024 * 1024;
+        }
         const stream = cloudinary.uploader.upload_stream(
-          { folder: 'trave-social', resource_type: resourceType },
+          uploadOpts,
           (error, result) => {
             if (error) reject(error);
             else resolve(result);

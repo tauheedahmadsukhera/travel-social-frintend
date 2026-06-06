@@ -231,7 +231,7 @@ export default function CreatePostScreen() {
 
       {loading && (
         <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.3)', justifyContent: 'center', alignItems: 'center', zIndex: 1000 }]}>
-          <ActivityIndicator size="large" color="#0095f6" />
+          <ActivityIndicator size="large" color="#FF8D00" />
         </View>
       )}
     </SafeAreaView>
