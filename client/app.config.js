@@ -5,7 +5,7 @@ export default {
   "expo": {
     "name": "Trips",
     "slug": "trave-social",
-    "version": "1.1.0",
+    "version": "1.1.1",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "trave-social",
@@ -39,7 +39,7 @@ export default {
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.tauhee56.travesocial",
-      "buildNumber": "47",
+      "buildNumber": "1",
       "googleServicesFile": "./GoogleService-Info.plist",
       "config": {
         "googleMapsApiKey": process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY || "AIzaSyCQ1Fe55xOwt9fFfAiGIDVoEt01i2hL-zs"
