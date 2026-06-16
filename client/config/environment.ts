@@ -311,7 +311,7 @@ export function getAPIBaseURL(): string {
   // Derive Metro host IP for Expo Go/dev-client to avoid stale hardcoded LAN IP.
   const hostUri = String((Constants as any)?.expoConfig?.hostUri || (Constants as any)?.manifest2?.extra?.expoGo?.debuggerHost || '');
   const hostIp = hostUri.includes(':') ? hostUri.split(':')[0] : hostUri;
-  const derivedLocalUrl = hostIp ? `http://${hostIp}:5000/api` : '';
+  const derivedLocalUrl = hostIp ? `http://${hostIp}:5002/api` : '';
 
   if (__DEV__) {
     console.log('📡 [environment] EXPO_PUBLIC_API_BASE_URL check:', {
@@ -334,12 +334,12 @@ export function getAPIBaseURL(): string {
     // Fallback for Android Emulator (only if no envUrl)
     if (Platform.OS === 'android') {
       console.log('📡 [environment] Falling back to Android Emulator local URL');
-      return 'http://10.0.2.2:5000/api';
+      return 'http://10.0.2.2:5002/api';
     }
 
     // Fallback for iOS Simulator / Web
     console.log('📡 [environment] Falling back to localhost');
-    return 'http://localhost:5000/api';
+    return 'http://localhost:5002/api';
   }
 
   // Production safety: never allow a local/LAN URL to ship by accident.

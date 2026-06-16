@@ -12,19 +12,9 @@ export async function isApprovedFollower(userId: string, checkUserId: string) {
   }
 }
 
-/**
- * Get highlights for a user (respects privacy settings)
- */
-export async function getUserHighlights(userId: string, requesterUserId?: string) {
-  try {
-    const qs = requesterUserId ? `?requesterUserId=${encodeURIComponent(requesterUserId)}` : '';
-    const res = await fetch(`/api/users/${userId}/highlights${qs}`);
-    const data = await res.json();
-    return { success: data.success, highlights: data.data || [] };
-  } catch (error: any) {
-    return { success: false, error: error.message };
-  }
-}
+import { getUserHighlights as getUserHighlightsCore, getHighlightStories as getHighlightStoriesCore } from './core';
+
+export { getUserHighlightsCore as getUserHighlights, getHighlightStoriesCore as getHighlightStories };
 
 /**
  * Get all stories for feed (grouped by user)
@@ -40,19 +30,6 @@ export async function getAllStoriesForFeed() {
     return { success: res?.success !== false, data: Array.isArray(stories) ? stories : [] };
   } catch (error: any) {
     console.log('[getAllStoriesForFeed] Error:', error.message);
-    return { success: false, error: error.message };
-  }
-}
-
-/**
- * Get stories for a highlight
- */
-export async function getHighlightStories(highlightId: string) {
-  try {
-    const res = await fetch(`/api/highlights/${highlightId}/stories`);
-    const data = await res.json();
-    return { success: data.success, stories: data.data || [] };
-  } catch (error: any) {
     return { success: false, error: error.message };
   }
 }

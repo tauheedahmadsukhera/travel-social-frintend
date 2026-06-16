@@ -18,16 +18,7 @@ interface HighlightCarouselProps {
 
 const HighlightCarousel: React.FC<HighlightCarouselProps> = ({ highlights, onPressHighlight, isOwnProfile, onAddHighlight }) => {
   const renderAddButton = () => {
-    const hasHighlights = Array.isArray(highlights) && highlights.length > 0;
-    if (!isOwnProfile || hasHighlights || typeof onAddHighlight !== 'function') return null;
-    return (
-      <TouchableOpacity style={styles.highlightBubble} onPress={onAddHighlight}>
-        <View style={styles.addButton}>
-          <Ionicons name="add" size={24} color="#FF8D00" />
-        </View>
-        <Text style={styles.title} numberOfLines={1}>New</Text>
-      </TouchableOpacity>
-    );
+    return null;
   };
 
   return (

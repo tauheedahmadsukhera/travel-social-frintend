@@ -380,30 +380,16 @@ export async function signInWithTikTok() {
         throw new Error('No authorization code received');
       }
 
-      // Exchange code for access token via Cloud Function (secure)
-      console.log('🔐 Exchanging code via Cloud Function...');
-      const cloudFunctionUrl = 'https://us-central1-travel-app-3da72.cloudfunctions.net/tiktokAuth';
-
-      const tokenAbort = new AbortController();
-      const tokenTimeout = setTimeout(() => tokenAbort.abort(), 15000);
-
-      const tokenResponse = await fetch(cloudFunctionUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          code: code,
-          redirectUri: redirectUri,
-        }),
-        signal: tokenAbort.signal,
+      // Exchange code for access token via Backend API (secure)
+      console.log('🔐 Exchanging code via Backend API...');
+      const { apiService } = await import('@/src/_services/apiService');
+      const tokenData = await apiService.post('/auth/tiktok', {
+        code: code,
+        redirectUri: redirectUri,
       });
 
-      clearTimeout(tokenTimeout);
-      const tokenData = await tokenResponse.json();
-
-      if (!tokenData.success || !tokenData.openId) {
-        throw new Error(tokenData.error || 'Failed to get TikTok user data');
+      if (!tokenData || !tokenData.success || !tokenData.openId) {
+        throw new Error(tokenData?.error || 'Failed to get TikTok user data');
       }
 
       console.log('✅ TikTok user data received:', tokenData.displayName);
@@ -529,9 +515,77 @@ export async function signInWithSnapchat() {
       if (!code) {
         throw new Error('No authorization code received');
       }
-      // Security Fix: Client secret removed from frontend. 
-      // Token exchange MUST happen on a secure backend endpoint similar to TikTok.
-      throw new Error('Snapchat auth requires server-side token exchange (frontend secrets removed for security).');
+
+      // Exchange code for access token via Cloud Function (secure)
+      console.log('🔐 Exchanging Snapchat code via Cloud Function...');
+      const cloudFunctionUrl = 'https://us-central1-travel-app-3da72.cloudfunctions.net/snapchatAuth';
+
+      const tokenAbort = new AbortController();
+      const tokenTimeout = setTimeout(() => tokenAbort.abort(), 15000);
+
+      const tokenResponse = await fetch(cloudFunctionUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          code: code,
+          redirectUri: redirectUri,
+        }),
+        signal: tokenAbort.signal,
+      });
+
+      clearTimeout(tokenTimeout);
+      const tokenData = await tokenResponse.json();
+
+      if (!tokenData.success || !tokenData.externalId) {
+        throw new Error(tokenData.error || 'Failed to get Snapchat user data');
+      }
+
+      console.log('✅ Snapchat user data received:', tokenData.displayName);
+
+      const snapchatUser = {
+        external_id: tokenData.externalId,
+        display_name: tokenData.displayName,
+        avatar_url: tokenData.avatarUrl,
+      };
+
+      const { createUserWithEmailAndPassword, signInWithEmailAndPassword } = await import('firebase/auth');
+      const authInstance = await requireAuth();
+
+      // Use Snapchat external_id as unique identifier
+      const snapchatEmail = `snapchat_${snapchatUser.external_id}@trave-social.app`;
+      // Use a deterministic password based on the user ID
+      const snapchatPassword = `Snapchat${snapchatUser.external_id.substring(0, 16)}!@#`;
+
+      let firebaseUser;
+
+      try {
+        console.log('📱 Trying to sign in existing Snapchat user:', snapchatEmail);
+        const signInResult = await signInWithEmailAndPassword(authInstance, snapchatEmail, snapchatPassword);
+        firebaseUser = signInResult.user;
+        console.log('✅ Signed in existing Snapchat user');
+      } catch (signInError: any) {
+        console.log('⚠️ Snapchat sign-in failed, error code:', signInError.code);
+        if (signInError.code === 'auth/user-not-found') {
+          console.log('🆕 Creating new Snapchat user...');
+          const createResult = await createUserWithEmailAndPassword(authInstance, snapchatEmail, snapchatPassword);
+          firebaseUser = createResult.user;
+          console.log('✅ New Snapchat user created');
+        } else if (signInError.code === 'auth/wrong-password') {
+          console.error('❌ Snapchat password mismatch detected');
+          throw new Error('Password mismatch with stored Snapchat credentials');
+        } else {
+          console.error('❌ Snapchat auth error:', signInError.code, signInError.message);
+          throw signInError;
+        }
+      }
+
+      console.log('✅ Snapchat authentication successful for user:', firebaseUser?.uid);
+      return {
+        success: true,
+        user: firebaseUser,
+      };
     } else if (snapResult.type === 'cancel' || snapResult.type === 'dismiss') {
       // User explicitly canceled
       console.log('Snapchat sign-in canceled by user');

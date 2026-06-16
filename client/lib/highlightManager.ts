@@ -159,6 +159,44 @@ export const highlightManager = {
     }
   },
 
+  async createHighlightWithStories(params: { userId: string; title: string; stories: any[]; visibility?: string; coverImage?: string }): Promise<{ success: boolean; highlightId?: string; error?: string }> {
+    try {
+      if (!params.stories || params.stories.length === 0) {
+        return { success: false, error: 'At least one story is required' };
+      }
+
+      const normalizedStories = params.stories.map(s => storyForStoriesViewer(s, 0));
+      const storyIds = normalizedStories.map(ns => String(ns?.id || ns?._id || ns?.storyId || '').trim()).filter(Boolean);
+      
+      const firstStory = normalizedStories[0];
+      const cover = params.coverImage || firstStory.imageUrl || firstStory.videoUrl || '';
+
+      // Create on backend
+      const created = await createHighlightApi(params.userId, params.title.trim(), cover, storyIds, params.visibility || 'Public');
+      const highlightId = resolveHighlightId(created?.highlight) || String(created?.highlightId || '').trim();
+      if (!highlightId) return { success: false, error: 'Highlight id missing' };
+
+      // Cache all stories locally (so they remain visible even after 24h)
+      for (const ns of normalizedStories) {
+        await cacheHighlightStory(highlightId, ns);
+      }
+
+      // Best effort attach verify
+      for (const ns of normalizedStories) {
+        const sid = String(ns.id || ns._id || ns.storyId || '').trim();
+        if (sid) {
+          try {
+            await addStoryToHighlightApi(highlightId, sid, ns);
+          } catch {}
+        }
+      }
+
+      return { success: true, highlightId };
+    } catch (e: any) {
+      return { success: false, error: e?.message || 'Failed to create highlight' };
+    }
+  },
+
   // Convenience: fetch highlights list with apiService params support (viewerId etc)
   async fetchUserHighlights(userId: string, viewerId?: string): Promise<HighlightSummary[]> {
     const params: any = {};

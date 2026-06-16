@@ -34,13 +34,21 @@ export async function createHighlight(
 
 export async function addStoryToHighlight(highlightId: string, storyId: string, storyObj?: any) {
   try {
-    // Backend expects { storyId, storySnapshot: { storyId, imageUrl, videoUrl, mediaType, createdAt } }
+    // Backend expects { storyId, storySnapshot: { storyId, imageUrl, videoUrl, mediaType, createdAt, ... } }
+    // Send as much data as possible because the Story document may expire (24h TTL)
+    // and this snapshot is the only permanent record.
     const snapshot = storyObj ? {
       storyId: storyObj.id || storyObj._id || storyId,
+      id: storyObj.id || storyObj._id || storyId,
+      userId: storyObj.userId || '',
+      userName: storyObj.userName || '',
+      userAvatar: storyObj.userAvatar || '',
       imageUrl: storyObj.imageUrl || '',
       videoUrl: storyObj.videoUrl || '',
+      mediaUrl: storyObj.mediaUrl || storyObj.imageUrl || storyObj.videoUrl || '',
       mediaType: storyObj.mediaType || (storyObj.videoUrl ? 'video' : 'image'),
-      createdAt: storyObj.createdAt || new Date()
+      createdAt: storyObj.createdAt || new Date(),
+      locationData: storyObj.locationData || null,
     } : { storyId };
 
     const res = await apiService.post(`/highlights/${highlightId}/stories`, { 

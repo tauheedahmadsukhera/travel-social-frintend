@@ -82,6 +82,8 @@ const DraggableText = ({
     onDelete,
     onEdit,
     onUpdatePosition,
+    onDragStart,
+    onDragEnd,
 }: {
     overlay: TextOverlay;
     isSelected: boolean;
@@ -89,6 +91,8 @@ const DraggableText = ({
     onDelete: (id: string) => void;
     onEdit: (overlay: TextOverlay) => void;
     onUpdatePosition: (id: string, x: number, y: number) => void;
+    onDragStart?: () => void;
+    onDragEnd?: () => void;
 }) => {
     const baseRef = useRef({ x: overlay.x * SCREEN_W, y: overlay.y * PREVIEW_H });
     const pan = useRef(new Animated.ValueXY({ x: baseRef.current.x, y: baseRef.current.y })).current;
@@ -104,13 +108,14 @@ const DraggableText = ({
 
     const panResponder = useRef(
         PanResponder.create({
-            onStartShouldSetPanResponder: () => true,
+            onStartShouldSetPanResponder: () => false,
             onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dx) > 2 || Math.abs(g.dy) > 2,
             onPanResponderGrant: () => {
                 onSelect(overlay.id);
                 pan.stopAnimation();
                 pan.setOffset({ x: baseRef.current.x, y: baseRef.current.y });
                 pan.setValue({ x: 0, y: 0 });
+                onDragStart?.();
             },
             onPanResponderMove: Animated.event([null, { dx: pan.x, dy: pan.y }], { useNativeDriver: false }),
             onPanResponderRelease: () => {
@@ -125,9 +130,11 @@ const DraggableText = ({
                 baseRef.current = { x: clampedX, y: clampedY };
                 pan.setValue({ x: clampedX, y: clampedY });
                 onUpdatePosition(overlay.id, clampedX / SCREEN_W, clampedY / PREVIEW_H);
+                onDragEnd?.();
             },
             onPanResponderTerminate: () => {
                 pan.flattenOffset();
+                onDragEnd?.();
             },
         })
     ).current;
@@ -220,6 +227,7 @@ export default function StoryCreatorScreen() {
     const [editingColor, setEditingColor] = useState('#ffffff');
     const [editingFontStyle, setEditingFontStyle] = useState<FontStyleKey>('classic');
     const [selectedOverlayId, setSelectedOverlayId] = useState<string | null>(null);
+    const [scrollEnabled, setScrollEnabled] = useState(true);
 
     // Sharing State
     const [uploading, setUploading] = useState(false);
@@ -451,8 +459,22 @@ export default function StoryCreatorScreen() {
             return (
                 <TouchableOpacity
                     activeOpacity={0.85}
-                    onPress={() => {
-                        setSelectedUri(item.uri);
+                    onPress={async () => {
+                        let targetUri = item.uri;
+                        if (item.uri.startsWith('ph://') || item.uri.startsWith('assets-library://')) {
+                            try {
+                                const assetId = item.uri.startsWith('ph://')
+                                    ? item.uri.replace('ph://', '').split('/')[0]
+                                    : item.uri;
+                                const assetInfo = await MediaLibrary.getAssetInfoAsync(assetId);
+                                if (assetInfo) {
+                                    targetUri = assetInfo.localUri || assetInfo.uri || item.uri;
+                                }
+                            } catch (e) {
+                                console.warn('[story-creator] Failed to resolve iOS local URI for preview:', e);
+                            }
+                        }
+                        setSelectedUri(targetUri);
                         setSelectedAsset(item);
                         setStep('editor');
                     }}
@@ -585,6 +607,7 @@ export default function StoryCreatorScreen() {
                     </View>
 
                     <ScrollView 
+                        scrollEnabled={scrollEnabled}
                         style={{ flex: 1, backgroundColor: '#000000' }}
                         contentContainerStyle={{ paddingBottom: 40, backgroundColor: '#000000' }}
                         keyboardShouldPersistTaps="handled"
@@ -600,6 +623,7 @@ export default function StoryCreatorScreen() {
                                             resizeMode={ResizeMode.CONTAIN}
                                             shouldPlay={true}
                                             isLooping={true}
+                                            isMuted={true}
                                             useNativeControls={false}
                                         />
                                     ) : (
@@ -619,6 +643,8 @@ export default function StoryCreatorScreen() {
                                         onUpdatePosition={(id, x, y) => {
                                             setTextOverlays(prev => prev.map(item => item.id === id ? { ...item, x, y } : item));
                                         }}
+                                        onDragStart={() => setScrollEnabled(false)}
+                                        onDragEnd={() => setScrollEnabled(true)}
                                     />
                                 ))}
                             </View>
@@ -1107,6 +1133,7 @@ const styles = StyleSheet.create({
         textShadowColor: 'rgba(0,0,0,0.5)',
         textShadowOffset: { width: 1, height: 1 },
         textShadowRadius: 4,
+        textAlign: 'center',
     },
     overlayDeleteBadge: {
         position: 'absolute',

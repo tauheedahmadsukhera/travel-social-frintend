@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useMemo } from 'react';
 import { Dimensions, Image, Modal, StyleSheet, Text, TouchableOpacity, View, ActivityIndicator, Alert, SafeAreaView, Platform, Animated, KeyboardAvoidingView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { getHighlightStories } from '../../lib/firebaseHelpers/core';
@@ -8,6 +8,8 @@ import { Video, ResizeMode } from 'expo-av';
 import { highlightManager } from '../../lib/highlightManager';
 import AsyncStorage from '@/lib/storage';
 import { feedEventEmitter } from '../../lib/feedEventEmitter';
+import { apiService } from '../_services/apiService';
+import StoriesViewer from './StoriesViewer';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -35,22 +37,29 @@ interface Story {
 const HighlightViewer: React.FC<HighlightViewerProps> = ({ visible, highlightId, onClose, userId, userName, userAvatar }) => {
   const [stories, setStories] = useState<Story[]>([]);
   const [loading, setLoading] = useState(false);
-  const [currentIndex, setCurrentIndex] = useState(0);
   const [deleting, setDeleting] = useState(false);
   const [localUid, setLocalUid] = useState<string | null>(null);
   const [isPaused, setIsPaused] = useState(false);
   const [showComments, setShowComments] = useState(false);
-  const [isLiked, setIsLiked] = useState(false);
-  const progress = useRef(new Animated.Value(0)).current;
-  const progressAnimation = useRef<Animated.CompositeAnimation | null>(null);
+
+  useEffect(() => {
+    console.log('[HighlightViewer] 🚀 Component MOUNTED! visible:', visible, 'highlightId:', highlightId);
+    return () => {
+      console.log('[HighlightViewer] 💀 Component UNMOUNTED!');
+    };
+  }, []);
+
+  useEffect(() => {
+    console.log('[HighlightViewer] 🔄 Prop changed - visible:', visible, 'highlightId:', highlightId);
+  }, [visible, highlightId]);
 
   useEffect(() => {
     if (!visible) {
       setShowComments(false);
       setIsPaused(false);
-      progress.setValue(0);
     }
   }, [visible]);
+
 
   useEffect(() => {
     let mounted = true;
@@ -68,16 +77,12 @@ const HighlightViewer: React.FC<HighlightViewerProps> = ({ visible, highlightId,
 
   useEffect(() => {
     if (highlightId && visible) {
+      console.log('[HighlightViewer] 🔍 Fetching stories for highlightId:', highlightId);
       setLoading(true);
-      getHighlightStories(highlightId).then((res: any) => {
-        const storyArray = Array.isArray(res?.stories)
-          ? res.stories
-          : Array.isArray(res?.data?.stories)
-            ? res.data.stories
-            : Array.isArray(res?.data)
-              ? res.data
-              : [];
-        const normalized = (Array.isArray(storyArray) ? storyArray : [])
+
+      // Helper: normalize raw story objects into our Story shape.
+      const normalizeArray = (arr: any[]): Story[] =>
+        (Array.isArray(arr) ? arr : [])
           .map((raw: any, idx: number) => {
             const flat = flattenStoryPayload(raw);
             const media = pickStoryMedia(flat);
@@ -91,189 +96,100 @@ const HighlightViewer: React.FC<HighlightViewerProps> = ({ visible, highlightId,
               mediaType: media.mediaType,
             } as Story;
           })
-          .slice()
           .sort((a: any, b: any) => {
             const ta = Date.parse(String(a?.createdAt || a?.timestamp || 0)) || 0;
             const tb = Date.parse(String(b?.createdAt || b?.timestamp || 0)) || 0;
             return ta - tb;
           });
-        (async () => {
-          // If backend is empty (e.g. 24h expiry or eventual consistency), fall back to local archive.
-          if (normalized.length === 0 && highlightId) {
-            const cached = await getCachedHighlightStories(highlightId);
-            const cachedNorm = (Array.isArray(cached) ? cached : []).map((raw: any, idx: number) => {
-              const flat = flattenStoryPayload(raw);
-              const media = pickStoryMedia(flat);
-              const sid = pickStoryId(flat, raw, idx);
-              return {
-                ...flat,
-                id: sid,
-                _id: flat._id || flat.id || sid,
-                imageUrl: media.mediaType === 'video' ? (media.imageUrl || media.videoUrl || '') : (media.imageUrl || ''),
-                videoUrl: media.mediaType === 'video' ? media.videoUrl : undefined,
-                mediaType: media.mediaType,
-              } as Story;
-            });
-            setStories(cachedNorm);
-          } else {
-            setStories(normalized);
+
+      // Helper: extract story array from any response shape.
+      const extractStories = (res: any): any[] => {
+        if (!res) return [];
+        if (Array.isArray(res)) return res;
+        if (Array.isArray(res.data)) return res.data;
+        if (Array.isArray(res.stories)) return res.stories;
+        if (Array.isArray(res.data?.stories)) return res.data.stories;
+        if (Array.isArray(res.data?.data)) return res.data.data;
+        return [];
+      };
+
+      (async () => {
+        let stories: Story[] = [];
+        let debugRes: any = null;
+
+        // Strategy 1: Direct apiService call (simplest, most reliable).
+        try {
+          console.log('[HighlightViewer] 📡 Direct API call...');
+          const directRes = await apiService.get(`/highlights/${highlightId}/stories`);
+          debugRes = directRes;
+          console.log('[HighlightViewer] 📡 Direct API response keys:', Object.keys(directRes || {}));
+          const directArr = extractStories(directRes);
+          console.log('[HighlightViewer] 📡 Direct API stories count:', directArr.length);
+          if (directArr.length > 0) {
+            stories = normalizeArray(directArr);
+            console.log('[HighlightViewer] ✅ Got', stories.length, 'stories from direct API');
           }
-          setLoading(false);
-          setCurrentIndex(0);
-        })();
-      });
+        } catch (err: any) {
+          console.warn('[HighlightViewer] ⚠️ Direct API failed:', err?.message || err);
+          debugRes = { error: err?.message };
+        }
+
+        // Strategy 2: getHighlightStories helper (includes hydration + cache merge).
+        if (stories.length === 0) {
+          try {
+            console.log('[HighlightViewer] 📡 Trying getHighlightStories helper...');
+            const helperRes: any = await getHighlightStories(highlightId);
+            const helperArr = extractStories(helperRes);
+            console.log('[HighlightViewer] 📡 Helper stories count:', helperArr.length);
+            if (helperArr.length > 0) {
+              stories = normalizeArray(helperArr);
+              console.log('[HighlightViewer] ✅ Got', stories.length, 'stories from helper');
+            }
+          } catch (err: any) {
+            console.warn('[HighlightViewer] ⚠️ Helper failed:', err?.message || err);
+          }
+        }
+
+        // Strategy 3: Local cache fallback.
+        if (stories.length === 0) {
+          try {
+            console.log('[HighlightViewer] 💾 Trying local cache...');
+            const cached = await getCachedHighlightStories(highlightId);
+            if (Array.isArray(cached) && cached.length > 0) {
+              stories = normalizeArray(cached);
+              console.log('[HighlightViewer] ✅ Got', stories.length, 'stories from cache');
+            }
+          } catch (err: any) {
+            console.warn('[HighlightViewer] ⚠️ Cache failed:', err?.message || err);
+          }
+        }
+
+        console.log('[HighlightViewer] 🏁 Final stories count:', stories.length);
+        if (stories.length === 0) {
+          Alert.alert('Debug: No Stories', `ID: ${highlightId}\nDirect API: ${JSON.stringify(debugRes || 'failed')}`);
+        }
+        setStories(stories);
+        setLoading(false);
+      })();
     }
   }, [highlightId, visible]);
 
-  useEffect(() => {
-    if (stories.length > 0 && visible && !loading && !showComments) {
-      if (isPaused) {
-        if (progressAnimation.current) progressAnimation.current.stop();
-      } else {
-        startProgress();
-      }
-    }
-    return () => {
-      if (progressAnimation.current) progressAnimation.current.stop();
-    };
-  }, [currentIndex, stories, visible, loading, isPaused, showComments]);
 
-  const startProgress = () => {
-    // Calculate remaining time if we were paused
-    const currentProgress = (progress as any)._value || 0;
-    const remainingDuration = 5000 * (1 - currentProgress);
-
-    progressAnimation.current = Animated.timing(progress, {
-      toValue: 1,
-      duration: remainingDuration,
-      useNativeDriver: false,
-    });
-
-    progressAnimation.current.start(({ finished }) => {
-      if (finished) {
-        handleNext();
-      }
-    });
-  };
-
-  const handleLongPressIn = () => {
-    setIsPaused(true);
-  };
-
-  const handleLongPressOut = () => {
-    setIsPaused(false);
-  };
-
-  const resolveStoryUri = (s: Story) => {
-    const flat = flattenStoryPayload(s as any);
-    const media = pickStoryMedia(flat);
-    if (media.mediaType === 'video') {
-      return media.imageUrl || media.videoUrl || String(flat.userAvatar || '');
-    }
-    return media.imageUrl || String(flat.userAvatar || '');
-  };
-
-  const handleNext = () => {
-    if (currentIndex < stories.length - 1) {
-      progress.setValue(0);
-      setCurrentIndex(currentIndex + 1);
-    } else {
-      onClose();
-    }
-  };
-
-  const handlePrev = () => {
-    if (currentIndex > 0) {
-      progress.setValue(0);
-      setCurrentIndex(currentIndex - 1);
-    }
-  };
-
-  const toggleLike = () => {
-    setIsLiked(!isLiked);
-    // Add API call for like here if needed
-  };
-
-  const handleDeleteStory = async () => {
-    if (!highlightId || !stories[currentIndex]) return;
-
-    Alert.alert(
-      'Delete Story',
-      'Remove this story from highlight?',
-      [
-        { text: 'Cancel' },
-        {
-          text: 'Delete',
-          onPress: async () => {
-            setDeleting(true);
-            try {
-              const storyAtPress = stories[currentIndex];
-              const storyId = storyAtPress?.id || storyAtPress?._id;
-              if (!storyId) {
-                Alert.alert('Error', 'Story id not found');
-                return;
-              }
-              const mediaHint = String((storyAtPress as any)?.videoUrl || (storyAtPress as any)?.imageUrl || (storyAtPress as any)?.mediaUrl || '');
-
-              // ✅ Instagram-like: remove instantly in UI, then sync server.
-              const removedIndex = currentIndex;
-              const nextStories = stories.filter((_, idx) => idx !== removedIndex);
-              setStories(nextStories);
-              if (nextStories.length === 0) {
-                // Remove highlight from profile immediately (don't wait for refetch)
-                try { feedEventEmitter.emitHighlightDeleted(String(highlightId)); } catch {}
-                // If highlight becomes empty, close viewer immediately.
-                onClose();
-              } else {
-                setCurrentIndex((idx) => Math.min(idx, nextStories.length - 1));
-              }
-
-              const result = await highlightManager.removeStoryFromHighlight({
-                highlightId,
-                storyId: String(storyId),
-                mediaUrlHint: mediaHint || undefined,
-                autoDeleteHighlightIfEmpty: true,
-                userId: String(userId || localUid || ''),
-              });
-
-              // Don't block UX on server failure in production.
-              if (result.error && __DEV__) {
-                console.warn('[HighlightViewer] Server remove failed:', result.error);
-              }
-            } catch (error: any) {
-              Alert.alert('Error', 'Failed to delete story: ' + error.message);
-            } finally {
-              setDeleting(false);
-            }
-          },
-          style: 'destructive'
-        }
-      ]
-    );
-  };
-
-  const getRelativeTime = (dateStr?: string) => {
-    if (!dateStr) return '';
-    const date = new Date(dateStr);
-    const now = new Date();
-    const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000);
-    
-    if (diffInSeconds < 60) return `${diffInSeconds}s`;
-    const diffInMinutes = Math.floor(diffInSeconds / 60);
-    if (diffInMinutes < 60) return `${diffInMinutes}m`;
-    const diffInHours = Math.floor(diffInMinutes / 60);
-    if (diffInHours < 24) return `${diffInHours}h`;
-    const diffInDays = Math.floor(diffInHours / 24);
-    return `${diffInDays}d`;
-  };
-
-  const currentStoryId = stories[currentIndex]?.id || stories[currentIndex]?._id || '';
 
   const handleClose = () => {
+    console.log('[HighlightViewer] handleClose called! Stack trace:\n', new Error().stack);
     setShowComments(false);
     setIsPaused(false);
     onClose();
   };
+
+  const mappedStories = useMemo(() => {
+    return stories.map((s: any) => ({
+      ...s,
+      userName: s.userName || userName || 'User',
+      userAvatar: s.userAvatar || userAvatar || '',
+    }));
+  }, [stories, userName, userAvatar]);
 
   return (
     <Modal 
@@ -296,154 +212,12 @@ const HighlightViewer: React.FC<HighlightViewerProps> = ({ visible, highlightId,
             <Text style={styles.loadingText}>No stories in this highlight</Text>
           </View>
         ) : (
-          <View style={styles.storyContainer}>
-            {String(stories[currentIndex]?.mediaType || '').toLowerCase() === 'video' &&
-            (stories[currentIndex] as any)?.videoUrl ? (
-              <Video
-                source={{ uri: String((stories[currentIndex] as any).videoUrl) }}
-                style={styles.storyImage}
-                resizeMode={ResizeMode.COVER}
-                shouldPlay={!isPaused && !showComments}
-                isLooping
-                isMuted={false}
-                useNativeControls={false}
-              />
-            ) : (
-              <Image
-                source={{ uri: resolveStoryUri(stories[currentIndex]) }}
-                style={styles.storyImage}
-                resizeMode="cover"
-              />
-            )}
-            
-            {/* Progress bar */}
-            <View style={styles.progressBarContainer}>
-              {stories.map((_, idx) => (
-                <View key={idx} style={styles.progressBarBackground}>
-                  <Animated.View
-                    style={[
-                      styles.progressBarFill,
-                      idx < currentIndex ? { width: '100%' } : 
-                      idx === currentIndex ? { 
-                        width: progress.interpolate({
-                          inputRange: [0, 1],
-                          outputRange: ['0%', '100%']
-                        }) 
-                      } : { width: '0%' }
-                    ]}
-                  />
-                </View>
-              ))}
-            </View>
-            
-            {/* Top Bar Info */}
-            <View style={styles.topBar}>
-              <View style={styles.userInfo}>
-                {userAvatar ? (
-                  <Image source={{ uri: userAvatar }} style={styles.userAvatar} />
-                ) : (
-                  <View style={[styles.userAvatar, styles.userAvatarPlaceholder]}>
-                    <Ionicons name="person" size={14} color="#fff" />
-                  </View>
-                )}
-                <Text style={styles.userName}>{userName || 'User'}</Text>
-                <Text style={styles.timestamp}>{getRelativeTime(stories[currentIndex]?.createdAt)}</Text>
-              </View>
-              
-              <View style={styles.topActions}>
-                {(userId || localUid) && (
-                  <TouchableOpacity
-                    style={styles.actionBtn}
-                    onPress={handleDeleteStory}
-                    disabled={deleting}
-                  >
-                    <Ionicons name="ellipsis-horizontal" size={24} color="#fff" />
-                  </TouchableOpacity>
-                )}
-                <TouchableOpacity style={styles.actionBtn} onPress={handleClose}>
-                  <Ionicons name="close" size={30} color="#fff" />
-                </TouchableOpacity>
-              </View>
-            </View>
-            
-            {/* Navigation Areas */}
-            <View style={styles.navOverlay}>
-              <TouchableOpacity
-                style={styles.navSide}
-                onPress={handlePrev}
-                onPressIn={handleLongPressIn}
-                onPressOut={handleLongPressOut}
-                activeOpacity={1}
-              />
-              <TouchableOpacity
-                style={styles.navSide}
-                onPress={handleNext}
-                onPressIn={handleLongPressIn}
-                onPressOut={handleLongPressOut}
-                activeOpacity={1}
-              />
-            </View>
-
-            {/* Bottom Actions - Instagram Style */}
-            <View style={styles.bottomActions}>
-              <TouchableOpacity style={styles.commentInputTrigger} onPress={() => { setIsPaused(true); setShowComments(true); }}>
-                <Text style={styles.commentPlaceholder}>Send message</Text>
-              </TouchableOpacity>
-              
-              <TouchableOpacity style={styles.bottomIconBtn} onPress={toggleLike}>
-                <Ionicons 
-                  name={isLiked ? "heart" : "heart-outline"} 
-                  size={28} 
-                  color={isLiked ? "#ff3b30" : "#fff"} 
-                />
-              </TouchableOpacity>
-              
-              <TouchableOpacity style={styles.bottomIconBtn}>
-                <Ionicons name="paper-plane-outline" size={26} color="#fff" />
-              </TouchableOpacity>
-            </View>
-
-            {/* Comments Modal */}
-            <Modal
-              visible={showComments}
-              transparent={true}
-              animationType="slide"
-              onRequestClose={() => { setShowComments(false); setIsPaused(false); }}
-            >
-              <View style={styles.commentsModalContainer}>
-                <TouchableOpacity 
-                  style={styles.commentsBackdrop} 
-                  activeOpacity={1} 
-                  onPress={() => { setShowComments(false); setIsPaused(false); }}
-                />
-                <KeyboardAvoidingView 
-                  behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-                  style={styles.keyboardAvoidingView}
-                >
-                  <View style={styles.commentsContent}>
-                    <View style={styles.commentsHeader}>
-                      <View style={styles.commentsHandle} />
-                      <TouchableOpacity 
-                        style={styles.commentsCloseBtn}
-                        onPress={() => { setShowComments(false); setIsPaused(false); }}
-                      >
-                        <Ionicons name="close" size={24} color="#000" />
-                      </TouchableOpacity>
-                    </View>
-                    
-                    <View style={{ flex: 1 }}>
-                      <CommentSection
-                        postId={currentStoryId}
-                        postOwnerId={userId || ''}
-                        currentAvatar={userAvatar || ''}
-                        currentUser={userId || ''}
-                      />
-                    </View>
-                  </View>
-                </KeyboardAvoidingView>
-              </View>
-            </Modal>
-          </View>
+          <StoriesViewer
+            stories={mappedStories as any}
+            onClose={handleClose}
+            isHighlight={true}
+            highlightId={highlightId || undefined}
+          />
         )}
       </SafeAreaView>
     </Modal>

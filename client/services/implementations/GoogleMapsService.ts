@@ -378,6 +378,11 @@ export class GoogleMapsService implements IMapService {
 
   private parsePlaceResult(result: any): LocationData {
     const location = result.geometry.location;
+    const addressComponents = result.address_components || [];
+
+    const city = this.findAddressComponent(addressComponents, 'locality');
+    const country = this.findAddressComponent(addressComponents, 'country');
+    const countryCode = this.findAddressComponent(addressComponents, 'country', 'short_name');
 
     return {
       latitude: location.lat,
@@ -385,8 +390,11 @@ export class GoogleMapsService implements IMapService {
       address: result.formatted_address || result.vicinity,
       placeName: result.name,
       placeId: result.place_id,
-      neighborhood: result.vicinity || this.findAddressComponent(result.address_components || [], 'neighborhood'),
-      sublocality: this.findAddressComponent(result.address_components || [], 'sublocality_level_1'),
+      city,
+      country,
+      countryCode,
+      neighborhood: result.vicinity || this.findAddressComponent(addressComponents, 'neighborhood'),
+      sublocality: this.findAddressComponent(addressComponents, 'sublocality_level_1'),
     };
   }
 

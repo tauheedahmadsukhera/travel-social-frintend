@@ -1,24 +1,21 @@
 
 import AsyncStorage from '@/lib/storage';
-import { API_BASE_URL } from '../api';
+import { apiService } from '@/src/_services/apiService';
 
 export async function deleteStory(storyId: string) {
   try {
-    const fullUrl = `${API_BASE_URL}/stories/${storyId}`;
-    console.log('[deleteStory] Deleting story at:', fullUrl);
+    console.log('[deleteStory] Deleting story:', storyId);
 
     const userId = await AsyncStorage.getItem('userId');
+    const res = await apiService.delete(`/stories/${storyId}`, { userId });
 
-    const res = await fetch(fullUrl, {
-      method: 'DELETE',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userId }),
-    });
-
-    const data = await res.json();
-    console.log('[deleteStory] Response:', data);
-    return data;
+    console.log('[deleteStory] Response:', res);
+    return res;
   } catch (error: any) {
+    if (error.response?.status === 404) {
+      console.log('[deleteStory] Story already deleted on server (404), returning success to update UI.');
+      return { success: true, message: 'Already deleted' };
+    }
     console.error('[deleteStory] Error:', error);
     return { success: false, error: error.message };
   }

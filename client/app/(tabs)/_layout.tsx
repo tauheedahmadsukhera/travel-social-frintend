@@ -170,7 +170,7 @@ export default function TabsLayout() {
         const now = Date.now();
         const activeStories = res.data.filter((s: any) => {
           if (s?.expiresAt == null) return true;
-          return Number(s.expiresAt) > now;
+          return new Date(s.expiresAt).getTime() > now;
         });
 
         const target = activeStories.find((s: any) => {

@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Image, Dimensions, ScrollView, TouchableOpacity, StyleSheet } from 'react-native';
 import { Video, ResizeMode } from 'expo-av';
 import { Feather } from '@expo/vector-icons';
+import * as MediaLibrary from 'expo-media-library';
 
 const { width: windowWidth } = Dimensions.get('window');
 
@@ -14,43 +15,78 @@ interface MediaPreviewProps {
 }
 
 const MediaPreview: React.FC<MediaPreviewProps> = ({ uris, thumbnails, isVideo, height, onRemove }) => {
+  const [resolvedUris, setResolvedUris] = useState<string[]>([]);
+
+  useEffect(() => {
+    let active = true;
+    async function resolveAll() {
+      const resolved = await Promise.all(
+        uris.map(async (uri) => {
+          if (uri.startsWith('ph://') || uri.startsWith('assets-library://')) {
+            try {
+              const assetId = uri.startsWith('ph://')
+                ? uri.replace('ph://', '').split('/')[0]
+                : uri;
+              const assetInfo = await MediaLibrary.getAssetInfoAsync(assetId);
+              return assetInfo?.localUri || assetInfo?.uri || uri;
+            } catch (e) {
+              console.warn('[MediaPreview] Failed to resolve iOS asset:', e);
+              return uri;
+            }
+          }
+          return uri;
+        })
+      );
+      if (active) {
+        setResolvedUris(resolved);
+      }
+    }
+    resolveAll();
+    return () => {
+      active = false;
+    };
+  }, [uris]);
+
   if (uris.length === 0) return null;
 
   return (
     <View style={{ height, width: windowWidth, backgroundColor: '#f0f0f0' }}>
       <ScrollView horizontal pagingEnabled showsHorizontalScrollIndicator={false}>
-        {uris.map((uri, index) => (
-          <View key={`${uri}-${index}`} style={{ width: windowWidth, height }}>
-            {isVideo(uri) ? (
-              <Video
-                source={{ uri }}
-                style={{ flex: 1 }}
-                useNativeControls
-                resizeMode={ResizeMode.CONTAIN}
-                isLooping
-                shouldPlay={true}
-                isMuted={true}
-                posterSource={thumbnails[uri] ? { uri: thumbnails[uri] } : undefined}
-                usePoster={!!thumbnails[uri]}
-              />
-            ) : (
-              <Image
-                source={{ uri }}
-                style={{ flex: 1 }}
-                resizeMode="cover"
-              />
-            )}
-            
-            {onRemove && uris.length > 1 && (
-              <TouchableOpacity 
-                style={styles.removeButton}
-                onPress={() => onRemove(index)}
-              >
-                <Feather name="trash-2" size={18} color="#fff" />
-              </TouchableOpacity>
-            )}
-          </View>
-        ))}
+        {resolvedUris.map((uri, index) => {
+          const rawUri = uris[index];
+          return (
+            <View key={`${rawUri}-${index}`} style={{ width: windowWidth, height }}>
+              {isVideo(rawUri) ? (
+                <Video
+                  source={{ uri }}
+                  style={{ flex: 1 }}
+                  useNativeControls
+                  resizeMode={ResizeMode.CONTAIN}
+                  isLooping
+                  shouldPlay={true}
+                  isMuted={true}
+                  posterSource={thumbnails[rawUri] ? { uri: thumbnails[rawUri] } : undefined}
+                  usePoster={!!thumbnails[rawUri]}
+                />
+              ) : (
+                <Image
+                  source={{ uri }}
+                  style={{ flex: 1 }}
+                  resizeMode="cover"
+                />
+              )}
+              
+              {onRemove && uris.length > 1 && (
+                <TouchableOpacity 
+                  style={styles.removeButton}
+                  onPress={() => onRemove(index)}
+                >
+                  <Feather name="trash-2" size={18} color="#fff" />
+                </TouchableOpacity>
+              )}
+            </View>
+          );
+        })}
       </ScrollView>
     </View>
   );

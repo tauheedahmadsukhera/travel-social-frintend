@@ -48,9 +48,25 @@ export type GalleryAsset = {
 
 export const isVideoUri = (uri: string, galleryAssets?: GalleryAsset[]) => {
   if (!uri) return false;
+  
+  if (galleryAssets && Array.isArray(galleryAssets)) {
+    const found = galleryAssets.find(a => a.uri === uri || a.id === uri);
+    if (found) {
+      return found.mediaType === 'video';
+    }
+  }
+
   const lower = String(uri || '').toLowerCase();
-  if (lower.endsWith('.jpg') || lower.endsWith('.jpeg') || lower.endsWith('.png')) return false;
-  return lower.endsWith('.mp4') || lower.endsWith('.mov') || lower.includes('video');
+  if (lower.endsWith('.jpg') || lower.endsWith('.jpeg') || lower.endsWith('.png') || lower.endsWith('.webp')) return false;
+  return (
+    lower.endsWith('.mp4') || 
+    lower.endsWith('.mov') || 
+    lower.endsWith('.m4v') ||
+    lower.endsWith('.3gp') ||
+    lower.endsWith('.mkv') ||
+    lower.includes('video') ||
+    lower.includes('ExponentExperienceData')
+  );
 };
 
 export const useCreatePost = (params: any = {}) => {

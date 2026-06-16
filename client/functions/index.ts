@@ -529,3 +529,106 @@ exports.tiktokAuth = functions.https.onRequest(async (req: any, res: any) => {
     res.status(500).json({ error: error.message || 'Internal server error' });
   }
 });
+
+/**
+ * Snapchat OAuth Code Exchange Cloud Function
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+exports.snapchatAuth = functions.https.onRequest(async (req: any, res: any) => {
+  // Enable CORS
+  res.set('Access-Control-Allow-Origin', '*');
+  res.set('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.set('Access-Control-Allow-Headers', 'Content-Type');
+
+  if (req.method === 'OPTIONS') {
+    res.status(204).send('');
+    return;
+  }
+
+  if (req.method !== 'POST') {
+    res.status(405).json({ error: 'Method not allowed' });
+    return;
+  }
+
+  try {
+    const { code, redirectUri } = req.body;
+
+    if (!code || !redirectUri) {
+      res.status(400).json({ error: 'Missing code or redirectUri' });
+      return;
+    }
+
+    const clientId = functions.config().snapchat?.client_id;
+    const clientSecret = functions.config().snapchat?.client_secret;
+
+    if (!clientId || !clientSecret) {
+      console.error('❌ Snapchat credentials not configured');
+      res.status(500).json({ error: 'Snapchat credentials not configured' });
+      return;
+    }
+
+    // Exchange code for access token
+    const tokenUrl = 'https://accounts.snapchat.com/accounts/oauth2/token';
+    const tokenResponse = await fetch(tokenUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: new URLSearchParams({
+        client_id: clientId,
+        client_secret: clientSecret,
+        code: code,
+        grant_type: 'authorization_code',
+        redirect_uri: redirectUri,
+      }),
+    });
+
+    const tokenData = await tokenResponse.json();
+
+    if (!tokenResponse.ok || tokenData.error) {
+      console.error('❌ Snapchat token exchange failed:', tokenData);
+      res.status(400).json({ error: tokenData.error || 'Token exchange failed' });
+      return;
+    }
+
+    // Fetch user info via kit.snapchat.com/v1/me GraphQL
+    const userInfoUrl = 'https://kit.snapchat.com/v1/me';
+    const userInfoResponse = await fetch(userInfoUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${tokenData.access_token}`,
+      },
+      body: JSON.stringify({
+        query: '{me{displayName bitmoji{avatar} externalId}}',
+      }),
+    });
+
+    const userInfoData = await userInfoResponse.json();
+
+    if (!userInfoResponse.ok || userInfoData.errors?.length > 0) {
+      console.error('❌ Snapchat user info failed:', userInfoData);
+      res.status(400).json({ error: userInfoData.errors?.[0]?.message || 'User info fetch failed' });
+      return;
+    }
+
+    const me = userInfoData.data?.me;
+    if (!me) {
+      res.status(400).json({ error: 'Failed to retrieve Snapchat user profile' });
+      return;
+    }
+
+    // Return user data (client will sign in or create Firebase user using externalId)
+    res.status(200).json({
+      success: true,
+      accessToken: tokenData.access_token,
+      externalId: me.externalId,
+      displayName: me.displayName || 'Snapchat User',
+      avatarUrl: me.bitmoji?.avatar || null,
+    });
+
+  } catch (error: any) {
+    console.error('❌ Snapchat auth error:', error);
+    res.status(500).json({ error: error.message || 'Internal server error' });
+  }
+});

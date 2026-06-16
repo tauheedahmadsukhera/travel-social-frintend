@@ -19,6 +19,7 @@ import {
 } from '../../lib/storyViewer';
 import { safeRouterBack } from '@/lib/safeRouterBack';
 import { mapService } from '../../services/implementations/GoogleMapsService';
+import { countries, continents } from 'countries-list';
 
 
 const { width } = Dimensions.get('window');
@@ -66,7 +67,7 @@ type Story = {
   videoUrl?: string;
   mediaType?: 'image' | 'video';
   createdAt: any;
-  location?: string | { name?: string };
+  location?: any;
   locationData?: {
     name?: string;
     address?: string;
@@ -88,6 +89,140 @@ type SubLocation = {
   }[];
 };
 
+// Dynamically build countryNameToCode from countries-list
+const countryNameToCode: Record<string, string> = {};
+for (const [code, info] of Object.entries(countries)) {
+  const nameLower = info.name.toLowerCase();
+  countryNameToCode[nameLower] = code;
+}
+
+// Add common aliases for client-side legacy mapping
+const countryAliases: Record<string, string> = {
+  'usa': 'US',
+  'united states of america': 'US',
+  'us': 'US',
+  'uk': 'GB',
+  'united kingdom': 'GB',
+  'uae': 'AE',
+  'united arab emirates': 'AE',
+  'vietnam': 'VN',
+  'viet nam': 'VN',
+  'south korea': 'KR',
+  'north korea': 'KP',
+  'russia': 'RU',
+  'russian federation': 'RU',
+  'netherlands': 'NL',
+  'holland': 'NL'
+};
+
+for (const [alias, code] of Object.entries(countryAliases)) {
+  countryNameToCode[alias.toLowerCase()] = code;
+}
+
+// Curated major city mapping fallback for legacy posts on client
+const CITY_TO_COUNTRY: Record<string, string> = {
+  'lahore': 'Pakistan',
+  'karachi': 'Pakistan',
+  'islamabad': 'Pakistan',
+  'rawalpindi': 'Pakistan',
+  'peshawar': 'Pakistan',
+  'multan': 'Pakistan',
+  'faisalabad': 'Pakistan',
+  'quetta': 'Pakistan',
+  'sialkot': 'Pakistan',
+  'gujranwala': 'Pakistan',
+  'delhi': 'India',
+  'new delhi': 'India',
+  'mumbai': 'India',
+  'bangalore': 'India',
+  'bengaluru': 'India',
+  'kolkata': 'India',
+  'chennai': 'India',
+  'hyderabad': 'India',
+  'pune': 'India',
+  'ahmedabad': 'India',
+  'dubai': 'United Arab Emirates',
+  'abu dhabi': 'United Arab Emirates',
+  'sharjah': 'United Arab Emirates',
+  'riyadh': 'Saudi Arabia',
+  'jeddah': 'Saudi Arabia',
+  'mecca': 'Saudi Arabia',
+  'medina': 'Saudi Arabia',
+  'new york': 'United States',
+  'new york city': 'United States',
+  'nyc': 'United States',
+  'los angeles': 'United States',
+  'la': 'United States',
+  'chicago': 'United States',
+  'san francisco': 'United States',
+  'miami': 'United States',
+  'las vegas': 'United States',
+  'seattle': 'United States',
+  'boston': 'United States',
+  'washington': 'United States',
+  'houston': 'United States',
+  'dallas': 'United States',
+  'london': 'United Kingdom',
+  'manchester': 'United Kingdom',
+  'birmingham': 'United Kingdom',
+  'edinburgh': 'United Kingdom',
+  'glasgow': 'United Kingdom',
+  'paris': 'France',
+  'marseille': 'France',
+  'lyon': 'France',
+  'madrid': 'Spain',
+  'barcelona': 'Spain',
+  'seville': 'Spain',
+  'rome': 'Italy',
+  'milan': 'Italy',
+  'florence': 'Italy',
+  'venice': 'Italy',
+  'tokyo': 'Japan',
+  'osaka': 'Japan',
+  'kyoto': 'Japan',
+  'beijing': 'China',
+  'shanghai': 'China',
+  'shenzhen': 'China',
+  'guangzhou': 'China',
+  'bangkok': 'Thailand',
+  'phuket': 'Thailand',
+  'istanbul': 'Turkey',
+  'ankara': 'Turkey',
+  'amsterdam': 'Netherlands',
+  'sydney': 'Australia',
+  'melbourne': 'Australia',
+  'toronto': 'Canada',
+  'vancouver': 'Canada',
+  'montreal': 'Canada',
+  'singapore': 'Singapore'
+};
+
+const normalizeCountryName = (c: string): string => {
+  const norm = String(c || '').toLowerCase().trim();
+  const code = countryNameToCode[norm];
+  if (code && countries[code as keyof typeof countries]) {
+    return countries[code as keyof typeof countries].name;
+  }
+  return c;
+};
+
+const isCountryInContinent = (country: string, continent: string): boolean => {
+  const normCountry = String(country || '').toLowerCase().trim();
+  const normContinent = String(continent || '').toLowerCase().trim();
+
+  const code = countryNameToCode[normCountry];
+  if (!code || !countries[code as keyof typeof countries]) return false;
+
+  const continentCode = countries[code as keyof typeof countries].continent;
+  const continentName = (continents[continentCode as keyof typeof continents] || '').toLowerCase().trim();
+
+  if (normContinent === 'america' || normContinent === 'americas') {
+    return continentName === 'north america' || continentName === 'south america';
+  }
+
+  return continentName === normContinent;
+};
+
 const getCleanAddressParts = (addressString?: string | null): string[] => {
   if (!addressString || typeof addressString !== 'string') return [];
   
@@ -97,17 +232,22 @@ const getCleanAddressParts = (addressString?: string | null): string[] => {
   for (const part of parts) {
     let p = part;
     
-    // Remove UK-style postal codes (case-insensitive, e.g. SW1A 1AA)
-    p = p.replace(/\b[A-Z]{1,2}\d[A-Z\d]?\s?\d[A-Z]{2}\b/gi, '');
-    
-    // Remove US/Canadian/European zip codes and any stand-alone numbers
-    p = p.replace(/\b\d{3,8}\b/g, '');
-    p = p.replace(/\b\d+\b/g, '');
+    // Remove postal codes and zip codes
+    p = p.replace(/\b[A-Z]{1,2}\d[A-Z\d]?\s?\d[A-Z]{2}\b/gi, ''); // UK
+    p = p.replace(/\b[A-Z]\d[A-Z]\s?\d[A-Z]\d\b/gi, '');         // Canada (e.g. T1L 1K2)
+    p = p.replace(/\b\d{5}(-\d{4})?\b/g, '');                    // US Zip Code
+    p = p.replace(/\b[A-Z]?\d{3,5}(-[A-Z\d]{3,4})?\b/gi, '');    // Europe / Japan / Generic
+    p = p.replace(/\b\d+\b/g, '');                               // General numbers
     
     // Clean up extra whitespace
     p = p.trim().replace(/\s+/g, ' ');
+    if (!p) continue;
+
+    // Discard 2-letter state/province uppercase codes (e.g., NY, CA, AB, ON)
+    if (p.length === 2 && p === p.toUpperCase() && /^[A-Z]{2}$/.test(p)) {
+      continue;
+    }
     
-    // Only keep if it has at least 2 characters and contains letters
     if (p.length >= 2 && /[a-zA-Z]/.test(p)) {
       cleanParts.push(p);
     }
@@ -244,22 +384,15 @@ export default function LocationDetailsScreen() {
     const sc = String(scope || '').toLowerCase().trim();
 
     // Continent Detection
-    const continents = ['europe', 'asia', 'africa', 'americas', 'oceania', 'america', 'antarctica'];
-    if (sc === 'region' || sc === 'continent' || continents.includes(name)) {
+    const isContinentName = Object.values(continents).map(c => c.toLowerCase()).includes(name) ||
+      name === 'america' || name === 'americas' || name === 'middle east';
+      
+    if (sc === 'continent' || isContinentName) {
       return 'CONTINENT';
     }
 
     // Country Detection
-    if (sc === 'country') {
-      return 'COUNTRY';
-    }
-    const countries = [
-      'united kingdom', 'japan', 'pakistan', 'france', 'spain', 'italy', 'germany', 
-      'united states', 'usa', 'canada', 'australia', 'brazil', 'india', 'china',
-      'united arab emirates', 'uae', 'saudi arabia', 'mexico', 'thailand', 'turkey',
-      'portugal', 'greece', 'switzerland', 'egypt', 'morocco', 'south africa', 'kenya'
-    ];
-    if (countries.includes(name)) {
+    if (sc === 'country' || sc === 'region' || countryNameToCode[name] !== undefined) {
       return 'COUNTRY';
     }
 
@@ -276,33 +409,6 @@ export default function LocationDetailsScreen() {
     if (geoScope === 'COUNTRY') return 'CITIES';
     return 'PLACES';
   }, [getGeoScope]);
-
-  const extractCountryIntelligently = React.useCallback((post: any): string => {
-    if (post?.locationData?.country && typeof post.locationData.country === 'string' && post.locationData.country.trim().length > 0) {
-      return post.locationData.country.trim();
-    }
-    const fields = [
-      post?.locationData?.address,
-      post?.locationName,
-      post?.location,
-      post?.locationData?.name
-    ];
-    for (const f of fields) {
-      if (f && typeof f === 'string') {
-        const cleanParts = getCleanAddressParts(f);
-        if (cleanParts.length > 0) {
-          const lastPart = cleanParts[cleanParts.length - 1];
-          if (lastPart.toLowerCase() !== 'europe' && lastPart.toLowerCase() !== 'asia' && lastPart.toLowerCase() !== 'america' && lastPart.toLowerCase() !== 'africa') {
-            return lastPart;
-          }
-          if (cleanParts.length > 1) {
-            return cleanParts[cleanParts.length - 2];
-          }
-        }
-      }
-    }
-    return 'General';
-  }, []);
 
   const extractCityIntelligently = React.useCallback((post: any): string => {
     if (post?.locationData?.city && typeof post.locationData.city === 'string' && post.locationData.city.trim().length > 0) {
@@ -324,22 +430,116 @@ export default function LocationDetailsScreen() {
         
         if (nonStreetParts.length > 0) {
           const len = nonStreetParts.length;
+          let candidate = 'General';
           if (len === 1) {
-            return nonStreetParts[0];
+            candidate = nonStreetParts[0];
           } else if (len === 2) {
-            return nonStreetParts[0];
+            candidate = nonStreetParts[0];
           } else {
             const secondToLast = nonStreetParts[len - 2];
             if (secondToLast.length === 2 && secondToLast === secondToLast.toUpperCase()) {
-              return nonStreetParts[len - 3] || nonStreetParts[len - 2];
+              candidate = nonStreetParts[len - 3] || nonStreetParts[len - 2];
+            } else {
+              candidate = secondToLast;
             }
-            return secondToLast;
+          }
+          
+          // Filter out country names from being returned as city names
+          if (countryNameToCode[candidate.toLowerCase().trim()] !== undefined) {
+            const nonCountryParts = nonStreetParts.filter(p => countryNameToCode[p.toLowerCase().trim()] === undefined);
+            if (nonCountryParts.length > 0) {
+              return nonCountryParts[0].trim();
+            }
+          } else {
+            return candidate.trim();
           }
         }
       }
     }
     return 'General';
   }, []);
+
+  const extractCountryIntelligently = React.useCallback((post: any): string => {
+    // 1. Try real locationData country (with self-healing for cities wrongly stored as countries)
+    if (post?.locationData?.country && typeof post.locationData.country === 'string' && post.locationData.country.trim().length > 0) {
+      const c = post.locationData.country.trim();
+      const mappedCountry = CITY_TO_COUNTRY[c.toLowerCase()];
+      if (mappedCountry) {
+        return mappedCountry;
+      }
+      return c;
+    }
+
+    // 2. Try to map city name to country
+    const city = extractCityIntelligently(post);
+    if (city && city !== 'General') {
+      const mappedCountry = CITY_TO_COUNTRY[city.toLowerCase().trim()];
+      if (mappedCountry) {
+        return mappedCountry;
+      }
+    }
+
+    // 3. Address parsing fallback
+    const fields = [
+      post?.locationData?.address,
+      post?.locationName,
+      post?.location,
+      post?.locationData?.name
+    ];
+    for (const f of fields) {
+      if (f && typeof f === 'string') {
+        const cleanParts = getCleanAddressParts(f);
+        if (cleanParts.length > 0) {
+          const lastPart = cleanParts[cleanParts.length - 1].trim();
+          
+          // Self-heal known city in last position to its country
+          const mappedFromLast = CITY_TO_COUNTRY[lastPart.toLowerCase()];
+          if (mappedFromLast) {
+            return mappedFromLast;
+          }
+
+          if (lastPart.toLowerCase() !== 'europe' && lastPart.toLowerCase() !== 'asia' && lastPart.toLowerCase() !== 'america' && lastPart.toLowerCase() !== 'africa') {
+            return lastPart;
+          }
+          if (cleanParts.length > 1) {
+            return cleanParts[cleanParts.length - 2].trim();
+          }
+        }
+      }
+    }
+    return 'General';
+  }, [extractCityIntelligently]);
+
+  const filterPostsForLocation = React.useCallback((posts: any[]): any[] => {
+    const geoScope = getGeoScope();
+    const locName = String(locationName || placeDetails?.name || '').toLowerCase().trim();
+
+    return posts.filter(post => {
+      if (geoScope === 'CONTINENT') {
+        const postContinent = String(post?.locationData?.continent || '').toLowerCase().trim();
+        if (postContinent) {
+          if (locName === 'america' || locName === 'americas') {
+            return postContinent === 'north america' || postContinent === 'south america';
+          }
+          return postContinent === locName;
+        }
+        
+        // Fallback for legacy posts
+        const country = extractCountryIntelligently(post);
+        return isCountryInContinent(country, locName);
+      } else if (geoScope === 'COUNTRY') {
+        const postCountry = String(post?.locationData?.country || '').toLowerCase().trim();
+        if (postCountry) {
+          return normalizeCountryName(postCountry) === normalizeCountryName(locName);
+        }
+        
+        // Fallback for legacy posts
+        const country = extractCountryIntelligently(post);
+        return normalizeCountryName(country) === normalizeCountryName(locName);
+      }
+      return true;
+    });
+  }, [getGeoScope, locationName, placeDetails?.name, extractCountryIntelligently]);
 
   const formatHeaderLocationName = React.useCallback(() => {
     const mainName = placeDetails?.name || locationName || '';
@@ -582,22 +782,23 @@ export default function LocationDetailsScreen() {
       if (locationPosts.length < LIMIT) setHasMore(false);
 
       const normalized = locationPosts.map((p: any) => ({ ...p, id: p.id || p._id }));
+      const filtered = filterPostsForLocation(normalized);
       
-      let finalPosts = normalized;
+      let finalPosts = filtered;
       if (isLoadMore) {
-        finalPosts = [...allPosts, ...normalized];
+        finalPosts = [...allPosts, ...filtered];
         setAllPosts(finalPosts);
         setFilteredPosts(finalPosts);
         setPage(p => p + 1);
       } else {
-        setAllPosts(normalized);
-        setFilteredPosts(normalized);
+        setAllPosts(filtered);
+        setFilteredPosts(filtered);
         setPage(0);
         setHasMore(locationPosts.length === LIMIT);
 
         // --- NEW: Set Most Liked Image for Region Header ---
-        if (normalized.length > 0) {
-          const mostLiked = normalized.reduce((prev: any, curr: any) =>
+        if (filtered.length > 0) {
+          const mostLiked = filtered.reduce((prev: any, curr: any) =>
             (curr.likesCount || 0) > (prev.likesCount || 0) ? curr : prev
           );
           if (mostLiked?.imageUrl) setMostLikedPostImage(mostLiked.imageUrl);
@@ -605,9 +806,9 @@ export default function LocationDetailsScreen() {
       }
 
         // --- Meta Logic ---
-        if (normalized.length > 0) {
+        if (filtered.length > 0) {
           // Trigger enrichment in background
-          enrichDataInBackground(finalPosts, normalized);
+          enrichDataInBackground(finalPosts, filtered);
         }
     } catch (err) {
       console.error('[fetchLocationPosts] Error:', err);
@@ -632,30 +833,31 @@ export default function LocationDetailsScreen() {
       if (locationPosts.length < LIMIT) setHasMore(false);
 
       const normalized = locationPosts.map((p: any) => ({ ...p, id: p.id || p._id }));
+      const filtered = filterPostsForLocation(normalized);
 
-      let finalPosts = normalized;
+      let finalPosts = filtered;
       if (isLoadMore) {
-        finalPosts = [...allPosts, ...normalized];
+        finalPosts = [...allPosts, ...filtered];
         setAllPosts(finalPosts);
         setFilteredPosts(finalPosts);
         setPage(p => p + 1);
       } else {
-        setAllPosts(normalized);
-        setFilteredPosts(normalized);
+        setAllPosts(filtered);
+        setFilteredPosts(filtered);
         setPage(0);
         setHasMore(locationPosts.length === LIMIT);
 
         // --- NEW: Set Most Liked Image for Header ---
-        if (normalized.length > 0) {
-          const mostLiked = normalized.reduce((prev: any, curr: any) =>
+        if (filtered.length > 0) {
+          const mostLiked = filtered.reduce((prev: any, curr: any) =>
             (curr.likesCount || 0) > (prev.likesCount || 0) ? curr : prev
           );
           if (mostLiked?.imageUrl) setMostLikedPostImage(mostLiked.imageUrl);
         }
       }
 
-      if (normalized.length > 0) {
-        enrichDataInBackground(finalPosts, normalized);
+      if (filtered.length > 0) {
+        enrichDataInBackground(finalPosts, filtered);
       }
     } catch (err) {
       console.error('[fetchRegionPosts] Error:', err);

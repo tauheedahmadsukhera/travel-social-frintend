@@ -39,22 +39,36 @@ async function uploadToCloudinary(fileBuffer, folder, resourceType = 'auto', opt
     };
 
     // Enable chunked upload for large files (bypasses 10MB single upload limit)
-    if (fileBuffer.length > 6 * 1024 * 1024) {
+    const isLarge = fileBuffer.length > 6 * 1024 * 1024;
+    if (isLarge) {
       uploadOptions.chunk_size = 6 * 1024 * 1024; // 6MB chunks
     }
 
-    const uploadStream = cloudinary.uploader.upload_stream(
-      uploadOptions,
-      (error, result) => {
-        if (error) {
-          logger.error('❌ Cloudinary upload error: %O', error);
-          reject(error);
-        } else {
-          logger.info('✅ Cloudinary upload success: %s', result.secure_url);
-          resolve(options.returnResult ? result : result.secure_url);
-        }
-      }
-    );
+    const uploadStream = isLarge
+      ? cloudinary.uploader.upload_large_stream(
+          uploadOptions,
+          (error, result) => {
+            if (error) {
+              logger.error('❌ Cloudinary upload error: %O', error);
+              reject(error);
+            } else {
+              logger.info('✅ Cloudinary upload success: %s', result.secure_url);
+              resolve(options.returnResult ? result : result.secure_url);
+            }
+          }
+        )
+      : cloudinary.uploader.upload_stream(
+          uploadOptions,
+          (error, result) => {
+            if (error) {
+              logger.error('❌ Cloudinary upload error: %O', error);
+              reject(error);
+            } else {
+              logger.info('✅ Cloudinary upload success: %s', result.secure_url);
+              resolve(options.returnResult ? result : result.secure_url);
+            }
+          }
+        );
     uploadStream.end(fileBuffer);
   });
 }

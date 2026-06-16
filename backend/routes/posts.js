@@ -265,15 +265,8 @@ router.get('/by-location', optionalAuth, async (req, res) => {
 
     const Post = mongoose.model('Post');
     
-    // PRODUCTION-GRADE ISO REGION MAPPING
-    const regionISO = {
-      europe: ['FR', 'DE', 'IT', 'ES', 'GB', 'UK', 'PT', 'GR', 'CH', 'NL', 'BE', 'AT', 'TR', 'SE', 'NO', 'DK', 'FI', 'IE', 'PL', 'CZ', 'HU', 'RO', 'BG', 'HR', 'UA', 'RU', 'ME', 'AL', 'RS', 'BA', 'SI', 'IS', 'MC', 'MT', 'LU', 'LI', 'AD', 'SM', 'VA', 'EE', 'LV', 'LT'],
-      americas: ['US', 'CA', 'MX', 'BR', 'AR', 'CL', 'CO', 'PE', 'VE', 'EC', 'BO', 'PY', 'UY', 'CU', 'JM', 'CR', 'PA', 'GT', 'HN', 'SV', 'NI', 'DO', 'HT', 'PR'],
-      asia: ['CN', 'JP', 'TH', 'VN', 'SG', 'HK', 'IN', 'PK', 'AE', 'SA', 'KR', 'ID', 'MY', 'PH', 'TW', 'IL', 'QA', 'KW', 'OM', 'JO', 'LB', 'KH', 'LA', 'MM', 'NP', 'LK', 'BD'],
-      africa: ['EG', 'MA', 'ZA', 'KE', 'NG', 'DZ', 'TN', 'ET', 'GH', 'TZ', 'UG', 'SN', 'CI', 'AO', 'CM', 'ET', 'ZW'],
-      oceania: ['AU', 'NZ', 'FJ', 'PG', 'SB', 'VU', 'NC', 'PF']
-    };
-
+    const { countries, continents } = require('countries-list');
+    
     // Split search query into parts (e.g. "Paris, France" -> ["paris", "france"])
     const parts = location.split(',').map(p => p.trim()).filter(p => p.length > 2);
     const normalizedLocs = parts.map(p => p.toLowerCase());
@@ -282,27 +275,6 @@ router.get('/by-location', optionalAuth, async (req, res) => {
     }
 
     const conditions = [];
-    
-    // PRODUCTION-GRADE COUNTRY-TO-ISO MAPPING
-    const countryToISO = {
-      'france': 'FR', 'germany': 'DE', 'italy': 'IT', 'spain': 'ES', 'united kingdom': 'GB', 'uk': 'GB', 'usa': 'US', 'united states': 'US',
-      'pakistan': 'PK', 'india': 'IN', 'uae': 'AE', 'dubai': 'AE'
-    };
-
-    const countryAliases = {
-      'united states': ['usa', 'us', 'america', 'united states of america'],
-      'usa': ['united states', 'us', 'america'],
-      'united kingdom': ['uk', 'gb', 'great britain'],
-      'uk': ['united kingdom', 'gb', 'great britain'],
-      'uae': ['united arab emirates', 'dubai', 'abu dhabi'],
-      'pakistan': ['pk', 'islamabad', 'karachi', 'lahore']
-    };
-
-    const famousPlacesMap = {
-      'europe': ['eiffel tower', 'louvre', 'colosseum', 'big ben', 'arc de triomphe', 'pisa', 'sagrada familia'],
-      'france': ['eiffel tower', 'louvre', 'arc de triomphe', 'notre dame', 'versailles'],
-      'uk': ['big ben', 'london eye', 'stonehenge', 'buckingham palace']
-    };
 
     // Process each search term
     normalizedLocs.forEach(loc => {
@@ -315,64 +287,94 @@ router.get('/by-location', optionalAuth, async (req, res) => {
       conditions.push({ 'locationData.address': regex });
       conditions.push({ 'locationData.city': regex });
       conditions.push({ 'locationData.country': regex });
+      conditions.push({ 'locationData.continent': regex });
 
-      // 2. Alias Support: If searching 'United States', also search 'USA', 'US'
-      const aliases = countryAliases[loc] || [];
-      aliases.forEach(alias => {
-        const aRegex = new RegExp(escapeRegExp(alias), 'i');
-        conditions.push({ location: aRegex });
-        conditions.push({ 'locationData.address': aRegex });
-        conditions.push({ locationKeys: { $in: [alias.toLowerCase()] } });
-      });
-
-      // 3. Famous Places Fallback: e.g. Eiffel Tower -> France/Europe
-      const places = famousPlacesMap[loc] || [];
-      places.forEach(place => {
-        const pRegex = new RegExp(escapeRegExp(place), 'i');
-        conditions.push({ location: pRegex });
-        conditions.push({ 'locationData.name': pRegex });
-        conditions.push({ 'locationData.address': pRegex });
-      });
-
-      // 4. ISO Hierarchy (If searching a region like 'europe')
-      if (regionISO[loc]) {
-        const codes = regionISO[loc];
-        const allCases = [...codes, ...codes.map(c => c.toLowerCase())];
-        conditions.push({ 'locationData.countryCode': { $in: allCases } });
-        
-        // IMPORTANT: Also search for country names AND major cities across ALL fields
-        const regionCountryNames = {
-          europe: [
-            'france', 'germany', 'italy', 'spain', 'uk', 'united kingdom', 'portugal', 'greece', 'turkey', 'croatia', 'montenegro', 'switzerland', 'netherlands', 'belgium', 'austria', 'russia', 'poland',
-            'paris', 'berlin', 'rome', 'madrid', 'london', 'lisbon', 'athens', 'istanbul', 'amsterdam', 'vienna', 'warsaw', 'prague', 'budapest',
-            'marseille', 'lyon', 'nice', 'toulouse', 'milan', 'barcelona', 'munich', 'hamburg', 'manchester', 'birmingham'
-          ],
-          americas: [
-            'usa', 'united states', 'canada', 'mexico', 'brazil', 'argentina', 'chile', 'colombia',
-            'new york', 'los angeles', 'miami', 'toronto', 'vancouver', 'mexico city', 'sao paulo', 'rio de janeiro'
-          ],
-          asia: [
-            'china', 'japan', 'thailand', 'india', 'pakistan', 'uae', 'saudi arabia', 'vietnam', 'singapore',
-            'tokyo', 'beijing', 'shanghai', 'bangkok', 'delhi', 'mumbai', 'karachi', 'lahore', 'islamabad', 'dubai', 'abu dhabi', 'seoul'
-          ]
-        };
-        const names = regionCountryNames[loc] || [];
-        names.forEach(n => {
-          const nRegex = new RegExp(escapeRegExp(n), 'i');
-          // Deep scan every field for each country in the region
-          conditions.push({ location: nRegex });
-          conditions.push({ 'locationData.name': nRegex });
-          conditions.push({ 'locationData.address': nRegex });
-          conditions.push({ 'locationData.city': nRegex });
-          conditions.push({ 'locationData.country': nRegex });
-          conditions.push({ locationKeys: { $in: [n.toLowerCase()] } });
-        });
+      // 2. Continent detection dynamically
+      let targetContinentName = null;
+      let targetContinentCode = null;
+      for (const [code, name] of Object.entries(continents)) {
+        if (name.toLowerCase() === loc || (loc === 'americas' && (name.toLowerCase() === 'north america' || name.toLowerCase() === 'south america'))) {
+          targetContinentName = name;
+          targetContinentCode = code;
+          break;
+        }
       }
 
-      // 3. Country-to-ISO: If searching a country (e.g. 'france')
-      if (countryToISO[loc]) {
-        const code = countryToISO[loc];
-        conditions.push({ 'locationData.countryCode': { $in: [code, code.toLowerCase()] } });
+      if (loc === 'america' || loc === 'americas') {
+        targetContinentName = 'Americas';
+      }
+
+      if (targetContinentCode || targetContinentName === 'Americas') {
+        if (targetContinentName === 'Americas') {
+          conditions.push({ 'locationData.continent': { $in: ['North America', 'South America'] } });
+          
+          const codes = Object.entries(countries)
+            .filter(([_, info]) => info.continent === 'NA' || info.continent === 'SA')
+            .map(([code]) => code);
+          const codesLower = codes.map(c => c.toLowerCase());
+          conditions.push({ 'locationData.countryCode': { $in: [...codes, ...codesLower] } });
+          
+          Object.entries(countries)
+            .filter(([_, info]) => info.continent === 'NA' || info.continent === 'SA')
+            .forEach(([_, info]) => {
+              const nameRegex = new RegExp(escapeRegExp(info.name), 'i');
+              conditions.push({ 'locationData.country': nameRegex });
+            });
+        } else {
+          conditions.push({ 'locationData.continent': new RegExp(escapeRegExp(targetContinentName), 'i') });
+          
+          const codes = Object.entries(countries)
+            .filter(([_, info]) => info.continent === targetContinentCode)
+            .map(([code]) => code);
+          const codesLower = codes.map(c => c.toLowerCase());
+          conditions.push({ 'locationData.countryCode': { $in: [...codes, ...codesLower] } });
+          
+          Object.entries(countries)
+            .filter(([_, info]) => info.continent === targetContinentCode)
+            .forEach(([_, info]) => {
+              const nameRegex = new RegExp(escapeRegExp(info.name), 'i');
+              conditions.push({ 'locationData.country': nameRegex });
+            });
+        }
+      }
+
+      // 3. Country detection dynamically
+      let targetCountryName = null;
+      let targetCountryCode = null;
+      if (loc.length === 2) {
+        const codeUpper = loc.toUpperCase();
+        if (countries[codeUpper]) {
+          targetCountryName = countries[codeUpper].name;
+          targetCountryCode = codeUpper;
+        }
+      } else {
+        const { countryNameToCode } = require('../src/utils/geoResolver');
+        const code = countryNameToCode[loc];
+        if (code && countries[code]) {
+          targetCountryName = countries[code].name;
+          targetCountryCode = code;
+        }
+      }
+
+      if (targetCountryCode) {
+        conditions.push({ 'locationData.countryCode': { $in: [targetCountryCode, targetCountryCode.toLowerCase()] } });
+        conditions.push({ 'locationData.country': new RegExp(escapeRegExp(targetCountryName), 'i') });
+        conditions.push({ locationKeys: { $in: [targetCountryName.toLowerCase(), targetCountryCode.toLowerCase()] } });
+        
+        // Also support common country aliases in search
+        const countryAliases = {
+          'US': ['usa', 'us', 'america', 'united states of america'],
+          'GB': ['uk', 'gb', 'great britain', 'united kingdom'],
+          'AE': ['united arab emirates', 'dubai', 'abu dhabi', 'uae'],
+          'PK': ['pk', 'islamabad', 'karachi', 'lahore', 'pakistan']
+        };
+        const aliases = countryAliases[targetCountryCode] || [];
+        aliases.forEach(alias => {
+          const aRegex = new RegExp(escapeRegExp(alias), 'i');
+          conditions.push({ location: aRegex });
+          conditions.push({ 'locationData.address': aRegex });
+          conditions.push({ locationKeys: { $in: [alias.toLowerCase()] } });
+        });
       }
     });
 
@@ -543,6 +545,17 @@ router.post('/', verifyToken, validate(createPostSchema), async (req, res) => {
     allowed.forEach(f => { if (req.body[f] !== undefined) postData[f] = req.body[f]; });
     // Always use authenticated userId from token, NEVER trust body.userId
     postData.userId = req.userId;
+
+    // Resolve structured geographical details
+    if (postData.location || postData.locationData) {
+      try {
+        const { resolveGeographicalData } = require('../src/utils/geoResolver');
+        postData.locationData = resolveGeographicalData(postData.location, postData.locationData);
+      } catch (err) {
+        console.warn('[CreatePost] Failed to resolve geo data:', err.message);
+      }
+    }
+
     const post = new Post(postData);
     await post.save();
     res.status(201).json({ success: true, data: post });

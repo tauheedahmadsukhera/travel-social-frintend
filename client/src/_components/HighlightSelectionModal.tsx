@@ -74,8 +74,10 @@ export default function HighlightSelectionModal({
     </TouchableOpacity>
   );
 
+  if (!visible) return null;
+
   return (
-    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
+    <View style={[StyleSheet.absoluteFillObject, { zIndex: 105 }]}>
       <View style={styles.overlay}>
         <TouchableOpacity style={styles.dismissArea} activeOpacity={1} onPress={onClose} />
         
@@ -106,7 +108,7 @@ export default function HighlightSelectionModal({
           )}
         </View>
       </View>
-    </Modal>
+    </View>
   );
 }
 

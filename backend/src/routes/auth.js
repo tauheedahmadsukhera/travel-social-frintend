@@ -550,4 +550,71 @@ router.post('/reset-password', validate(require('../validations/authValidation')
   }
 });
 
+/**
+ * POST /api/auth/tiktok
+ * Exchanges a TikTok OAuth code for access token and profile info.
+ */
+router.post('/tiktok', async (req, res) => {
+  try {
+    const { code, redirectUri } = req.body;
+    if (!code || !redirectUri) {
+      return res.status(400).json({ success: false, error: 'Missing code or redirectUri' });
+    }
+
+    const clientKey = 'awsmbaw0wj2exq5v';
+    const clientSecret = 'YG9FFyouPCjN4xmbh0qjftUvMga6XD9t';
+
+    const axios = require('axios');
+    const params = new URLSearchParams();
+    params.append('client_key', clientKey);
+    params.append('client_secret', clientSecret);
+    params.append('code', code);
+    params.append('grant_type', 'authorization_code');
+    params.append('redirect_uri', redirectUri);
+
+    if (process.env.NODE_ENV !== 'production') {
+      logger.info(`Sending TikTok token request with redirectUri: ${redirectUri}`);
+    }
+
+    const tokenResponse = await axios.post('https://open.tiktokapis.com/v2/oauth/token/', params.toString(), {
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+    });
+
+    const tokenData = tokenResponse.data;
+    if (!tokenData || !tokenData.access_token) {
+      logger.error('❌ TikTok token exchange failed: %O', tokenData);
+      return res.status(400).json({ success: false, error: 'Failed to obtain access token from TikTok' });
+    }
+
+    const userInfoResponse = await axios.get('https://open.tiktokapis.com/v2/user/info/?fields=open_id,union_id,avatar_url,display_name', {
+      headers: {
+        'Authorization': `Bearer ${tokenData.access_token}`,
+      },
+    });
+
+    const userInfoData = userInfoResponse.data;
+    if (!userInfoData || !userInfoData.data || !userInfoData.data.user) {
+      logger.error('❌ TikTok user info fetch failed: %O', userInfoData);
+      return res.status(400).json({ success: false, error: 'Failed to obtain user info from TikTok' });
+    }
+
+    res.json({
+      success: true,
+      accessToken: tokenData.access_token,
+      openId: userInfoData.data.user.open_id,
+      unionId: userInfoData.data.user.union_id,
+      displayName: userInfoData.data.user.display_name,
+      avatarUrl: userInfoData.data.user.avatar_url,
+    });
+  } catch (error) {
+    logger.error('❌ TikTok auth error: %s', error.response?.data ? JSON.stringify(error.response.data) : error.message);
+    res.status(500).json({ 
+      success: false, 
+      error: error.response?.data?.error_description || error.response?.data?.error || error.message || 'Internal server error' 
+    });
+  }
+});
+
 module.exports = router;

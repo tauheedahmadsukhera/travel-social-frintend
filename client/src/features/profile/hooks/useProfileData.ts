@@ -61,7 +61,7 @@ export function useProfileData({ viewedUserId, currentUserId, enabled }: UseProf
     queryFn: async () => {
       if (!viewedUserId) return [];
       try {
-        const res = await apiService.get(`/stories/user/${viewedUserId}`);
+        const res = await apiService.get(`/users/${viewedUserId}/stories`);
         return res?.success && Array.isArray(res.data) ? res.data : [];
       } catch (error: any) {
         if (error.response?.status === 404) return [];
@@ -114,7 +114,12 @@ export function useProfileData({ viewedUserId, currentUserId, enabled }: UseProf
       if (!viewedUserId) return [];
       try {
         const res = await apiService.get(`/users/${viewedUserId}/highlights`);
-        return res?.success && Array.isArray(res.data) ? res.data : [];
+        const rawHighlights = res?.success && Array.isArray(res.data) ? res.data : [];
+        return rawHighlights.map((h: any) => ({
+          ...h,
+          id: h.id || h._id || String(h._id || ''),
+          coverImage: h.coverImage || h.image || (h.items && h.items[0]?.imageUrl) || 'https://via.placeholder.com/150'
+        }));
       } catch (error: any) {
         if (error.response?.status === 404) return [];
         throw error;

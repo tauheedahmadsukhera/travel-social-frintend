@@ -18,6 +18,7 @@ const PostSchema = new mongoose.Schema({
     city: String,
     country: String,
     countryCode: String,
+    continent: String,
     lat: Number,
     lon: Number,
     verified: Boolean

@@ -148,12 +148,23 @@ router.post('/', verifyToken, async (req, res) => {
       ]
     });
 
+    // Resolve structured geographical details
+    let resolvedLocationData = locationData || null;
+    if (caption || locationData) {
+      try {
+        const { resolveGeographicalData } = require('../src/utils/geoResolver');
+        resolvedLocationData = resolveGeographicalData(caption, locationData);
+      } catch (err) {
+        console.warn('[CreateStory] Failed to resolve geo data:', err.message);
+      }
+    }
+
     const storyData = {
       userId,
       userName: user?.displayName || user?.name || userName || 'Anonymous',
       userAvatar: user?.avatar || user?.photoURL || null,
       caption: caption || '',
-      locationData: locationData || null,
+      locationData: resolvedLocationData,
       createdAt: new Date(),
       expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000)
     };

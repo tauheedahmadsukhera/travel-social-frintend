@@ -43,6 +43,7 @@
     "@zegocloud/zego-uikit-prebuilt-live-streaming-rn": "^2.8.3",
     "@zegocloud/zego-uikit-rn": "^2.19.2",
     "axios": "^1.7.9",
+    "countries-list": "^3.3.0",
     "crypto-js": "^4.2.0",
     "date-fns": "^4.1.0",
     "expo": "52.0.49",

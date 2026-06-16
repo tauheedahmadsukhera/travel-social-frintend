@@ -81,6 +81,8 @@ interface ProfileModalsProps {
   highlightViewerVisible: boolean;
   setHighlightViewerVisible: (val: boolean) => void;
   selectedHighlightId: string | null;
+
+  userStories: any[];
 }
 
 const ProfileModals: React.FC<ProfileModalsProps> = (props) => {
@@ -95,8 +97,20 @@ const ProfileModals: React.FC<ProfileModalsProps> = (props) => {
     userMenuVisible, setUserMenuVisible, handleBlockUser, handleReportUser, shareProfile,
     showUploadModal, setShowUploadModal, selectedMedia, setSelectedMedia, locationQuery, setLocationQuery, locationSuggestions, setLocationSuggestions,
     uploading, setUploading, uploadProgress, setUploadProgress, showSuccess,
-    highlightViewerVisible, setHighlightViewerVisible, selectedHighlightId
+    highlightViewerVisible, setHighlightViewerVisible, selectedHighlightId,
+    userStories
   } = props;
+
+  React.useEffect(() => {
+    console.log('[ProfileModals] 🚀 Component MOUNTED! highlightViewerVisible:', highlightViewerVisible);
+    return () => {
+      console.log('[ProfileModals] 💀 Component UNMOUNTED!');
+    };
+  }, []);
+
+  React.useEffect(() => {
+    console.log('[ProfileModals] 🔄 highlightViewerVisible or selectedHighlightId changed:', { highlightViewerVisible, selectedHighlightId });
+  }, [highlightViewerVisible, selectedHighlightId]);
 
   return (
     <>
@@ -262,7 +276,10 @@ const ProfileModals: React.FC<ProfileModalsProps> = (props) => {
       <HighlightViewer
         visible={highlightViewerVisible}
         highlightId={selectedHighlightId}
-        onClose={() => setHighlightViewerVisible(false)}
+        onClose={() => {
+          console.log('[ProfileModals] 🛑 onClose triggered from inside HighlightViewer! Stack trace:\n', new Error().stack);
+          setHighlightViewerVisible(false);
+        }}
         userId={isOwnProfile ? (currentUserId || undefined) : undefined}
         userName={profile?.displayName || profile?.name}
         userAvatar={profile?.avatar || profile?.photoURL || undefined}

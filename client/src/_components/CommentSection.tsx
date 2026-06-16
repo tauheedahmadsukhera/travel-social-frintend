@@ -124,9 +124,13 @@ export const CommentSection: React.FC<CommentSectionProps> = ({
       const actualCount = mappedComments.reduce((acc: number, c: Comment) => acc + 1 + (c.replies?.length || 0), 0);
       feedEventEmitter.emit("commentCountUpdated", { postId, count: actualCount });
 
-      const postRes: any = await apiService.get(`/posts/${postId}`);
-      if (postRes?.success && postRes.data?.reactions) {
-        setReactions(postRes.data.reactions);
+      try {
+        const postRes: any = await apiService.get(`/posts/${postId}`);
+        if (postRes?.success && postRes.data?.reactions) {
+          setReactions(postRes.data.reactions);
+        }
+      } catch (postErr: any) {
+        console.log("[CommentSection] Skipped loading post reactions (ID is likely a story or highlight):", postErr.message);
       }
     } catch (err) {
       console.error("[CommentSection] Load error:", err);

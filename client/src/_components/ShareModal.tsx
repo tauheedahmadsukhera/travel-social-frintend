@@ -29,6 +29,7 @@ type ShareModalProps = {
   modalVariant?: 'home' | 'chat';
   onAddToStory?: () => void;
   sharePayload?: any;
+  useViewOverlay?: boolean;
 };
 
 const DEFAULT_AVATAR = DEFAULT_AVATAR_URL;
@@ -43,6 +44,7 @@ export default function ShareModal({
   modalVariant = 'chat',
   onAddToStory,
   sharePayload,
+  useViewOverlay = false,
 }: ShareModalProps) {
   const router = useRouter();
   const [search, setSearch] = useState('');
@@ -201,6 +203,130 @@ export default function ShareModal({
       </TouchableOpacity>
     );
   };
+
+  if (useViewOverlay) {
+    if (!visible) return null;
+    return (
+      <View style={[StyleSheet.absoluteFillObject, { zIndex: 120 }]}>
+        <TouchableOpacity style={styles.overlay} activeOpacity={1} onPress={onClose}>
+          <TouchableOpacity style={styles.container} activeOpacity={1} onPress={(e) => e.stopPropagation()}>
+            <View style={styles.handle} />
+            
+            <View style={styles.header}>
+              <Text style={styles.headerTitle}>{title}</Text>
+            </View>
+
+            <View style={styles.searchRow}>
+              <View style={styles.searchBox}>
+                <Feather name="search" size={16} color="#8e8e8e" />
+                <TextInput 
+                  style={styles.searchInput}
+                  placeholder="Search"
+                  placeholderTextColor="#8e8e8e"
+                  value={search}
+                  onChangeText={handleSearch}
+                />
+              </View>
+              <TouchableOpacity
+                style={styles.createGroupBtn}
+                activeOpacity={0.8}
+                onPress={() => {
+                  onClose();
+                  const shareType = String(sharePayload?.shareType || '').trim();
+                  const shareData = sharePayload?.data ?? sharePayload ?? null;
+                  const params: any = {};
+                  if (shareType) params.shareType = shareType;
+                  if (shareData) {
+                    try {
+                      params.shareData = JSON.stringify(shareData);
+                    } catch {
+                      // ignore serialization failures and open plain create-group flow
+                    }
+                  }
+                  router.push({ pathname: '/new-group', params } as any);
+                }}
+              >
+                <Ionicons name="people-outline" size={22} color="#6b7280" />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.usersListContainer}>
+              {loading ? (
+                <ActivityIndicator size="small" color="#0095f6" style={{ marginTop: 20 }} />
+              ) : (
+                <FlatList 
+                  data={users}
+                  keyExtractor={(item) => item.id}
+                  renderItem={renderUser}
+                  numColumns={3}
+                  contentContainerStyle={[
+                    styles.listContent,
+                    modalVariant === 'home' && styles.listContentWithActions,
+                  ]}
+                  ListEmptyComponent={<Text style={styles.emptyText}>No users found</Text>}
+                />
+              )}
+            </View>
+
+            {modalVariant === 'home' && (
+              <View style={styles.quickActionsRow}>
+                <TouchableOpacity
+                  style={styles.quickActionItem}
+                  activeOpacity={0.8}
+                  onPress={() => {
+                    onClose();
+                    onAddToStory?.();
+                  }}
+                >
+                  <View style={styles.quickActionIconCircle}>
+                    <Ionicons name="add-circle-outline" size={24} color="#111827" />
+                  </View>
+                  <Text style={styles.quickActionLabel}>Add to story</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity style={styles.quickActionItem} activeOpacity={0.8}>
+                  <View style={[styles.quickActionIconCircle, styles.quickActionIconGreen]}>
+                    <Ionicons name="logo-whatsapp" size={24} color="#fff" />
+                  </View>
+                  <Text style={styles.quickActionLabel}>WhatsApp</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity style={styles.quickActionItem} activeOpacity={0.8}>
+                  <View style={styles.quickActionIconCircle}>
+                    <Ionicons name="link-outline" size={24} color="#111827" />
+                  </View>
+                  <Text style={styles.quickActionLabel}>Copy link</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity style={styles.quickActionItem} activeOpacity={0.8}>
+                  <View style={[styles.quickActionIconCircle, styles.quickActionIconGreen]}>
+                    <Ionicons name="refresh-circle-outline" size={24} color="#fff" />
+                  </View>
+                  <Text style={styles.quickActionLabel}>WhatsApp Status</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity style={styles.quickActionItem} activeOpacity={0.8}>
+                  <View style={styles.quickActionIconCircle}>
+                    <Ionicons name="share-social-outline" size={24} color="#111827" />
+                  </View>
+                  <Text style={styles.quickActionLabel}>Share</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+
+            {selectedUsers.length > 0 && (
+              <TouchableOpacity 
+                style={styles.sendBtn} 
+                onPress={() => { onSend(selectedUsers); onClose(); }}
+              >
+                <Text style={styles.sendBtnText}>Send</Text>
+              </TouchableOpacity>
+            )}
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </View>
+    );
+  }
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>

@@ -502,8 +502,16 @@ export default function Profile({ userIdProp }: any) {
   };
 
   // Add missing highlight handler
-  const handlePressHighlight = (highlight: Highlight) => {
-    setSelectedHighlightId(highlight.id);
+  const handlePressHighlight = (highlight: any) => {
+    const hid = String(highlight?.id || highlight?._id || '').trim();
+    if (!hid) {
+      const keys = Object.keys(highlight || {}).join(', ');
+      Alert.alert('Debug: No ID', `Highlight keys: ${keys}\nJSON: ${JSON.stringify(highlight)}`);
+    }
+    if (__DEV__) {
+      console.log('[profile.tsx] 👆 Pressed highlight:', highlight?.title, 'resolved ID:', hid);
+    }
+    setSelectedHighlightId(hid || null);
     setHighlightViewerVisible(true);
   };
 
@@ -864,7 +872,8 @@ export default function Profile({ userIdProp }: any) {
           userMenuVisible, setUserMenuVisible, handleBlockUser, handleReportUser, shareProfile,
           showUploadModal, setShowUploadModal, selectedMedia, setSelectedMedia, locationQuery, setLocationQuery, locationSuggestions, setLocationSuggestions,
           uploading, setUploading, uploadProgress, setUploadProgress, showSuccess,
-          highlightViewerVisible, setHighlightViewerVisible, selectedHighlightId
+          highlightViewerVisible, setHighlightViewerVisible, selectedHighlightId,
+          userStories
         }}
       />
     </SafeAreaView>

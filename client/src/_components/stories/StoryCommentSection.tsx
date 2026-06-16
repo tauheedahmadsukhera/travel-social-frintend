@@ -33,8 +33,10 @@ const StoryCommentSection: React.FC<StoryCommentSectionProps> = ({
   onSendComment,
   getTimeAgo
 }) => {
+  if (!visible) return null;
+
   return (
-    <Modal visible={visible} animationType="slide" transparent={true} onRequestClose={onClose}>
+    <View style={[StyleSheet.absoluteFillObject, { zIndex: 100 }]}>
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
         <View style={styles.overlay}>
           <TouchableOpacity style={{ flex: 1 }} onPress={onClose} />
@@ -72,7 +74,7 @@ const StoryCommentSection: React.FC<StoryCommentSectionProps> = ({
           </View>
         </View>
       </KeyboardAvoidingView>
-    </Modal>
+    </View>
   );
 };
 

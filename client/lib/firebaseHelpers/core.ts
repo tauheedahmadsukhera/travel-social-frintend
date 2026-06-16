@@ -428,7 +428,13 @@ export async function getUserHighlights(userId: string, requesterUserId?: string
       params.requesterUserId = requesterUserId;
     }
     const res = await apiService.get(`/users/${userId}/highlights`, params);
-    return { success: res?.success !== false, highlights: res?.data || [] };
+    const rawHighlights = Array.isArray(res?.data) ? res.data : [];
+    const highlights = rawHighlights.map((h: any) => ({
+      ...h,
+      id: h.id || h._id || String(h._id || ''),
+      coverImage: h.coverImage || h.image || (h.items && h.items[0]?.imageUrl) || 'https://via.placeholder.com/150'
+    }));
+    return { success: res?.success !== false, highlights };
   } catch (error: any) {
     return { success: false, highlights: [] };
   }
@@ -436,13 +442,20 @@ export async function getUserHighlights(userId: string, requesterUserId?: string
 
 export async function getHighlightStories(highlightId: string) {
   try {
+    console.log('[getHighlightStories] 🔍 Calling API for:', highlightId);
     const res = await apiService.get(`/highlights/${highlightId}/stories`);
+    console.log('[getHighlightStories] 📦 API raw response keys:', Object.keys(res || {}), 'success:', (res as any)?.success);
+    console.log('[getHighlightStories] 📦 res.data is array?', Array.isArray((res as any)?.data), 'length:', (res as any)?.data?.length);
     let stories = extractStoryListFromResponseBody(res);
+    console.log('[getHighlightStories] 📋 After extractStoryList:', stories.length, 'stories');
     if (stories.length === 0) {
       stories = extractStoryListFromResponseBody((res as any)?.payload ?? (res as any)?.body);
+      console.log('[getHighlightStories] 📋 After fallback extract:', stories.length, 'stories');
     }
     stories = await hydrateStoryDocumentsIfNeeded(stories);
+    console.log('[getHighlightStories] 💧 After hydrate:', stories.length, 'stories');
     const cached = await getCachedHighlightStories(highlightId);
+    console.log('[getHighlightStories] 💾 Cached stories:', Array.isArray(cached) ? cached.length : 0);
     if (Array.isArray(cached) && cached.length > 0) {
       const byId = new Map<string, any>();
       for (const s of cached) {
@@ -454,9 +467,12 @@ export async function getHighlightStories(highlightId: string) {
         if (id) byId.set(id, { ...(byId.get(id) || {}), ...(s as any) });
       }
       stories = Array.from(byId.values());
+      console.log('[getHighlightStories] 🔀 After merge with cache:', stories.length, 'stories');
     }
+    console.log('[getHighlightStories] ✅ Returning', stories.length, 'stories');
     return { success: (res as any)?.success !== false, stories };
   } catch (error: any) {
+    console.error('[getHighlightStories] ❌ ERROR:', error?.message || error);
     return { success: false, stories: [] };
   }
 }
@@ -654,10 +670,13 @@ export async function uploadMedia(
       console.log('[uploadMedia] 🍏 Detected iOS Photo Library URI, resolving to local file...');
       try {
         const assetId = uri.startsWith('ph://') 
-          ? uri.replace('ph:///', '').split('/')[0] 
+          ? uri.replace('ph://', '').split('/')[0] 
           : uri;
         
         const assetInfo = await MediaLibrary.getAssetInfoAsync(assetId);
+        if (!assetInfo) {
+          throw new Error(`Asset info not found for ID: ${assetId}`);
+        }
         const localUri = assetInfo.localUri || assetInfo.uri;
         
         if (!localUri) {
@@ -768,7 +787,11 @@ async function uploadStoryMedia(uri: string, userId: string, mediaType: 'image' 
           ? uri.replace('ph://', '').split('/')[0] 
           : uri;
         const assetInfo = await MediaLibrary.getAssetInfoAsync(assetId);
-        finalUri = assetInfo.localUri || assetInfo.uri || uri;
+        if (assetInfo) {
+          finalUri = assetInfo.localUri || assetInfo.uri || uri;
+        } else {
+          console.warn('[uploadStoryMedia] iOS Asset info not found for ID:', assetId);
+        }
       } catch (err) {
         console.warn('[uploadStoryMedia] Failed to resolve iOS asset:', err);
       }

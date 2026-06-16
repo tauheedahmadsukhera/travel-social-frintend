@@ -38,43 +38,43 @@ router.get('/:postId/comments', optionalAuth, async (req, res) => {
     let postObj = await Post.findOne(postQuery).lean();
     
     if (!postObj) {
-      // DEBUG: console.log(`[GET comments] Post NOT found for: ${postId}`);
-      return res.status(404).json({ success: false, error: 'Post not found' });
-    }
+      // It might be a deleted story that still exists in a Highlight snapshot.
+      // We will skip visibility check and just return the comments from the collection.
+    } else {
+      // 2. SECURITY: Check visibility for private posts
+      // We manually fetch the owner because Post.userId is a String (not a ref)
+      const User = mongoose.model('User');
+      const postOwnerId = postObj.userId;
+      const postOwner = await User.findOne({
+        $or: [
+          { _id: mongoose.Types.ObjectId.isValid(postOwnerId) ? new mongoose.Types.ObjectId(postOwnerId) : null },
+          { firebaseUid: postOwnerId },
+          { uid: postOwnerId }
+        ].filter(q => q._id !== null || q.firebaseUid || q.uid)
+      }).select('isPrivate firebaseUid uid _id').lean();
 
-    // 2. SECURITY: Check visibility for private posts
-    // We manually fetch the owner because Post.userId is a String (not a ref)
-    const User = mongoose.model('User');
-    const postOwnerId = postObj.userId;
-    const postOwner = await User.findOne({
-      $or: [
-        { _id: mongoose.Types.ObjectId.isValid(postOwnerId) ? new mongoose.Types.ObjectId(postOwnerId) : null },
-        { firebaseUid: postOwnerId },
-        { uid: postOwnerId }
-      ].filter(q => q._id !== null || q.firebaseUid || q.uid)
-    }).select('isPrivate firebaseUid uid _id').lean();
+      if (postOwner?.isPrivate || postObj.isPrivate) {
+        if (!viewerId) {
+          return res.status(403).json({ success: false, error: 'Private content: Please log in to view comments', data: [] });
+        }
 
-    if (postOwner?.isPrivate || postObj.isPrivate) {
-      if (!viewerId) {
-        return res.status(403).json({ success: false, error: 'Private content: Please log in to view comments', data: [] });
-      }
+        const { resolveUserIdentifiers } = require('../src/utils/userUtils');
+        const viewer = await resolveUserIdentifiers(viewerId);
+        
+        const isSelf = viewer.candidates.some(c => 
+          [String(postOwner?._id), postOwner?.firebaseUid, postOwner?.uid].filter(Boolean).includes(String(c))
+        );
 
-      const { resolveUserIdentifiers } = require('../src/utils/userUtils');
-      const viewer = await resolveUserIdentifiers(viewerId);
-      
-      const isSelf = viewer.candidates.some(c => 
-        [String(postOwner?._id), postOwner?.firebaseUid, postOwner?.uid].filter(Boolean).includes(String(c))
-      );
+        if (!isSelf) {
+          const Follow = mongoose.model('Follow');
+          const isFollowing = await Follow.findOne({
+            followerId: { $in: viewer.candidates },
+            followingId: { $in: [String(postOwner?._id), postOwner?.firebaseUid, postOwner?.uid].filter(Boolean) }
+          }).lean();
 
-      if (!isSelf) {
-        const Follow = mongoose.model('Follow');
-        const isFollowing = await Follow.findOne({
-          followerId: { $in: viewer.candidates },
-          followingId: { $in: [String(postOwner?._id), postOwner?.firebaseUid, postOwner?.uid].filter(Boolean) }
-        }).lean();
-
-        if (!isFollowing) {
-          return res.status(403).json({ success: false, error: 'Private content: You must follow this user to view comments', data: [] });
+          if (!isFollowing) {
+            return res.status(403).json({ success: false, error: 'Private content: You must follow this user to view comments', data: [] });
+          }
         }
       }
     }

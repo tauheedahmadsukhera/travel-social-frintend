@@ -25,8 +25,8 @@ const conversationRoutes = require('./conversations');
 // Register routes
 router.use('/conversations', messageRoutes);
 router.use('/conversations', conversationRoutes);
-router.use('/posts', postRoutes);
 router.use('/posts', commentRoutes);
+router.use('/posts', postRoutes);
 router.use('/live-streams', livestreamRoutes);
 router.use('/notifications', notificationRoutes);
 router.use('/stories', storyRoutes);
