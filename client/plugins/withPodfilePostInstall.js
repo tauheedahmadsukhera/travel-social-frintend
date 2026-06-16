@@ -10,18 +10,28 @@ const withPodfilePostInstall = (config) => {
       let contents = fs.readFileSync(filePath, 'utf-8');
 
       const targetConfigPatch = `
-      # Force C++17 standard for fmt target to fix Xcode 16 consteval compiler issue
+      # Fix Xcode 16 / Apple Clang 21 consteval check crash in {fmt} by disabling consteval
       installer.pods_project.targets.each do |target|
-        if target.name == 'fmt'
-          target.build_configurations.each do |config|
-            config.build_settings['CLANG_CXX_LANGUAGE_STANDARD'] = 'c++17'
+        target.build_configurations.each do |config|
+          if config.build_settings['GCC_PREPROCESSOR_DEFINITIONS'].nil?
+            config.build_settings['GCC_PREPROCESSOR_DEFINITIONS'] = ['$(inherited)', 'FMT_USE_CONSTEVAL=0']
+          else
+            if config.build_settings['GCC_PREPROCESSOR_DEFINITIONS'].is_a?(Array)
+              unless config.build_settings['GCC_PREPROCESSOR_DEFINITIONS'].include?('FMT_USE_CONSTEVAL=0')
+                config.build_settings['GCC_PREPROCESSOR_DEFINITIONS'] << 'FMT_USE_CONSTEVAL=0'
+              end
+            else
+              unless config.build_settings['GCC_PREPROCESSOR_DEFINITIONS'].include?('FMT_USE_CONSTEVAL=0')
+                config.build_settings['GCC_PREPROCESSOR_DEFINITIONS'] = [config.build_settings['GCC_PREPROCESSOR_DEFINITIONS'], 'FMT_USE_CONSTEVAL=0']
+              end
+            end
           end
         end
       end
       `;
 
       // Check if our patch is already in contents
-      if (!contents.includes("target.name == 'fmt'")) {
+      if (!contents.includes("FMT_USE_CONSTEVAL=0")) {
         const anchor = /post_install do\s*\|\s*(\w+)\s*\|/;
         const match = contents.match(anchor);
         
