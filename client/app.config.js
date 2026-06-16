@@ -1,4 +1,6 @@
 
+const withPodfilePostInstall = require('./plugins/withPodfilePostInstall');
+
 export default {
   "expo": {
     "name": "Trips",
@@ -37,7 +39,7 @@ export default {
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.tauhee56.travesocial",
-      "buildNumber": "39",
+      "buildNumber": "41",
       "googleServicesFile": "./GoogleService-Info.plist",
       "config": {
         "googleMapsApiKey": process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY || "AIzaSyCQ1Fe55xOwt9fFfAiGIDVoEt01i2hL-zs"
@@ -134,7 +136,8 @@ export default {
           "backgroundColor": "#FFFFFF"
         }
       ],
-      "react-native-compressor"
+      "react-native-compressor",
+      withPodfilePostInstall
     ],
     "experiments": {
       "typedRoutes": true
