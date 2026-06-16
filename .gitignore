@@ -120,8 +120,6 @@ replace_avatars.js
 # Large Client Assets
 client/assets/fake data/
 client/assets/fake profile/
-client/assets/cities/
-client/assets/countries/
 client/admin/node_modules/
 
 # Ad-hoc migration/binary blobs accidentally dropped under src/
