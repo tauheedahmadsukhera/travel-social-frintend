@@ -1,5 +1,6 @@
 
 const withPodfilePostInstall = require('./plugins/withPodfilePostInstall');
+const withSentryGradleFix = require('./plugins/withSentryGradleFix');
 
 export default {
   "expo": {
@@ -137,7 +138,8 @@ export default {
         }
       ],
       "react-native-compressor",
-      withPodfilePostInstall
+      withPodfilePostInstall,
+      withSentryGradleFix
     ],
     "experiments": {
       "typedRoutes": true
