@@ -71,19 +71,14 @@ async function enrichPostsWithUserData(posts, viewerId = null) {
       if (fuid) userMap[fuid] = profile;
     });
 
-    // BATCH FETCH: Comment counts for all posts
+    // BATCH FETCH: Comment counts for all posts (Optimized - removed slow regex scans)
     const Comment = mongoose.model('Comment');
     const postIds = posts.map(p => String(p._id || p.id));
     
     const commentCounts = await Comment.aggregate([
       { 
         $match: { 
-          postId: { $in: postIds },
-          $or: [
-            { text: { $regex: /[^\s]/ } },
-            { content: { $regex: /[^\s]/ } },
-            { message: { $regex: /[^\s]/ } }
-          ]
+          postId: { $in: postIds }
         } 
       },
       { 

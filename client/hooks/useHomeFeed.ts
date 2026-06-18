@@ -12,8 +12,6 @@ export function useHomeFeed(currentUserId: string | null, isOnline: boolean) {
   const [hasMorePosts, setHasMorePosts] = useState(true);
   
   const nextPageRef = useRef(0);
-  const avatarHydrateReqIdRef = useRef(0);
-  const avatarHydrateTaskRef = useRef<any>(null);
   const allLoadedPostsRef = useRef<any[]>([]);
   const hasFetchedRef = useRef(false);
 
@@ -144,56 +142,6 @@ export function useHomeFeed(currentUserId: string | null, isOnline: boolean) {
         setAllLoadedPosts(filteredPosts);
         setPosts(createMixedFeed(filteredPosts));
         nextPageRef.current = 0;
-
-        avatarHydrateReqIdRef.current += 1;
-        const reqId = avatarHydrateReqIdRef.current;
-        try { avatarHydrateTaskRef.current?.cancel?.(); } catch {}
-        avatarHydrateTaskRef.current = InteractionManager.runAfterInteractions(() => {
-          (async () => {
-            if (reqId !== avatarHydrateReqIdRef.current) return;
-            
-            // Only fetch profiles for posts that are missing a valid avatar
-            const needsHydration = normalizedPosts.filter(p => {
-              const direct = normalizeAvatar(p.userAvatar || p.avatar || p.photoURL || p.profilePicture || p?.userId?.avatar || p?.userId?.photoURL);
-              return !direct;
-            });
-            if (needsHydration.length === 0) return; // Skip hydration entirely if all posts have avatars
-
-            const authorIds = Array.from(new Set(needsHydration.map(p => getPostAuthorId(p)).filter(Boolean)));
-            const avatarMap: Record<string, string> = {};
-            const idsToFetch = authorIds.slice(0, 15); // Increased to 15 because it's now a single batch call
-
-            if (idsToFetch.length > 0) {
-              try {
-                const bulkRes = await apiService.getBulkProfiles(idsToFetch);
-                if (bulkRes?.success && Array.isArray(bulkRes.data)) {
-                  bulkRes.data.forEach((user: any) => {
-                    const resolved = normalizeAvatar(user.avatar || user.photoURL || user.profilePicture);
-                    const authorId = String(user.uid || user.firebaseUid || user._id || '');
-                    if (resolved && authorId) avatarMap[authorId] = resolved;
-                  });
-                }
-              } catch (err) {
-                if (__DEV__) console.warn('[HomeFeed] Bulk profile fetch failed:', err);
-              }
-            }
-
-            if (reqId !== avatarHydrateReqIdRef.current) return;
-            if (Object.keys(avatarMap).length === 0) return; // Nothing to apply
-            
-            const apply = (p: any) => {
-              const authorId = getPostAuthorId(p);
-              const directAvatar = normalizeAvatar(p.userAvatar || p.avatar || p.photoURL || p.profilePicture || p?.userId?.avatar || p?.userId?.photoURL || p?.userId?.profilePicture);
-              if (directAvatar) return p; // Already has avatar, skip update
-              const hydratedAvatar = avatarMap[authorId] || '';
-              if (!hydratedAvatar) return p;
-              const hydratedUserObj = (p.userId && typeof p.userId === 'object') ? { ...p.userId, avatar: p.userId.avatar || hydratedAvatar, photoURL: p.userId.photoURL || hydratedAvatar, profilePicture: p.userId.profilePicture || hydratedAvatar } : p.userId;
-              return { ...p, userAvatar: hydratedAvatar, avatar: hydratedAvatar, photoURL: hydratedAvatar, profilePicture: hydratedAvatar, userId: hydratedUserObj };
-            };
-            setAllLoadedPosts(prev => (Array.isArray(prev) ? prev.map(apply) : prev));
-            setPosts(prev => (Array.isArray(prev) ? prev.map(apply) : prev));
-          })();
-        });
       } else {
         setAllLoadedPosts(prev => {
           const updated = [...(Array.isArray(prev) ? prev : []), ...normalizedPosts];

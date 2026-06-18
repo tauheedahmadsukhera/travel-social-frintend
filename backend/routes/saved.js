@@ -12,6 +12,9 @@ const savedPostSchema = new mongoose.Schema({
   savedAt: { type: Date, default: Date.now }
 });
 
+savedPostSchema.index({ userId: 1, postId: 1 }, { unique: true });
+savedPostSchema.index({ userId: 1, savedAt: -1 });
+
 const SavedPost = mongoose.models.SavedPost || mongoose.model('SavedPost', savedPostSchema);
 
 const { verifyToken } = require('../src/middleware/authMiddleware');

@@ -394,86 +394,13 @@ router.get('/by-location', optionalAuth, async (req, res) => {
 
     logger.info(`[Search] Location: "${location}", Query Conditions: ${conditions.length}`);
 
-    // PERFORMANCE UPGRADE: Use Aggregation Pipeline to handle Search + Author + Stats + SavedStatus in ONE DB Roundtrip
-    const viewerVariants = viewerId ? [String(viewerId)] : [];
-    if (viewerId) {
-      try {
-        const { candidates } = await require('../src/utils/userUtils').resolveUserIdentifiers(viewerId);
-        candidates.forEach(id => { if (!viewerVariants.includes(String(id))) viewerVariants.push(String(id)); });
-      } catch (e) {}
-    }
-    const viewerStrings = viewerVariants.map(String);
+    // Optimized: Use indexed find query and lean formatting
+    const posts = await Post.find(query)
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit)
+      .lean();
 
-    const aggregatePipeline = [
-      { $match: query },
-      { $sort: { createdAt: -1 } },
-      { $skip: skip },
-      { $limit: limit },
-      
-      // Lookup Comment count
-      {
-        $lookup: {
-          from: 'comments',
-          let: { pId: '$_id' },
-          pipeline: [
-            { $match: { $expr: { $eq: ['$postId', '$$pId'] } } },
-            { $count: 'count' }
-          ],
-          as: 'commentData'
-        }
-      },
-
-      // Lookup Saved Status
-      {
-        $lookup: {
-          from: 'savedposts',
-          let: { pId: '$_id' },
-          pipeline: [
-            { 
-              $match: { 
-                $expr: { 
-                  $and: [
-                    { $eq: ['$postId', '$$pId'] },
-                    { $in: ['$userId', viewerStrings] }
-                  ]
-                } 
-              } 
-            },
-            { $limit: 1 }
-          ],
-          as: 'savedStatus'
-        }
-      },
-
-      // Project final fields to match enrichPostsWithUserData output
-      {
-        $addFields: {
-          commentCount: { 
-            $add: [
-              { $ifNull: [{ $arrayElemAt: ['$commentData.count', 0] }, 0] },
-              { $size: { $ifNull: ['$comments', []] } } // Legacy inline
-            ]
-          },
-          isSaved: { $gt: [{ $size: '$savedStatus' }, 0] },
-          likeCount: { 
-            $cond: { 
-              if: { $isArray: '$likes' }, 
-              then: { $size: '$likes' }, 
-              else: { $ifNull: ['$likesCount', 0] } 
-            }
-          },
-          isLiked: {
-            $cond: {
-              if: { $isArray: '$likes' },
-              then: { $anyElementTrue: { $map: { input: '$likes', as: 'l', in: { $in: [{ $toString: '$$l' }, viewerStrings] } } } },
-              else: false
-            }
-          }
-        }
-      }
-    ];
-
-    const posts = await Post.aggregate(aggregatePipeline);
     const enriched = await enrichPostsWithUserData(posts, viewerId);
 
     logger.info(`[Search] Found ${enriched.length} posts for "${location}" (Optimized & Enriched)`);

@@ -52,6 +52,7 @@ PostSchema.index({ allowedFollowers: 1, createdAt: -1 });
 PostSchema.index({ hashtags: 1, createdAt: -1 });
 PostSchema.index({ category: 1, createdAt: -1 });
 PostSchema.index({ visibility: 1, createdAt: -1 });
+PostSchema.index({ savedBy: 1 });
 PostSchema.index({ 
   location: 'text', 
   'locationData.name': 'text', 
