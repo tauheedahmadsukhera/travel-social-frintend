@@ -42,13 +42,27 @@ describe('🚀 Industrial Security & Stability Suite', () => {
     test('POST /api/admin/stats - Should fail for non-admin even if authenticated', async () => {
       // Create a valid token for a regular user
       const { generateToken } = require('../src/middleware/authMiddleware');
-      const validObjectId = new mongoose.Types.ObjectId().toString();
-      const token = generateToken(validObjectId, 'user@example.com');
+      const validObjectId = new mongoose.Types.ObjectId();
+      
+      // Create user in DB to pass verifyToken verification
+      const User = mongoose.model('User');
+      await User.create({
+        _id: validObjectId,
+        displayName: 'Regular User',
+        email: 'user@example.com',
+        role: 'user',
+        status: 'active'
+      });
+
+      const token = generateToken(validObjectId.toString(), 'user@example.com');
 
       const res = await request(app)
         .get('/api/admin/stats')
         .set('Authorization', `Bearer ${token}`);
       
+      // Clean up mock user
+      await User.deleteOne({ _id: validObjectId });
+
       // It should be 403 Forbidden because the mock user role is 'user'
       expect(res.statusCode).toBe(403);
     });
@@ -57,13 +71,27 @@ describe('🚀 Industrial Security & Stability Suite', () => {
   describe('🧪 Injection & Input Sanitization', () => {
     test('GET /api/users/search - Should handle regex characters safely', async () => {
       const { generateToken } = require('../src/middleware/authMiddleware');
-      const validObjectId = new mongoose.Types.ObjectId().toString();
-      const token = generateToken(validObjectId, 'user@example.com');
+      const validObjectId = new mongoose.Types.ObjectId();
+
+      // Create user in DB to pass verifyToken verification
+      const User = mongoose.model('User');
+      await User.create({
+        _id: validObjectId,
+        displayName: 'Search User',
+        email: 'user@example.com',
+        role: 'user',
+        status: 'active'
+      });
+
+      const token = generateToken(validObjectId.toString(), 'user@example.com');
 
       const res = await request(app)
         .get('/api/users/search?q=.*')
         .set('Authorization', `Bearer ${token}`);
       
+      // Clean up mock user
+      await User.deleteOne({ _id: validObjectId });
+
       expect(res.statusCode).toBe(200);
       expect(res.body.success).toBe(true);
     });
