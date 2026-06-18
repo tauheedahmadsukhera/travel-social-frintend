@@ -6,8 +6,8 @@ const cache = require('../utils/redis');
  */
 const cacheMiddleware = (ttl = 3600) => {
   return async (req, res, next) => {
-    // Skip caching if Redis is not available or it's not a GET request
-    if (!cache.redis || req.method !== 'GET') {
+    // Skip caching if neither Redis nor local fallback is available, or it's not a GET request
+    if ((!cache.redis && !cache.hasFallback) || req.method !== 'GET') {
       return next();
     }
 
