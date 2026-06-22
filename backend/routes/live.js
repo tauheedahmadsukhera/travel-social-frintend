@@ -13,10 +13,9 @@ const toObjectId = (id) => {
 router.get('/', async (req, res) => {
   try {
     const LiveStream = mongoose.model('LiveStream');
-    const streams = await LiveStream.find({ isActive: true }).sort({ createdAt: -1 });
+    const streams = await LiveStream.find({ isActive: true }).sort({ createdAt: -1 }).lean();
 
-    const rawStreams = streams.map(s => s.toObject ? s.toObject() : s);
-    const normalized = rawStreams.map(s => {
+    const normalized = streams.map(s => {
       const id = s?._id ? String(s._id) : (s?.id ? String(s.id) : undefined);
       const isActive = typeof s?.isActive === 'boolean' ? s.isActive : (typeof s?.isLive === 'boolean' ? s.isLive : true);
       const viewerCount = typeof s?.viewerCount === 'number' ? s.viewerCount : (Array.isArray(s?.viewers) ? s.viewers.length : 0);

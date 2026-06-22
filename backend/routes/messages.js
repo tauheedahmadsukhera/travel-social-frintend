@@ -36,7 +36,7 @@ router.get('/:conversationId/messages', verifyToken, async (req, res) => {
     }
 
     // 2. Fetch messages
-    const messages = await Message.find({ conversationId: req.params.conversationId }).sort({ createdAt: 1 });
+    const messages = await Message.find({ conversationId: req.params.conversationId }).sort({ createdAt: 1 }).lean();
 
     // BATCH FETCH: Get all unique sender IDs
     const senderIds = Array.from(new Set(messages.map(m => String(m.senderId))));
@@ -46,7 +46,7 @@ router.get('/:conversationId/messages', verifyToken, async (req, res) => {
       $or: [
         { firebaseUid: { $in: senderIds } },
         { uid: { $in: senderIds } },
-        { _id: { $in: senderIds.filter(id => mongoose.Types.ObjectId.isValid(id)).map(id => new mongoose.Types.ObjectId(id)) } }
+        { _id: { $in: senderIds.filter(id => mongoose.Types.isValidObjectId(id) || mongoose.Types.ObjectId.isValid(id)).map(id => new mongoose.Types.ObjectId(id)) } }
       ]
     }).select('displayName name username avatar photoURL profilePicture email').lean().catch(() => []);
 
@@ -58,13 +58,12 @@ router.get('/:conversationId/messages', verifyToken, async (req, res) => {
     });
 
     const enrichedMessages = messages.map((message) => {
-      const messageObj = message.toObject ? message.toObject() : message;
       const sender = userCache[String(message.senderId)];
 
       return {
-        ...messageObj,
-        senderName: sender?.displayName || sender?.name || (sender?.email ? sender.email.split('@')[0] : (messageObj.senderName || 'User')),
-        senderAvatar: sender?.avatar || sender?.photoURL || messageObj.senderAvatar || null
+        ...message,
+        senderName: sender?.displayName || sender?.name || (sender?.email ? sender.email.split('@')[0] : (message.senderName || 'User')),
+        senderAvatar: sender?.avatar || sender?.photoURL || message.senderAvatar || null
       };
     });
 
