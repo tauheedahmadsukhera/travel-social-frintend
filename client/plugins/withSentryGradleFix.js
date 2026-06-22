@@ -31,15 +31,14 @@ ${SENTRY_FIX_MARKER}
 // Fix: sentry_react-native packageReleaseResources depends on
 // sentry-react-native generateReleaseResValues but Gradle doesn't know.
 subprojects { subproject ->
-    subproject.afterEvaluate {
-        if (subproject.name == 'sentry_react-native') {
-            def sentryHyphen = rootProject.findProject(':sentry-react-native')
-            if (sentryHyphen != null) {
-                subproject.tasks.matching { it.name.contains('packageReleaseResources') || it.name.contains('packageDebugResources') }.configureEach { task ->
-                    def releaseTask = sentryHyphen.tasks.findByName('generateReleaseResValues')
-                    def debugTask = sentryHyphen.tasks.findByName('generateDebugResValues')
-                    if (releaseTask != null) task.dependsOn(releaseTask)
-                    if (debugTask != null) task.dependsOn(debugTask)
+    if (subproject.name == 'sentry_react-native') {
+        def sentryHyphen = rootProject.findProject(':sentry-react-native')
+        if (sentryHyphen != null) {
+            subproject.tasks.matching { it.name.contains('packageReleaseResources') || it.name.contains('packageDebugResources') }.configureEach { task ->
+                if (task.name.contains('Release')) {
+                    task.dependsOn(':sentry-react-native:generateReleaseResValues')
+                } else if (task.name.contains('Debug')) {
+                    task.dependsOn(':sentry-react-native:generateDebugResValues')
                 }
             }
         }
