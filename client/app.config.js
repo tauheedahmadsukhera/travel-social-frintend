@@ -1,6 +1,7 @@
 
 const withPodfilePostInstall = require('./plugins/withPodfilePostInstall');
 const withSentryGradleFix = require('./plugins/withSentryGradleFix');
+const withKotlinVersionFix = require('./plugins/withKotlinVersionFix');
 
 export default {
   "expo": {
@@ -139,7 +140,8 @@ export default {
       ],
       "react-native-compressor",
       withPodfilePostInstall,
-      withSentryGradleFix
+      withSentryGradleFix,
+      withKotlinVersionFix
     ],
     "experiments": {
       "typedRoutes": true
