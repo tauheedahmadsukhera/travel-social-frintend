@@ -2,7 +2,7 @@ import { Feather } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import * as MediaLibrary from 'expo-media-library';
 import * as ImageManipulator from 'expo-image-manipulator';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
     ActivityIndicator,
@@ -32,6 +32,7 @@ import { createStory } from '@/lib/firebaseHelpers/index';
 import { getAuthenticatedUserId } from '@/lib/currentUser';
 import { apiService } from '@/src/_services/apiService';
 import { hapticLight, hapticMedium, hapticSuccess } from '@/lib/haptics';
+import { captureRef } from 'react-native-view-shot';
 
 // ─────────────────────────────────────────────
 // Types
@@ -193,6 +194,36 @@ const DraggableText = ({
 export default function StoryCreatorScreen() {
     const router = useRouter();
     const insets = useSafeAreaInsets();
+    const { sharePostId, sharePostData } = useLocalSearchParams<{ sharePostId?: string; sharePostData?: string }>();
+    const [sharedPostMetadata, setSharedPostMetadata] = useState<any | null>(null);
+
+    useEffect(() => {
+        if (sharePostId && sharePostData) {
+            try {
+                const parsedPost = JSON.parse(decodeURIComponent(sharePostData));
+                const imageUrl = parsedPost.media?.[0]?.url || parsedPost.imageUrl || parsedPost.thumbnailUrl || '';
+                
+                setSelectedUri(imageUrl || 'placeholder');
+                setSelectedAsset({
+                    id: 'share_post_' + sharePostId,
+                    uri: imageUrl || 'placeholder',
+                    mediaType: 'photo',
+                });
+                
+                setSharedPostMetadata({
+                    postId: sharePostId,
+                    userName: parsedPost.userName || parsedPost.user?.displayName || parsedPost.user?.name || 'User',
+                    userAvatar: parsedPost.userAvatar || parsedPost.user?.profilePicture || parsedPost.user?.avatar || parsedPost.user?.photoURL || '',
+                    caption: parsedPost.caption || parsedPost.text || '',
+                    imageUrl: imageUrl
+                });
+                
+                setStep('editor');
+            } catch (err) {
+                console.error('[StoryCreator] Failed to parse sharePostData:', err);
+            }
+        }
+    }, [sharePostId, sharePostData]);
 
     // Navigation Step
     const [step, setStep] = useState<'picker' | 'editor'>('picker');
@@ -207,6 +238,7 @@ export default function StoryCreatorScreen() {
     const [hasNextPage, setHasNextPage] = useState(true);
     const [loadingMore, setLoadingMore] = useState(false);
     const flatListRef = useRef<FlatList>(null);
+    const previewRef = useRef<View>(null);
 
     // Visibility Selection
     const [userGroups, setUserGroups] = useState<any[]>([]);
@@ -357,9 +389,24 @@ export default function StoryCreatorScreen() {
             let uploadUri = selectedUri;
             const mediaType = selectedAsset?.mediaType || 'photo';
             if (mediaType === 'photo') {
+                if (textOverlays.length > 0) {
+                    try {
+                        setSelectedOverlayId(null);
+                        await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+                        const capturedUri = await captureRef(previewRef, {
+                            format: 'jpg',
+                            quality: 0.92,
+                            result: 'tmpfile',
+                        });
+                        if (capturedUri) uploadUri = capturedUri;
+                    } catch (e) {
+                        console.warn('[StoryCreator] Failed to capture preview with text overlays:', e);
+                    }
+                }
+
                 try {
                     const manipResult = await ImageManipulator.manipulateAsync(
-                        selectedUri,
+                        uploadUri,
                         [{ resize: { width: 1080 } }],
                         { compress: 0.7, format: ImageManipulator.SaveFormat.JPEG }
                     );
@@ -368,6 +415,13 @@ export default function StoryCreatorScreen() {
                     console.warn('Image manipulation failed, using raw URI:', e);
                 }
             }
+
+            const finalPostMetadata = (() => {
+                const meta: Record<string, unknown> = {};
+                if (sharedPostMetadata) Object.assign(meta, sharedPostMetadata);
+                if (textOverlays.length > 0) meta.textOverlays = textOverlays;
+                return Object.keys(meta).length > 0 ? meta : undefined;
+            })();
 
             const storyRes = await createStory(
                 authUserId,
@@ -379,8 +433,8 @@ export default function StoryCreatorScreen() {
                 visibility,
                 selectedGroupId ? [selectedGroupId] : [],
                 (p: number) => setUploadProgress(Math.round(p)),
-                undefined,
-                textOverlays.length > 0 ? { textOverlays: JSON.stringify(textOverlays) } : undefined
+                sharedPostMetadata ? true : undefined,
+                finalPostMetadata
             );
 
             if (storyRes?.success) {
@@ -466,7 +520,7 @@ export default function StoryCreatorScreen() {
                                 const assetId = item.uri.startsWith('ph://')
                                     ? item.uri.replace('ph://', '').split('/')[0]
                                     : item.uri;
-                                const assetInfo = await MediaLibrary.getAssetInfoAsync(assetId);
+                                const assetInfo = await MediaLibrary.getAssetInfoAsync(assetId, { copyToLocalContainer: true });
                                 if (assetInfo) {
                                     targetUri = assetInfo.localUri || assetInfo.uri || item.uri;
                                 }
@@ -614,7 +668,7 @@ export default function StoryCreatorScreen() {
                     >
                         {/* Preview */}
                         <TouchableWithoutFeedback onPress={openTextEditor}>
-                            <View style={styles.preview}>
+                            <View ref={previewRef} collapsable={false} style={styles.preview}>
                                 {selectedUri ? (
                                     selectedAsset?.mediaType === 'video' ? (
                                         <Video
@@ -630,6 +684,31 @@ export default function StoryCreatorScreen() {
                                         <Image source={{ uri: selectedUri }} style={styles.previewImg} resizeMode="contain" />
                                     )
                                 ) : null}
+
+                                {sharedPostMetadata && (
+                                    <View style={styles.sharedPostCard}>
+                                        <View style={styles.sharedPostCardHeader}>
+                                            <Image 
+                                                source={{ uri: sharedPostMetadata.userAvatar || 'https://www.gravatar.com/avatar/00000000000000000000000000000000?d=mp&f=y' }} 
+                                                style={styles.sharedPostCardAvatar} 
+                                            />
+                                            <Text style={styles.sharedPostCardUsername}>
+                                                {sharedPostMetadata.userName}
+                                            </Text>
+                                        </View>
+                                        <Image 
+                                            source={{ uri: sharedPostMetadata.imageUrl }} 
+                                            style={styles.sharedPostCardImage} 
+                                            resizeMode="cover"
+                                        />
+                                        {sharedPostMetadata.caption ? (
+                                            <Text style={styles.sharedPostCardCaption} numberOfLines={2}>
+                                                <Text style={{ fontWeight: '700' }}>{sharedPostMetadata.userName} </Text>
+                                                {sharedPostMetadata.caption}
+                                            </Text>
+                                        ) : null}
+                                    </View>
+                                )}
 
                                 {/* Text overlays preview */}
                                 {textOverlays.map((o) => (
@@ -822,7 +901,7 @@ export default function StoryCreatorScreen() {
             >
                 <KeyboardAvoidingView
                     style={{ flex: 1 }}
-                    behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                    behavior={Platform.OS === 'ios' ? 'padding' : undefined}
                     keyboardVerticalOffset={0}
                 >
                     <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
@@ -1388,5 +1467,49 @@ const styles = StyleSheet.create({
         height: 6,
         backgroundColor: '#FF8D00',
         borderRadius: 3,
+    },
+    sharedPostCard: {
+        position: 'absolute',
+        width: '80%',
+        backgroundColor: '#ffffff',
+        borderRadius: 12,
+        padding: 12,
+        alignSelf: 'center',
+        top: '15%',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 8,
+        elevation: 5,
+        zIndex: 10,
+    },
+    sharedPostCardHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: 8,
+    },
+    sharedPostCardAvatar: {
+        width: 28,
+        height: 28,
+        borderRadius: 14,
+        backgroundColor: '#eeeeee',
+        marginRight: 8,
+    },
+    sharedPostCardUsername: {
+        fontSize: 13,
+        fontWeight: '600',
+        color: '#111111',
+    },
+    sharedPostCardImage: {
+        width: '100%',
+        aspectRatio: 1,
+        borderRadius: 8,
+        marginBottom: 8,
+        backgroundColor: '#f9f9f9',
+    },
+    sharedPostCardCaption: {
+        fontSize: 12,
+        color: '#333333',
+        lineHeight: 15,
     },
 });

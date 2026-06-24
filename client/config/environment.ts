@@ -75,7 +75,8 @@ function getEnvVar(key: string, defaultValue?: string): string {
       normalized === 'set_google_maps_api_key_in_build_env' ||
       normalized.startsWith('set_') ||
       normalized.includes('placeholder') ||
-      normalized.includes('your-')
+      normalized.includes('your-') ||
+      normalized.includes('your_')
     );
   };
 
@@ -160,9 +161,9 @@ export const AGORA_CONFIG = {
 } as const;
 
 // Social Config — ONLY client IDs (semi-public). Secrets must be server-side only.
-export const SNAPCHAT_CLIENT_ID = getEnvVar('EXPO_PUBLIC_SNAPCHAT_CLIENT_ID', '');
+export const SNAPCHAT_CLIENT_ID = getEnvVar('EXPO_PUBLIC_SNAPCHAT_CLIENT_ID', 'fa1c26b3-f800-47f0-9497-70857642f682');
 // SECURITY: SNAPCHAT_CLIENT_SECRET removed — must be handled server-side only
-export const TIKTOK_CLIENT_KEY = getEnvVar('EXPO_PUBLIC_TIKTOK_CLIENT_KEY', '');
+export const TIKTOK_CLIENT_KEY = getEnvVar('EXPO_PUBLIC_TIKTOK_CLIENT_KEY', 'awsmbaw0wj2exq5v');
 // SECURITY: TIKTOK_CLIENT_SECRET removed — must be handled server-side only
 
 // App Configuration

@@ -43,7 +43,7 @@ import { highlightManager } from '../../lib/highlightManager';
 import { CommentSection } from './CommentSection';
 import ShareModal from './ShareModal';
 import HighlightSelectionModal from './HighlightSelectionModal';
-import { storyForStoriesViewer } from '../../lib/storyViewer';
+import { storyForStoriesViewer, parseStoryTextOverlays } from '../../lib/storyViewer';
 
 const { width, height } = Dimensions.get('window');
 
@@ -52,6 +52,69 @@ const FONT_STYLES: Record<string, { fontFamily?: string; letterSpacing?: number;
     modern: { fontFamily: undefined, letterSpacing: 1 },
     strong: { fontFamily: undefined, letterSpacing: 2, textTransform: 'uppercase' },
 };
+
+const STORY_MEDIA_H = width * 1.1;
+const STORY_MEDIA_TOP = (height - STORY_MEDIA_H) / 2;
+
+function StoryTextOverlays({ postMetadata }: { postMetadata?: any }) {
+  const parsedOverlays = parseStoryTextOverlays(postMetadata);
+  if (!parsedOverlays.length) return null;
+
+  return (
+    <View
+      style={{
+        ...StyleSheet.absoluteFillObject,
+        zIndex: 15,
+        elevation: 15,
+      }}
+      pointerEvents="none"
+    >
+      <View
+        style={{
+          position: 'absolute',
+          width,
+          height: STORY_MEDIA_H,
+          top: STORY_MEDIA_TOP,
+          left: 0,
+        }}
+      >
+      {parsedOverlays.map((o: any) => {
+        const fs = FONT_STYLES[o.fontStyle] || FONT_STYLES.classic;
+        return (
+          <View
+            key={o.id}
+            style={{
+              position: 'absolute',
+              left: o.x * width,
+              top: o.y * STORY_MEDIA_H,
+              maxWidth: width - 60,
+              zIndex: 20,
+              elevation: 20,
+            }}
+          >
+            <Text
+              style={{
+                fontSize: 24,
+                fontWeight: '700',
+                color: o.color,
+                fontFamily: fs.fontFamily,
+                letterSpacing: fs.letterSpacing,
+                textTransform: fs.textTransform as any,
+                textShadowColor: 'rgba(0,0,0,0.5)',
+                textShadowOffset: { width: 1, height: 1 },
+                textShadowRadius: 4,
+                textAlign: 'center',
+              }}
+            >
+              {o.text}
+            </Text>
+          </View>
+        );
+      })}
+      </View>
+    </View>
+  );
+}
 
 interface Story {
   id: string;
@@ -73,11 +136,12 @@ interface Story {
     placeId?: string;
   };
   postMetadata?: {
-    postId: string;
-    userName: string;
-    userAvatar: string;
+    postId?: string;
+    userName?: string;
+    userAvatar?: string;
     caption?: string;
     imageUrl?: string;
+    textOverlays?: string | any[];
   };
 }
 
@@ -191,19 +255,11 @@ export default function StoriesViewer({ stories, onClose, initialIndex = 0, isHi
 
   // Keep localStories in sync with props and ensure index stays in-bounds.
   useEffect(() => {
-    console.log('[StoriesViewer] 📥 stories prop updated. Array length:', stories?.length);
-    setLocalStories(Array.isArray(stories) ? stories : []);
-  }, [stories]);
+    const arr = Array.isArray(stories) ? stories : [];
+    setLocalStories(arr.map((s, i) => storyForStoriesViewer(s, i)));
+    setCurrentIndex(initialIndex);
+  }, [stories, initialIndex]);
 
-  useEffect(() => {
-    console.log('[StoriesViewer] 🔄 localStories or currentIndex updated. localStories count:', localStories?.length, 'currentIndex:', currentIndex);
-    if (!Array.isArray(localStories) || localStories.length === 0) return;
-    if (currentIndex < 0) setCurrentIndex(0);
-    else if (currentIndex >= localStories.length) setCurrentIndex(localStories.length - 1);
-  }, [localStories, localStories.length, currentIndex]);
-
-
-  // Load current user from AsyncStorage on mount
   useEffect(() => {
     const loadCurrentUser = async () => {
       try {
@@ -364,13 +420,11 @@ export default function StoriesViewer({ stories, onClose, initialIndex = 0, isHi
     };
   }, []);
 
-  // Sync localStories and currentIndex when stories or initialIndex change
   useEffect(() => {
-    console.log('[StoriesViewer] 📥 second sync effect stories/initialIndex updated. stories count:', stories?.length, 'initialIndex:', initialIndex);
-    const arr = Array.isArray(stories) ? stories : [];
-    setLocalStories(arr.map((s, i) => storyForStoriesViewer(s, i)));
-    setCurrentIndex(initialIndex);
-  }, [stories, initialIndex]);
+    if (!Array.isArray(localStories) || localStories.length === 0) return;
+    if (currentIndex < 0) setCurrentIndex(0);
+    else if (currentIndex >= localStories.length) setCurrentIndex(localStories.length - 1);
+  }, [localStories, localStories.length, currentIndex]);
 
 
   // Filter out stories from blocked users
@@ -469,7 +523,16 @@ export default function StoriesViewer({ stories, onClose, initialIndex = 0, isHi
     try {
       const { apiService } = await import('@/src/_services/apiService');
       const response = await apiService.post(`/stories/${storyId}/like`, { userId });
-      if (!response.success) {
+      if (response?.success) {
+        // Fetch fresh story data to sync likes and count
+        const fresh = await apiService.get(`/stories/${storyId}`);
+        if (fresh?.success && fresh?.data) {
+          const freshStories = [...localStories];
+          freshStories[currentIndex] = fresh.data;
+          setLocalStories(freshStories);
+        }
+      } else {
+        // Revert UI on failure
         setLocalStories([...localStories]);
       }
     } catch (error) {
@@ -495,11 +558,37 @@ export default function StoriesViewer({ stories, onClose, initialIndex = 0, isHi
   const handleLikeComment = async (commentId: string) => {
     if (!currentUser?.uid) return;
     const isLiked = likedComments[commentId];
+    // Optimistic UI update
     setLikedComments(prev => ({ ...prev, [commentId]: !isLiked }));
     setCommentLikesCount(prev => ({
       ...prev,
       [commentId]: Math.max(0, (prev[commentId] || 0) + (isLiked ? -1 : 1))
     }));
+
+    try {
+      const { apiService } = await import('@/src/_services/apiService');
+      const endpoint = `/stories/${currentStory.id}/comments/${commentId}/like`;
+      if (isLiked) {
+        await apiService.delete(endpoint, { userId: currentUser.uid });
+      } else {
+        await apiService.post(endpoint, { userId: currentUser.uid });
+      }
+      // Refresh story to get up‑to‑date likes/comments
+      const fresh = await apiService.get(`/stories/${currentStory.id}`);
+      if (fresh?.success && fresh?.data) {
+        const freshStories = [...localStories];
+        freshStories[currentIndex] = fresh.data;
+        setLocalStories(freshStories);
+      }
+    } catch (e) {
+      console.error(e);
+      // Rollback on error
+      setLikedComments(prev => ({ ...prev, [commentId]: isLiked }));
+      setCommentLikesCount(prev => ({
+        ...prev,
+        [commentId]: Math.max(0, (prev[commentId] || 0) + (isLiked ? 1 : -1))
+      }));
+    }
   };
 
   // Navigation is handled by useStories hook
@@ -508,7 +597,7 @@ export default function StoriesViewer({ stories, onClose, initialIndex = 0, isHi
     <View style={{ flex: 1, backgroundColor: '#000' }}>
       <KeyboardAvoidingView
         style={{ flex: 1 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         keyboardVerticalOffset={getKeyboardOffset()}
       >
         {/* Story Media with long-press to pause */}
@@ -608,6 +697,9 @@ export default function StoriesViewer({ stories, onClose, initialIndex = 0, isHi
                       shouldPlay={!isPaused && !showComments}
                       isMuted={isMuted}
                       isLooping={false}
+                      usePoster={true}
+                      posterSource={currentStoryImageUrl ? { uri: currentStoryImageUrl } : undefined}
+                      posterStyle={{ resizeMode: 'contain' }}
                       onLoadStart={() => setImageLoading(true)}
                       onLoad={status => {
                         setImageLoading(false);
@@ -654,54 +746,13 @@ export default function StoriesViewer({ stories, onClose, initialIndex = 0, isHi
                       <Text style={{ color: '#fff', fontSize: 14 }}>Story media unavailable</Text>
                     </View>
                   )}
-
-                  {/* Text overlays rendered on top of media */}
-                  {(currentStory as any)?.postMetadata?.textOverlays ? (() => {
-                    let parsedOverlays = [];
-                    try {
-                      parsedOverlays = JSON.parse((currentStory as any).postMetadata.textOverlays);
-                    } catch (e) {
-                      console.warn('Failed to parse story text overlays:', e);
-                    }
-                    if (!Array.isArray(parsedOverlays) || parsedOverlays.length === 0) return null;
-                    return (
-                      <View style={{ position: 'absolute', width: width, height: width * 1.1, top: (height - width * 1.1) / 2, left: 0, zIndex: 10 }} pointerEvents="none">
-                        {parsedOverlays.map((o: any) => {
-                          const fs = FONT_STYLES[o.fontStyle] || FONT_STYLES.classic;
-                          return (
-                            <View
-                              key={o.id}
-                              style={{
-                                position: 'absolute',
-                                left: o.x * width,
-                                top: o.y * (width * 1.1),
-                              }}
-                            >
-                              <Text
-                                style={{
-                                  fontSize: 24,
-                                  fontWeight: '700',
-                                  color: o.color,
-                                  fontFamily: fs.fontFamily,
-                                  letterSpacing: fs.letterSpacing,
-                                  textTransform: fs.textTransform as any,
-                                  textShadowColor: 'rgba(0,0,0,0.5)',
-                                  textShadowOffset: { width: 1, height: 1 },
-                                  textShadowRadius: 4,
-                                }}
-                              >
-                                {o.text}
-                              </Text>
-                            </View>
-                          );
-                        })}
-                      </View>
-                    );
-                  })() : null}
                 </View>
               )}
+
             </View>
           </View>
+
+          <StoryTextOverlays postMetadata={currentStory?.postMetadata} />
         </Pressable>
 
         {/* Absolute Top Overlay (Progress & Header) */}
@@ -864,8 +915,8 @@ export default function StoriesViewer({ stories, onClose, initialIndex = 0, isHi
             />
             <View style={{ flex: 1, justifyContent: 'flex-end' }}>
               <KeyboardAvoidingView 
-                behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-                style={{ width: '100%', height: '70%' }}
+                behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+                style={{ width: '100%', height: '70%', backgroundColor: '#fff' }}
               >
                 <View style={{ flex: 1, backgroundColor: '#fff', borderTopLeftRadius: 20, borderTopRightRadius: 20, overflow: 'hidden' }}>
                   <View style={{ height: 50, alignItems: 'center', justifyContent: 'center', borderBottomWidth: 0.5, borderBottomColor: '#eee' }}>
@@ -884,6 +935,7 @@ export default function StoriesViewer({ stories, onClose, initialIndex = 0, isHi
                       postOwnerId={currentStory.userId || ''}
                       currentAvatar={currentUser?.photoURL || currentUser?.avatar || ''}
                       currentUser={currentUser}
+                      isStory={true}
                     />
                   </View>
                 </View>
@@ -913,7 +965,11 @@ export default function StoriesViewer({ stories, onClose, initialIndex = 0, isHi
           <View style={[StyleSheet.absoluteFillObject, { zIndex: 110 }]}>
             <View style={{ flex: 1, justifyContent: 'flex-end' }}>
               <Pressable style={{ ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.45)' }} onPress={() => { setShowNewHighlightModal(false); setIsPaused(false); }} />
-              <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} enabled={Platform.OS === 'ios'}>
+              <KeyboardAvoidingView 
+                behavior={Platform.OS === 'ios' ? 'padding' : undefined} 
+                enabled={Platform.OS === 'ios'}
+                style={{ backgroundColor: '#fff' }}
+              >
                 <SafeAreaView style={{ backgroundColor: '#fff', borderTopLeftRadius: 20, borderTopRightRadius: 20, maxHeight: height * 0.9, minHeight: 420, overflow: 'hidden' }}>
                   <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: '#ddd', alignSelf: 'center', marginTop: 10, marginBottom: 2 }} />
 
@@ -992,6 +1048,8 @@ export default function StoriesViewer({ stories, onClose, initialIndex = 0, isHi
           useViewOverlay={true}
           currentUserId={currentUser?.uid || ''}
           onClose={() => { setShowShareModal(false); setIsPaused(false); }}
+          modalVariant="home"
+          sharePayload={{ ...currentStory, isStory: true }}
           onSend={async (userIds: string[]) => {
             const uid = currentUser?.uid || currentUser?.id;
             if (!uid || userIds.length === 0) return;

@@ -599,7 +599,7 @@ export default function MapScreen() {
             <KeyboardAvoidingView
               style={[styles.searchSheet, { bottom: tabBarHeight }]}
               pointerEvents="auto"
-              behavior={Platform.OS === 'ios' ? 'padding' : 'padding'}
+              behavior={Platform.OS === 'ios' ? 'padding' : undefined}
               keyboardVerticalOffset={Platform.select({ ios: 90, android: tabBarHeight + (insets?.bottom || 0) })}
             >
               <View style={styles.searchSheetHandle} />

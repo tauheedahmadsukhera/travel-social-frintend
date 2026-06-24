@@ -33,7 +33,7 @@ export async function checkBackendHealth(): Promise<boolean> {
 
   for (const endpoint of endpoints) {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 20000); // 20s timeout
+    const timeoutId = setTimeout(() => controller.abort(), 30000); // 30s timeout for cold starts
 
     try {
       const response = await fetch(endpoint, {

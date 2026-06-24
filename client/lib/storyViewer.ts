@@ -235,6 +235,7 @@ export async function cacheHighlightStory(highlightId: string, story: any): Prom
       location: (normalized as any)?.location,
       // keep original media too for matching/removal
       mediaUrl: (normalized as any)?.mediaUrl,
+      postMetadata: normalized.postMetadata,
     };
 
     const existing = await getCachedHighlightStories(hid);
@@ -349,10 +350,36 @@ export function pickStoryMedia(flat: any): { imageUrl: string; videoUrl?: string
 /**
  * Shape expected by StoriesViewer (extends with common API fields).
  */
+export function parseStoryTextOverlays(postMetadata: any): any[] {
+  if (!postMetadata) return [];
+  let parsed = postMetadata;
+  if (typeof postMetadata === 'string') {
+    try {
+      parsed = JSON.parse(postMetadata);
+    } catch (e) {
+      return [];
+    }
+  }
+  const raw = parsed.textOverlays || parsed;
+  if (!raw) return [];
+  try {
+    if (typeof raw === 'string') {
+      const parsedRaw = JSON.parse(raw);
+      return Array.isArray(parsedRaw) ? parsedRaw : [];
+    }
+    if (Array.isArray(raw)) return raw;
+  } catch {
+    // ignore malformed overlay payloads
+  }
+  return [];
+}
+
 export function storyForStoriesViewer(raw: any, index: number): any {
   const flat = flattenStoryPayload(raw);
   const media = pickStoryMedia(flat);
   const id = pickStoryId(flat, raw, index);
+  const postMetadata =
+    flat.postMetadata || raw.postMetadata || (raw.story && raw.story.postMetadata) || undefined;
 
   return {
     ...flat,
@@ -364,5 +391,11 @@ export function storyForStoriesViewer(raw: any, index: number): any {
     videoUrl: media.videoUrl,
     mediaType: media.mediaType,
     createdAt: flat.createdAt ?? flat.timestamp ?? Date.now(),
+    postMetadata,
+    isPostShare: !!(
+      flat.isPostShare ||
+      raw.isPostShare ||
+      postMetadata?.postId
+    ),
   };
 }

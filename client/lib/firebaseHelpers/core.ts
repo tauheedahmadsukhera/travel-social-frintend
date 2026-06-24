@@ -1,5 +1,6 @@
 import AsyncStorage from '@/lib/storage';
 import * as MediaLibrary from 'expo-media-library';
+import { compressVideoSafe } from '../mediaUtils';
 import { apiService } from '@/src/_services/apiService';
 import { API_BASE_URL } from '../api';
 import {
@@ -625,7 +626,7 @@ export async function uploadMedia(
   uri: string,
   mediaType: 'image' | 'video' = 'image',
   path?: string
-): Promise<{ success: boolean; url?: string; error?: string; width?: number; height?: number; aspectRatio?: number }> {
+): Promise<{ success: boolean; url?: string; error?: string; width?: number; height?: number; aspectRatio?: number; thumbnailUrl?: string }> {
   try {
     console.log(`[uploadMedia] 📤 Starting ${mediaType} upload from URI:`, uri);
 
@@ -633,9 +634,9 @@ export async function uploadMedia(
     if (uri.startsWith('file://') || uri.startsWith('content://') || uri.startsWith('/') || !uri.includes('://')) {
       // Compress video if needed to stay within Cloudinary limits
       let finalUri = uri;
-      if (mediaType === 'video') {
-        finalUri = await compressVideoIfNeeded(uri);
-      }
+        if (mediaType === 'video') {
+          finalUri = await compressVideoSafe(uri);
+        }
       
       const multipartResult = await uploadWithMultipart(finalUri, mediaType, path);
       if (multipartResult?.success && multipartResult?.url) {
@@ -657,7 +658,7 @@ export async function uploadMedia(
         // Compress video if needed
         let finalDownloaded = downloadedUri;
         if (mediaType === 'video') {
-          finalDownloaded = await compressVideoIfNeeded(downloadedUri);
+          finalDownloaded = await compressVideoSafe(downloadedUri);
         }
         
         return uploadWithMultipart(finalDownloaded, mediaType, path);
@@ -673,7 +674,7 @@ export async function uploadMedia(
           ? uri.replace('ph://', '').split('/')[0] 
           : uri;
         
-        const assetInfo = await MediaLibrary.getAssetInfoAsync(assetId);
+        const assetInfo = await MediaLibrary.getAssetInfoAsync(assetId, { copyToLocalContainer: true });
         if (!assetInfo) {
           throw new Error(`Asset info not found for ID: ${assetId}`);
         }
@@ -705,7 +706,7 @@ async function uploadWithMultipart(
   uri: string,
   mediaType: 'image' | 'video',
   path?: string
-): Promise<{ success: boolean; url?: string; error?: string; width?: number; height?: number; aspectRatio?: number }> {
+): Promise<{ success: boolean; url?: string; error?: string; width?: number; height?: number; aspectRatio?: number; thumbnailUrl?: string }> {
   try {
     const token = await AsyncStorage.getItem('token');
     const endpointUrl = `${API_BASE_URL}/upload/upload`;
@@ -760,6 +761,7 @@ async function uploadWithMultipart(
     return { 
       success: true, 
       url,
+      thumbnailUrl: response?.data?.thumbnailUrl || response?.thumbnailUrl || '',
       width: response?.data?.width || response?.width,
       height: response?.data?.height || response?.height,
       aspectRatio: response?.data?.aspectRatio || response?.aspectRatio
@@ -786,7 +788,7 @@ async function uploadStoryMedia(uri: string, userId: string, mediaType: 'image' 
         const assetId = uri.startsWith('ph://') 
           ? uri.replace('ph://', '').split('/')[0] 
           : uri;
-        const assetInfo = await MediaLibrary.getAssetInfoAsync(assetId);
+        const assetInfo = await MediaLibrary.getAssetInfoAsync(assetId, { copyToLocalContainer: true });
         if (assetInfo) {
           finalUri = assetInfo.localUri || assetInfo.uri || uri;
         } else {
@@ -799,7 +801,7 @@ async function uploadStoryMedia(uri: string, userId: string, mediaType: 'image' 
 
     // Compress video if needed to stay within Cloudinary limits
     if (mediaType === 'video') {
-      finalUri = await compressVideoIfNeeded(finalUri);
+      finalUri = await compressVideoSafe(finalUri);
     }
 
     const endpointUrl = `${API_BASE_URL}/upload/story`;
@@ -1019,6 +1021,7 @@ export async function createPost(
     };
 
     let detectedUploadRatio = undefined;
+    let uploadedThumbnailUrl = '';
     const mediaUrls = [];
     for (const uri of mediaUris || []) {
       // If it's already an uploaded image from our server/cloudinary, don't re-upload
@@ -1029,6 +1032,9 @@ export async function createPost(
       const upload = await uploadMedia(uri, mediaType);
       if (!upload?.url) throw new Error(upload?.error || 'Upload failed');
       mediaUrls.push(upload.url);
+      if (mediaType === 'video' && upload.thumbnailUrl && !uploadedThumbnailUrl) {
+        uploadedThumbnailUrl = upload.thumbnailUrl;
+      }
       if (upload.aspectRatio && !detectedUploadRatio) {
         detectedUploadRatio = upload.aspectRatio;
       }
@@ -1036,7 +1042,6 @@ export async function createPost(
 
     const locationKeys = buildLocationKeys();
 
-    let uploadedThumbnailUrl = '';
     if (thumbnailUrlRaw) {
       try {
         const thumbUpload = await uploadMedia(thumbnailUrlRaw, 'image');

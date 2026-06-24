@@ -1,7 +1,7 @@
 import { Feather } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React from 'react';
-import { Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View, Linking } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { hapticLight } from '@/lib/haptics';
 import { safeRouterBack } from '@/lib/safeRouterBack';
@@ -43,8 +43,11 @@ export default function SettingsScreen() {
                 {
                   text: 'Email', onPress: () => {
                     // Open mail client
-                    import('react-native').then(({ Linking }) => {
-                      Linking.openURL('mailto:support@travesocial.com?subject=App Feedback');
+                    Linking.openURL('mailto:support@travesocial.com?subject=App Feedback').catch(() => {
+                      Alert.alert(
+                        'Error',
+                        'Unable to open mail client. Please send email manually to support@travesocial.com'
+                      );
                     });
                   }
                 }

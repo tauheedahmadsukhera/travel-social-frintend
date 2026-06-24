@@ -83,3 +83,21 @@ export async function checkUsernameAvailability(username: string): Promise<boole
     return false;
   }
 }
+
+/**
+ * Check if email is available
+ */
+export async function checkEmailAvailability(email: string): Promise<boolean> {
+  try {
+    if (!email || !email.includes('@')) {
+      return false;
+    }
+    const res = await apiService.get('/auth/email/check', {
+      email: email.toLowerCase().trim(),
+    });
+    return !!res?.available;
+  } catch (error) {
+    console.error('Email check error:', error);
+    return false;
+  }
+}

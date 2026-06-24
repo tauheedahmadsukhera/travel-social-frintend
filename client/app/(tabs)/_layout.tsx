@@ -208,7 +208,9 @@ export default function TabsLayout() {
           userAvatar: ownerAvatar,
           imageUrl: normalizeRemoteUrl(story.image || story.imageUrl || story.mediaUrl),
           videoUrl: normalizeRemoteUrl(story.video || story.videoUrl),
-          mediaType: (story.video || story.videoUrl || story.mediaType === 'video') ? 'video' : 'image'
+          mediaType: (story.video || story.videoUrl || story.mediaType === 'video') ? 'video' : 'image',
+          postMetadata: story.postMetadata || undefined,
+          isPostShare: !!(story.isPostShare || story.postMetadata?.postId),
         }));
 
         const idx = Math.max(0, transformed.findIndex((s: any) => String(s?.id || '') === storyIdParam));

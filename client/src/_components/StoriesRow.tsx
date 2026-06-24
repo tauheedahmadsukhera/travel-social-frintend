@@ -13,6 +13,7 @@ import { ActivityIndicator, Alert, Dimensions, Image, Keyboard, KeyboardAvoiding
 import { SafeAreaView } from 'react-native-safe-area-context';
 // import {} from "../../lib/firebaseHelpers";
 import { createStory, getAllStoriesForFeed, getUserProfile } from "../../lib/firebaseHelpers/index";
+import { feedEventEmitter } from '../../lib/feedEventEmitter';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -194,6 +195,14 @@ function StoriesRowComponent({ onStoryPress, onStoryViewerClose, refreshTrigger,
     loadStories({ preferCache: true });
     loadCurrentUserAvatar();
   }, [refreshTrigger]);
+
+  useEffect(() => {
+    const sub = feedEventEmitter.addListener('feedUpdated', () => {
+      lastStoriesLoadAtRef.current = 0;
+      loadStories();
+    });
+    return () => sub.remove();
+  }, []);
 
   useEffect(() => {
     if (!authUser?.uid) return;
@@ -430,7 +439,9 @@ function StoriesRowComponent({ onStoryPress, onStoryViewerClose, refreshTrigger,
             imageUrl: normalizeStoryMediaUrl(story.image || story.imageUrl || story.mediaUrl),
             videoUrl: normalizeStoryMediaUrl(story.video || story.videoUrl),
             thumbnailUrl: normalizeStoryMediaUrl(story.thumbnail || story.thumbnailUrl),
-            mediaType: (story.video || story.videoUrl || story.mediaType === 'video') ? 'video' : 'image'
+            mediaType: (story.video || story.videoUrl || story.mediaType === 'video') ? 'video' : 'image',
+            postMetadata: story.postMetadata || undefined,
+            isPostShare: !!(story.isPostShare || story.postMetadata?.postId),
           }));
           const hasUnseen = transformedStories.some((s: any) => !seenSet.has(String(s.id)));
 
@@ -681,7 +692,7 @@ function StoriesRowComponent({ onStoryPress, onStoryViewerClose, refreshTrigger,
         <SafeAreaView style={{ flex: 1, backgroundColor: '#fff' }} edges={['top', 'bottom']}>
           <KeyboardAvoidingView
             style={{ flex: 1 }}
-            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
             keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
           >
             <View style={{ flex: 1 }}>

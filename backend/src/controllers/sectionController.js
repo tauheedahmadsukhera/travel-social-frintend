@@ -13,11 +13,16 @@ try {
 // ─── helpers ────────────────────────────────────────────────────────────────
 
 function isOwner(section, uid) {
-  return section.userId === uid;
+  return String(section.userId) === String(uid);
 }
 
 function isCollaborator(section, uid) {
-  return section.collaborators && section.collaborators.some(c => c.userId === uid);
+  if (!section.collaborators || !section.collaborators.length) return false;
+  return section.collaborators.some(c => {
+    // Handle both string array and object array formats
+    if (typeof c === 'string') return String(c) === String(uid);
+    return String(c.userId || c) === String(uid);
+  });
 }
 
 // ─── GET /api/sections?userId=... ───────────────────────────────────────────
@@ -96,10 +101,20 @@ exports.updateSection = async (req, res) => {
       return res.status(403).json({ success: false, error: 'Not authorized' });
     }
 
+    // Helper: safely add/remove a postId from the string array
+    const safeAddPost = (id) => {
+      const sid = String(id);
+      if (!section.postIds.includes(sid)) section.postIds.push(sid);
+    };
+    const safeRemovePost = (id) => {
+      const sid = String(id);
+      section.postIds = section.postIds.filter(p => String(p) !== sid);
+    };
+
     // Collaborators can only add/remove posts
     if (collab && !owns) {
-      if (addPostId) section.postIds.addToSet(addPostId);
-      if (removePostId) section.postIds.pull(removePostId);
+      if (addPostId) safeAddPost(addPostId);
+      if (removePostId) safeRemovePost(removePostId);
     } else {
       // Owner: full update
       if (name !== undefined) section.name = name;
@@ -107,11 +122,12 @@ exports.updateSection = async (req, res) => {
       if (visibility !== undefined) section.visibility = visibility;
       if (Array.isArray(specificUsers)) section.specificUsers = specificUsers;
       if (Array.isArray(collaborators)) {
-        section.collaborators = collaborators.map(id => ({ userId: id }));
+        // Store as plain strings to match the schema
+        section.collaborators = collaborators.map(id => String(id._id || id.userId || id));
       }
-      if (Array.isArray(postIds)) section.postIds = postIds;
-      if (addPostId) section.postIds.addToSet(addPostId);
-      if (removePostId) section.postIds.pull(removePostId);
+      if (Array.isArray(postIds)) section.postIds = postIds.map(String);
+      if (addPostId) safeAddPost(addPostId);
+      if (removePostId) safeRemovePost(removePostId);
     }
 
     section.updatedAt = new Date();

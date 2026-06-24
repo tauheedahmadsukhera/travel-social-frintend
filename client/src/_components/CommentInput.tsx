@@ -23,10 +23,7 @@ export const CommentInput: React.FC<CommentInputProps> = ({
   quickEmojis,
 }) => {
   return (
-    <KeyboardAvoidingView 
-      behavior={Platform.OS === "ios" ? "padding" : "height"} 
-      keyboardVerticalOffset={Platform.OS === 'ios' ? 120 : 0}
-    >
+    <View>
       <View style={styles.quickEmojiBar}>
         {quickEmojis.map(emoji => (
           <TouchableOpacity key={emoji} onPress={() => setNewComment(prev => prev + emoji)}>
@@ -49,7 +46,7 @@ export const CommentInput: React.FC<CommentInputProps> = ({
           </TouchableOpacity>
         </View>
       </View>
-    </KeyboardAvoidingView>
+    </View>
   );
 };
 

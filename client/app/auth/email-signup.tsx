@@ -4,7 +4,7 @@ import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { signUpUser } from '../../lib/firebaseHelpers';
-import { checkUsernameAvailability } from '../../services/usernameAuthService';
+import { checkUsernameAvailability, checkEmailAvailability } from '../../services/usernameAuthService';
 import { AuthBrandHeader } from '@/src/_components/auth/AuthBrandHeader';
 import { AuthKeyboardScroll } from '@/src/_components/auth/AuthKeyboardScroll';
 import CustomButton from '@/src/_components/auth/CustomButton';
@@ -18,7 +18,26 @@ export default function EmailSignUpScreen() {
   const [name, setName] = useState('');
   const [checkingUsername, setCheckingUsername] = useState(false);
   const [usernameAvailable, setUsernameAvailable] = useState<boolean | null>(null);
+  const [checkingEmail, setCheckingEmail] = useState(false);
+  const [emailAvailable, setEmailAvailable] = useState<boolean | null>(null);
   const [error, setError] = useState('');
+
+  // Check email availability with debounce
+  useEffect(() => {
+    if (!email || !email.includes('@')) {
+      setEmailAvailable(null);
+      return;
+    }
+
+    const timer = setTimeout(async () => {
+      setCheckingEmail(true);
+      const available = await checkEmailAvailability(email);
+      setEmailAvailable(available);
+      setCheckingEmail(false);
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, [email]);
 
   // Check username availability with debounce
   useEffect(() => {
@@ -46,13 +65,18 @@ export default function EmailSignUpScreen() {
       return;
     }
 
+    if (emailAvailable === false) {
+      setError('An account already exists with this email');
+      return;
+    }
+
     if (!username || username.trim().length < 3) {
       setError('Username must be at least 3 characters');
       return;
     }
 
     if (usernameAvailable === false) {
-      setError('Username is not available');
+      setError('username already exists');
       return;
     }
 
@@ -84,18 +108,32 @@ export default function EmailSignUpScreen() {
 
             {/* Email Input */}
             <View style={styles.inputContainer}>
-              <TextInput
-                style={[styles.input, prefillEmail ? styles.inputLocked : null]}
-                placeholder="Please enter your email"
-                placeholderTextColor="#999"
-                value={email}
-                onChangeText={setEmail}
-                keyboardType="email-address"
-                autoCapitalize="none"
-                autoCorrect={false}
-                spellCheck={false}
-                editable={!prefillEmail}
-              />
+              <View style={styles.inputWrapper}>
+                <TextInput
+                  style={[styles.input, styles.usernameInput, prefillEmail ? styles.inputLocked : null]}
+                  placeholder="Please enter your email"
+                  placeholderTextColor="#999"
+                  value={email}
+                  onChangeText={setEmail}
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  spellCheck={false}
+                  editable={!prefillEmail}
+                />
+                {checkingEmail && (
+                  <ActivityIndicator size="small" color="#FF8D00" style={styles.inputIcon} />
+                )}
+                {!checkingEmail && emailAvailable === true && email.includes('@') && (
+                  <Ionicons name="checkmark-circle" size={20} color="#4CAF50" style={styles.inputIcon} />
+                )}
+                {!checkingEmail && emailAvailable === false && email.includes('@') && (
+                  <Ionicons name="close-circle" size={20} color="#f44336" style={styles.inputIcon} />
+                )}
+              </View>
+              {email.length > 0 && email.includes('@') && emailAvailable === false && (
+                <Text style={[styles.hint, { color: '#f44336' }]}>An account already exists with this email</Text>
+              )}
             </View>
 
 
@@ -124,7 +162,7 @@ export default function EmailSignUpScreen() {
                 )}
               </View>
               {username.length >= 3 && usernameAvailable === false && (
-                <Text style={[styles.hint, { color: '#f44336' }]}>This username is not available</Text>
+                <Text style={[styles.hint, { color: '#f44336' }]}>username already exists</Text>
               )}
               {username.length >= 3 && usernameAvailable === true && (
                 <Text style={[styles.hint, { color: '#4CAF50' }]}>Username is available!</Text>

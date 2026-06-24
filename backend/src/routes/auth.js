@@ -353,6 +353,23 @@ router.get('/username/check', async (req, res) => {
 });
 
 /**
+ * GET /api/auth/email/check
+ * Check if an email is available
+ */
+router.get('/email/check', async (req, res) => {
+  try {
+    const { email } = req.query;
+    if (!email) return res.status(400).json({ success: false, error: 'Email is required' });
+
+    const existingUser = await User.findOne({ email: email.toLowerCase().trim() });
+    res.json({ success: true, available: !existingUser });
+  } catch (error) {
+    logger.error('[Auth] Email check error: %O', error);
+    res.status(500).json({ success: false, error: 'Check failed' });
+  }
+});
+
+/**
  * POST /api/auth/username/signup
  * Create a new account with a username + password (PIN)
  */

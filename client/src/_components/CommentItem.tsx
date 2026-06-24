@@ -13,6 +13,7 @@ interface CommentItemProps {
   onReply: (id: string, userName: string) => void;
   onLike: (id: string, isReply: boolean, parentId?: string) => void;
   onLongPress: (comment: Comment, isReply: boolean, parentId?: string) => void;
+  isStory?: boolean;
 }
 
 const getCommentTime = (timestamp: any) => {
@@ -37,6 +38,7 @@ const CommentItemComponent: React.FC<CommentItemProps> = ({
   onReply,
   onLike,
   onLongPress,
+  isStory = false,
 }) => {
   const isOwner = useMemo(() => {
     const uid = currentUser?.uid || currentUser?._id || currentUser?.id;
@@ -67,9 +69,11 @@ const CommentItemComponent: React.FC<CommentItemProps> = ({
 
         <View style={styles.commentFooter}>
           <Text style={styles.footerAction}>{timeText}</Text>
-          <TouchableOpacity onPress={() => onReply(parentId || comment.id, comment.userName)}>
-            <Text style={styles.footerAction}>Reply</Text>
-          </TouchableOpacity>
+          {!isStory && (
+            <TouchableOpacity onPress={() => onReply(parentId || comment.id, comment.userName)}>
+              <Text style={styles.footerAction}>Reply</Text>
+            </TouchableOpacity>
+          )}
         </View>
         
         {comment.replies && comment.replies.length > 0 && (
@@ -85,32 +89,35 @@ const CommentItemComponent: React.FC<CommentItemProps> = ({
                 onReply={onReply}
                 onLike={onLike}
                 onLongPress={onLongPress}
+                isStory={isStory}
               />
             ))}
           </View>
         )}
       </View>
 
-      <TouchableOpacity 
-        style={styles.likeButton}
-        onPress={() => onLike(comment.id, isReply, parentId)}
-      >
-        <Ionicons 
-          name={isLiked ? "heart" : "heart-outline"} 
-          size={14} 
-          color={isLiked ? "#FF3B30" : "#999"} 
-        />
-        {likeCount > 0 && (
-          <Text style={styles.likeCount}>{likeCount}</Text>
-        )}
-      </TouchableOpacity>
+      {!isStory && (
+        <TouchableOpacity 
+          style={styles.likeButton}
+          onPress={() => onLike(comment.id, isReply, parentId)}
+        >
+          <Ionicons 
+            name={isLiked ? "heart" : "heart-outline"} 
+            size={14} 
+            color={isLiked ? "#FF3B30" : "#999"} 
+          />
+          {likeCount > 0 && (
+            <Text style={styles.likeCount}>{likeCount}</Text>
+          )}
+        </TouchableOpacity>
+      )}
     </View>
   );
 };
 
 const styles = StyleSheet.create({
   commentRow: { flexDirection: 'row', paddingHorizontal: 15, paddingVertical: 12 },
-  replyRow: { paddingLeft: 60, paddingVertical: 8 },
+  replyRow: { paddingLeft: 0, paddingRight: 0, paddingHorizontal: 0, paddingVertical: 8 },
   commentContent: { flex: 1, marginLeft: 12 },
   userName: { fontWeight: '700', fontSize: 13, color: '#333' },
   commentText: { fontSize: 14, color: '#333', marginTop: 4, lineHeight: 18 },

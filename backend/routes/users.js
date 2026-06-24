@@ -1196,10 +1196,15 @@ router.post('/:userId/sections', verifyToken, async (req, res) => {
       .findOne({ userId: { $in: userIdVariants } }).sort({ order: -1 });
     const nextOrder = (lastSection?.order || 0) + 1;
 
+    // Sanitize postIds to strip '-loop' suffix
+    const cleanPostIds = Array.isArray(postIds)
+      ? postIds.map(id => String(id).split('-loop')[0])
+      : [];
+
     const sectionData = {
       userId: canonicalUserId,
       name,
-      postIds: postIds || [],
+      postIds: cleanPostIds,
       coverImage: coverImage || null,
       visibility: visibility || 'private',
       collaborators: collaborators || [],
@@ -1251,7 +1256,9 @@ router.put('/:userId/sections/:sectionId', verifyToken, async (req, res) => {
     // Build update fields — only update what's provided
     const updateFields = { updatedAt: new Date() };
     if (name !== undefined) updateFields.name = name;
-    if (Array.isArray(postIds)) updateFields.postIds = postIds;
+    if (Array.isArray(postIds)) {
+      updateFields.postIds = postIds.map(id => String(id).split('-loop')[0]);
+    }
     if (coverImage !== undefined) updateFields.coverImage = coverImage;
     if (visibility !== undefined) updateFields.visibility = visibility;
     if (Array.isArray(collaborators)) updateFields.collaborators = collaborators;
@@ -1274,8 +1281,14 @@ router.put('/:userId/sections/:sectionId', verifyToken, async (req, res) => {
 
     const updateOp = { $set: updateFields };
     // addPostId / removePostId — atomic array ops (works even without full postIds)
-    if (addPostId) updateOp.$addToSet = { postIds: addPostId };
-    if (removePostId) updateOp.$pull = { postIds: removePostId };
+    if (addPostId) {
+      const cleanAddPostId = String(addPostId).split('-loop')[0];
+      updateOp.$addToSet = { postIds: cleanAddPostId };
+    }
+    if (removePostId) {
+      const cleanRemovePostId = String(removePostId).split('-loop')[0];
+      updateOp.$pull = { postIds: cleanRemovePostId };
+    }
 
     const result = await Section.findOneAndUpdate(
       filter,
@@ -1301,44 +1314,32 @@ router.delete('/:userId/sections/:sectionId', verifyToken, async (req, res) => {
     const { userId, sectionId } = req.params;
     const authenticatedUserId = req.userId;
 
-    // Ownership check
-    const resolved = await resolveUserIdentifiers(authenticatedUserId);
-    const target = await resolveUserIdentifiers(userId);
-    const isSelf = resolved.candidates.some(c => target.candidates.map(String).includes(String(c)));
-    
-    if (!isSelf) {
-      return res.status(403).json({ success: false, error: 'Forbidden' });
-    }
     const { migrateToSectionId } = req.body || {};
 
     const Section = mongoose.model('Section');
     const { resolveUserIdentifiers } = require('../src/utils/userUtils');
 
-    const user = await resolveUserIdentifiers(userId);
-    const userIdCandidates = [...user.candidates];
-    
-    // Make sure canonical id as object id is included
-    let hasObjectId = false;
-    let canonicalObj = null;
-    try { canonicalObj = new mongoose.Types.ObjectId(user.canonicalId); } catch(e){}
-    for(const c of userIdCandidates) {
-      if(String(c) === String(canonicalObj)) hasObjectId = true;
-    }
-    if(canonicalObj && !hasObjectId) userIdCandidates.push(canonicalObj);
+    const resolved = await resolveUserIdentifiers(authenticatedUserId);
 
     const sectionCandidates = [sectionId];
     try { sectionCandidates.push(new mongoose.Types.ObjectId(sectionId)); } catch {}
 
-    const filter = { 
-      userId: { $in: userIdCandidates }, 
-      $or: [{ _id: { $in: sectionCandidates } }, { name: sectionId }] 
-    };
+    const section = await Section.findOne({
+      $or: [{ _id: { $in: sectionCandidates } }, { name: sectionId }]
+    });
 
-    const section = await Section.findOne(filter);
     if (!section) {
-      console.log('[DELETE /users/:userId/sections/:sectionId] 404 - filter:', filter);
+      console.log('[DELETE /users/:userId/sections/:sectionId] 404 - Section not found:', sectionId);
       return res.status(404).json({ success: false, error: 'Section not found' });
     }
+
+    // Verify ownership
+    const isOwner = resolved.candidates.map(String).includes(String(section.userId));
+    if (!isOwner) {
+      return res.status(403).json({ success: false, error: 'Forbidden: You do not own this collection' });
+    }
+
+    const userIdCandidates = [...resolved.candidates];
     
     // Verify ownership (userId from candidates means they own it)
     // No strict check against `userId` directly needed since the filter did it with candidates.
@@ -1391,7 +1392,7 @@ router.delete('/:userId/sections/:sectionId', verifyToken, async (req, res) => {
       }
     }
 
-    await Section.deleteOne(filter);
+    await Section.deleteOne({ _id: section._id });
     res.json({ success: true, data: { deletedId: sectionId } });
   } catch (err) {
     console.error('[DELETE /:userId/sections/:sectionId] Error:', err.message);

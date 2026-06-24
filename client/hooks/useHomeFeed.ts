@@ -168,23 +168,34 @@ export function useHomeFeed(currentUserId: string | null, isOnline: boolean) {
     }
   };
 
+  // Track whether we've done an anonymous fetch (no userId) so we re-fetch
+  // once the user's identity resolves.
+  const fetchedAsAnonymousRef = useRef(false);
+
   useEffect(() => {
     (async () => {
+      let hasCache = false;
       try {
         const cached = await getCachedData<any[]>(HOME_CACHE_KEY);
         if (Array.isArray(cached) && cached.length > 0) {
           setAllLoadedPosts(cached);
           setPosts(createMixedFeed(cached));
           setLoading(false);
+          hasCache = true;
         }
       } catch {}
 
-      if (!currentUserId) return;
-      if (hasFetchedRef.current) return;
+      // Allow feed to load even without a userId (optionalAuth on backend).
+      // If we already fetched WITH a userId, don't refetch.
+      // If we fetched anonymously and now have a userId, refetch to get personalized data.
+      if (hasFetchedRef.current && !fetchedAsAnonymousRef.current) return;
+      if (hasFetchedRef.current && fetchedAsAnonymousRef.current && !currentUserId) return;
+
       hasFetchedRef.current = true;
+      fetchedAsAnonymousRef.current = !currentUserId;
 
       if (isOnline) {
-        await loadInitialFeed(0);
+        await loadInitialFeed(0, { silent: hasCache });
       } else {
         setLoading(prev => (prev ? false : prev));
       }

@@ -155,6 +155,7 @@ export default function SavedScreen() {
     if (!activeUid) return;
 
     // Cache-first bootstrap: show cached content immediately
+    let hasCacheData = false;
     try {
       const cached = await getCachedData<any>(SAVED_CACHE_KEY(activeUid));
       if (cached && !hasLoadedOnceRef.current) {
@@ -163,6 +164,7 @@ export default function SavedScreen() {
         if (cached.likedPosts && typeof cached.likedPosts === 'object') setLikedPosts(cached.likedPosts);
         if (cached.savedPosts && typeof cached.savedPosts === 'object') setSavedPosts(cached.savedPosts);
         setLoading(false);
+        hasCacheData = true;
       }
     } catch { }
 
@@ -177,7 +179,7 @@ export default function SavedScreen() {
 
     isLoadingDataRef.current = true;
     const requesterId = currentUserId || activeUid;
-    if (!hasLoadedOnceRef.current) setLoading(true);
+    if (!hasLoadedOnceRef.current && !hasCacheData) setLoading(true);
 
     // If we're offline, don't block — rely on cache if available
     if (!isOnline && hasLoadedOnceRef.current) {

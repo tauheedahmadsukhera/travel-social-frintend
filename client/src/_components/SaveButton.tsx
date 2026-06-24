@@ -40,34 +40,35 @@ export default function SaveButton({ post, currentUser }: any) {
       userForSave?.userId ||
       userForSave?._id;
 
-  const [saved, setSaved] = useState(post?.savedBy?.includes(userId) ?? false);
+  const [saved, setSaved] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
-  const [resolvedUserId, setResolvedUserId] = useState<string>(userId || "");
+  const [resolvedUserId, setResolvedUserId] = useState<string>("");
 
   useEffect(() => {
     // Priority 1: Direct flags from backend (most reliable)
     const backendSaved = post?.isSaved || post?.saved || false;
     // Priority 2: ID match in savedBy array
-    const idMatch = post?.savedBy?.includes(userId) ?? false;
+    const idMatch = (resolvedUserId && post?.savedBy) ? post.savedBy.includes(resolvedUserId) : false;
     
-    console.log(`[SaveButton] Debug: userId=${userId}, backendSaved=${backendSaved}, idMatch=${idMatch}`);
+    console.log(`[SaveButton] Debug: resolvedUserId=${resolvedUserId}, backendSaved=${backendSaved}, idMatch=${idMatch}`);
     setSaved(backendSaved || idMatch);
-  }, [post?.savedBy, userId, post?.isSaved, post?.saved]);
+  }, [post?.savedBy, resolvedUserId, post?.isSaved, post?.saved, post?._id, post?.id]);
 
   // Ensure we always have the userId from storage as fallback
   useEffect(() => {
-    if (!resolvedUserId) {
+    if (userId) {
+      setResolvedUserId(userId);
+    } else {
       AsyncStorage.getItem("userId").then((id) => {
         if (id) setResolvedUserId(id);
       });
-    } else {
-      setResolvedUserId(userId || "");
     }
   }, [userId]);
 
   useEffect(() => {
-    const pid = post.id || post._id;
-    if (!pid) return;
+    const rawPid = post.id || post._id;
+    if (!rawPid) return;
+    const pid = String(rawPid).split('-loop')[0];
     const { feedEventEmitter } = require("../../lib/feedEventEmitter");
     const sub = feedEventEmitter.onPostUpdated(pid, (id: string, data: any) => {
       if (!data) return; // Guard against undefined data
@@ -91,6 +92,8 @@ export default function SaveButton({ post, currentUser }: any) {
     setModalVisible(true);
   }
 
+  const cleanPostId = String(post.id || post._id || "").split('-loop')[0];
+
   return (
     <>
       <TouchableOpacity onPress={handleSavePress} style={{ marginLeft: 0 }}>
@@ -104,7 +107,7 @@ export default function SaveButton({ post, currentUser }: any) {
       <SaveToCollectionModal
         visible={modalVisible}
         onClose={() => setModalVisible(false)}
-        postId={post.id || post._id || ""}
+        postId={cleanPostId}
         postImageUrl={post.mediaUrl || post.imageUrl || post.media?.[0]?.url || undefined}
         currentUserId={resolvedUserId || userId}
         onSaveChange={(val: boolean) => setSaved(val)}

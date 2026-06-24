@@ -136,9 +136,12 @@ function Inbox() {
   };
 
   // Get userId from Zustand Global Store
-  const userId = useAppStore((state) => state.userId);
+  const storeUserId = useAppStore((state) => state.userId);
+  const [resolvedUserId, setResolvedUserId] = useState<string | null>(null);
+  const [userLoading, setUserLoading] = useState(true);
+  const userId = storeUserId || resolvedUserId;
+
   const [userVariants, setUserVariants] = useState<string[]>([]);
-  const userLoading = false;
   const [inFocus, setInFocus] = useState(false);
   const lastRefreshAtRef = useRef(0);
   const MIN_FOCUS_REFRESH_MS = 4000;
@@ -160,6 +163,7 @@ function Inbox() {
     const loadVariants = async () => {
       try {
         const storedId = await resolveCanonicalUserId();
+        setResolvedUserId(storedId);
         const [fUid, uid] = await Promise.all([
           AsyncStorage.getItem('firebaseUid'),
           AsyncStorage.getItem('uid'),
@@ -168,6 +172,8 @@ function Inbox() {
         setUserVariants(variants);
       } catch (e) {
         console.error('[Inbox] Failed to load user variants:', e);
+      } finally {
+        setUserLoading(false);
       }
     };
     loadVariants();

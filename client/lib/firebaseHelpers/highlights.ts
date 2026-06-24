@@ -8,7 +8,8 @@ export async function createHighlight(
   name: string,
   coverImage: string,
   storyIds: string[] = [],
-  visibility: string = 'Public'
+  visibility: string = 'Public',
+  storySnapshots: any[] = []
 ) {
   try {
     const res = await apiService.post('/highlights', { 
@@ -16,8 +17,10 @@ export async function createHighlight(
       title: name, 
       coverImage, 
       // Send both shapes for backend compatibility.
-      stories: storyIds,
+      stories: storySnapshots.length > 0 ? storySnapshots : storyIds,
       storyIds,
+      storySnapshots,
+      storySnapshot: storySnapshots[0],
       visibility
     });
     
@@ -33,13 +36,18 @@ export async function createHighlight(
 }
 
 export async function addStoryToHighlight(highlightId: string, storyId: string, storyObj?: any) {
+  const resolvedStoryId = String(storyId || storyObj?.id || storyObj?._id || '').trim();
+  if (!resolvedStoryId) {
+    console.error('❌ addStoryToHighlight validation error: storyId is missing');
+    return { success: false, error: 'storyId is required' };
+  }
   try {
     // Backend expects { storyId, storySnapshot: { storyId, imageUrl, videoUrl, mediaType, createdAt, ... } }
     // Send as much data as possible because the Story document may expire (24h TTL)
     // and this snapshot is the only permanent record.
     const snapshot = storyObj ? {
-      storyId: storyObj.id || storyObj._id || storyId,
-      id: storyObj.id || storyObj._id || storyId,
+      storyId: storyObj.id || storyObj._id || resolvedStoryId,
+      id: storyObj.id || storyObj._id || resolvedStoryId,
       userId: storyObj.userId || '',
       userName: storyObj.userName || '',
       userAvatar: storyObj.userAvatar || '',
@@ -49,10 +57,10 @@ export async function addStoryToHighlight(highlightId: string, storyId: string, 
       mediaType: storyObj.mediaType || (storyObj.videoUrl ? 'video' : 'image'),
       createdAt: storyObj.createdAt || new Date(),
       locationData: storyObj.locationData || null,
-    } : { storyId };
+    } : { storyId: resolvedStoryId };
 
     const res = await apiService.post(`/highlights/${highlightId}/stories`, { 
-      storyId,
+      storyId: resolvedStoryId,
       storySnapshot: snapshot 
     });
     return res;

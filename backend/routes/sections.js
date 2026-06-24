@@ -3,6 +3,9 @@ const router = express.Router();
 const mongoose = require('mongoose');
 const { resolveUserIdentifiers } = require('../src/utils/userUtils');
 
+// Load Section model
+const Section = mongoose.models.Section || require('../src/models/Section');
+
 // Use centralized Section model
 const { verifyToken } = require('../src/middleware/authMiddleware');
 
@@ -37,8 +40,8 @@ router.post('/', verifyToken, async (req, res) => {
   }
 });
 
-// Get user sections
-router.get('/users/:userId/sections', async (req, res) => {
+// GET /api/users/:userId/sections
+router.get('/:userId/sections', async (req, res) => {
   try {
     const user = await resolveUserIdentifiers(req.params.userId);
     const requesterId = req.query.requesterId;
@@ -209,6 +212,65 @@ router.patch('/:sectionId', verifyToken, async (req, res) => {
   }
 });
 
+// PUT /api/users/:uid/sections/:sectionId - used by client (useCollectionLogic)
+router.put('/:uid/sections/:sectionId', verifyToken, async (req, res) => {
+  try {
+    const { uid, sectionId } = req.params;
+    const { name, postIds, coverImage, visibility, specificUsers, collaborators, addPostId, removePostId } = req.body;
+
+    const section = await Section.findById(sectionId);
+    if (!section) return res.status(404).json({ success: false, error: 'Section not found' });
+
+    const sectionUserId = String(section.userId);
+    const requesterId = String(req.userId);
+    const paramUid = String(uid);
+
+    // Allow if JWT user matches uid param OR section owner
+    const isOwner = sectionUserId === requesterId || sectionUserId === paramUid;
+    const isCollaborator = Array.isArray(section.collaborators) &&
+      section.collaborators.some(c => String(typeof c === 'object' ? (c.userId || c._id || c) : c) === requesterId);
+
+    if (!isOwner && !isCollaborator) {
+      return res.status(403).json({ success: false, error: 'Not authorized' });
+    }
+
+    // Safe add/remove helpers
+    const safeAddPost = (id) => {
+      const sid = String(id);
+      const currentIds = section.postIds.map(String);
+      if (!currentIds.includes(sid)) section.postIds.push(sid);
+    };
+    const safeRemovePost = (id) => {
+      const sid = String(id);
+      section.postIds = section.postIds.filter(p => String(p) !== sid);
+    };
+
+    if (isCollaborator && !isOwner) {
+      if (addPostId) safeAddPost(addPostId);
+      if (removePostId) safeRemovePost(removePostId);
+    } else {
+      if (name !== undefined) section.name = name;
+      if (coverImage !== undefined) section.coverImage = coverImage;
+      if (visibility !== undefined) section.visibility = visibility;
+      if (Array.isArray(specificUsers)) section.specificUsers = specificUsers;
+      if (Array.isArray(collaborators)) {
+        section.collaborators = collaborators.map(id => String(id._id || id.userId || id));
+      }
+      if (Array.isArray(postIds)) section.postIds = postIds.map(String);
+      if (addPostId) safeAddPost(addPostId);
+      if (removePostId) safeRemovePost(removePostId);
+    }
+
+    section.updatedAt = new Date();
+    await section.save();
+    console.log('[PUT /users/:uid/sections/:sectionId] Updated section:', sectionId);
+    res.json({ success: true, data: section });
+  } catch (err) {
+    console.error('[PUT /users/:uid/sections/:sectionId] Error:', err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // DELETE /api/sections/:sectionId - Delete a section (Requires Auth)
 router.delete('/:sectionId', verifyToken, async (req, res) => {
   try {
@@ -238,8 +300,8 @@ router.delete('/:sectionId', verifyToken, async (req, res) => {
   }
 });
 
-// Update section order (batch update)
-router.patch('/users/:userId/sections-order', async (req, res) => {
+// UPDATE section order  
+router.patch('/:userId/sections-order', async (req, res) => {
   try {
     const { sections } = req.body;
 

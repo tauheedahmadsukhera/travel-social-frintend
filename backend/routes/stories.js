@@ -130,7 +130,7 @@ router.get('/', optionalAuth, async (req, res) => {
  */
 router.post('/', verifyToken, async (req, res) => {
   try {
-    const { userName, mediaUrl, mediaType, caption, locationData, thumbnailUrl, thumbnail } = req.body;
+    const { userName, mediaUrl, mediaType, caption, locationData, thumbnailUrl, thumbnail, postMetadata, isPostShare } = req.body;
     const userId = req.userId; // Always use authenticated userId
 
     if (!userId || !mediaUrl) {
@@ -159,12 +159,27 @@ router.post('/', verifyToken, async (req, res) => {
       }
     }
 
+    let normalizedPostMetadata = null;
+    if (postMetadata) {
+      if (typeof postMetadata === 'object') {
+        normalizedPostMetadata = postMetadata;
+      } else if (typeof postMetadata === 'string') {
+        try {
+          normalizedPostMetadata = JSON.parse(postMetadata);
+        } catch (e) {
+          console.warn('[CreateStory] Failed to parse postMetadata string:', e.message);
+        }
+      }
+    }
+
     const storyData = {
       userId,
       userName: user?.displayName || user?.name || userName || 'Anonymous',
       userAvatar: user?.avatar || user?.photoURL || null,
       caption: caption || '',
       locationData: resolvedLocationData,
+      postMetadata: normalizedPostMetadata,
+      isPostShare: !!(isPostShare || normalizedPostMetadata?.postId),
       createdAt: new Date(),
       expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000)
     };
@@ -179,7 +194,7 @@ router.post('/', verifyToken, async (req, res) => {
     const story = new Story(storyData);
     await story.save();
 
-    console.log('[POST /stories] Story created:', story._id, 'for user:', user?.displayName || userName);
+    console.log('[POST /stories] Story created:', story._id, 'for user:', user?.displayName || userName, 'postMetadata:', normalizedPostMetadata ? 'yes' : 'no', 'textOverlays:', normalizedPostMetadata?.textOverlays?.length ?? 0);
 
     // BACKGROUND TRIGGER: Notify followers about new story
     (async () => {

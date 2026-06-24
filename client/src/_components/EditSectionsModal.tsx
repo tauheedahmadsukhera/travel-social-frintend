@@ -520,7 +520,7 @@ export default function EditSectionsModal({
       <GestureHandlerRootView style={{ flex: 1 }}>
         <KeyboardAvoidingView
           style={{ flex: 1 }}
-          behavior="padding"
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         >
           <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
             {/* Header */}

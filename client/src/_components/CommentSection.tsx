@@ -61,6 +61,7 @@ export interface CommentSectionProps {
   maxHeight?: number;
   showInput?: boolean;
   initialTab?: 'comment' | 'reactions';
+  isStory?: boolean;
 }
 
 export const CommentSection: React.FC<CommentSectionProps> = ({
@@ -70,8 +71,9 @@ export const CommentSection: React.FC<CommentSectionProps> = ({
   currentUser: userProp,
   showInput = true,
   initialTab = 'comment',
+  isStory = false,
 }) => {
-  const [activeTab, setActiveTab] = useState<'comment' | 'reactions'>(initialTab);
+  const [activeTab, setActiveTab] = useState<'comment' | 'reactions'>(isStory ? 'comment' : initialTab);
   const [comments, setComments] = useState<Comment[]>([]);
   const [reactions, setReactions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -101,7 +103,12 @@ export const CommentSection: React.FC<CommentSectionProps> = ({
   const loadData = useCallback(async () => {
     try {
       setLoading(true);
-      const res = await getPostComments(postId);
+      let res;
+      if (isStory) {
+        res = await apiService.get(`/stories/${postId}/comments`);
+      } else {
+        res = await getPostComments(postId);
+      }
       const raw = Array.isArray(res) ? res : (res?.data ?? []);
       
       const mapComment = (c: any): Comment => ({
@@ -124,20 +131,22 @@ export const CommentSection: React.FC<CommentSectionProps> = ({
       const actualCount = mappedComments.reduce((acc: number, c: Comment) => acc + 1 + (c.replies?.length || 0), 0);
       feedEventEmitter.emit("commentCountUpdated", { postId, count: actualCount });
 
-      try {
-        const postRes: any = await apiService.get(`/posts/${postId}`);
-        if (postRes?.success && postRes.data?.reactions) {
-          setReactions(postRes.data.reactions);
+      if (!isStory) {
+        try {
+          const postRes: any = await apiService.get(`/posts/${postId}`);
+          if (postRes?.success && postRes.data?.reactions) {
+            setReactions(postRes.data.reactions);
+          }
+        } catch (postErr: any) {
+          console.log("[CommentSection] Skipped loading post reactions (ID is likely a story or highlight):", postErr.message);
         }
-      } catch (postErr: any) {
-        console.log("[CommentSection] Skipped loading post reactions (ID is likely a story or highlight):", postErr.message);
       }
     } catch (err) {
       console.error("[CommentSection] Load error:", err);
     } finally {
       setLoading(false);
     }
-  }, [postId]);
+  }, [postId, isStory]);
 
   useEffect(() => { loadData(); }, [loadData]);
 
@@ -145,7 +154,12 @@ export const CommentSection: React.FC<CommentSectionProps> = ({
     if (!newComment.trim() || isSubmitting) return;
     setIsSubmitting(true);
     try {
-      if (replyTo) {
+      if (isStory) {
+        await apiService.post(`/stories/${postId}/comments`, {
+          text: newComment.trim(),
+          userName: currentUser?.displayName || 'User'
+        });
+      } else if (replyTo) {
         await addCommentReply(postId, replyTo.id, {
           userId: currentUserId,
           userName: currentUser?.displayName || 'User',
@@ -218,6 +232,11 @@ export const CommentSection: React.FC<CommentSectionProps> = ({
       const postRes: any = await apiService.get(`/posts/${postId}`);
       if (postRes?.success && postRes.data?.reactions) {
         setReactions(postRes.data.reactions);
+        try {
+          feedEventEmitter.emitPostUpdated(postId, { reactions: postRes.data.reactions });
+        } catch (err) {
+          console.warn('[CommentSection] failed to emit reactions update:', err);
+        }
       }
       setShowEmojiPicker(false);
     } catch (e) { 
@@ -319,7 +338,7 @@ export const CommentSection: React.FC<CommentSectionProps> = ({
 
       {/* Edit Modal */}
       <Modal visible={isEditing} transparent animationType="fade">
-        <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={styles.editContainer}>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.editContainer}>
           <View style={styles.editBox}>
             <Text style={styles.editTitle}>Edit Comment</Text>
             <TextInput style={styles.editInput} multiline value={editValue} onChangeText={setEditValue} autoFocus />
@@ -331,16 +350,18 @@ export const CommentSection: React.FC<CommentSectionProps> = ({
         </KeyboardAvoidingView>
       </Modal>
 
-      <View style={styles.tabHeader}>
-        <View style={styles.tabContainer}>
-          <TouchableOpacity style={[styles.tabButton, activeTab === 'comment' && styles.tabButtonActive]} onPress={() => setActiveTab('comment')}>
-            <Text style={[styles.tabText, activeTab === 'comment' && styles.tabTextActive]}>Comments {totalCommentCount}</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={[styles.tabButton, activeTab === 'reactions' && styles.tabButtonActive]} onPress={() => setActiveTab('reactions')}>
-            <Text style={[styles.tabText, activeTab === 'reactions' && styles.tabTextActive]}>Reactions</Text>
-          </TouchableOpacity>
+      {!isStory && (
+        <View style={styles.tabHeader}>
+          <View style={styles.tabContainer}>
+            <TouchableOpacity style={[styles.tabButton, activeTab === 'comment' && styles.tabButtonActive]} onPress={() => setActiveTab('comment')}>
+              <Text style={[styles.tabText, activeTab === 'comment' && styles.tabTextActive]}>Comments {totalCommentCount}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={[styles.tabButton, activeTab === 'reactions' && styles.tabButtonActive]} onPress={() => setActiveTab('reactions')}>
+              <Text style={[styles.tabText, activeTab === 'reactions' && styles.tabTextActive]}>Reactions</Text>
+            </TouchableOpacity>
+          </View>
         </View>
-      </View>
+      )}
 
       {activeTab === 'comment' ? (
         <View style={{ flex: 1, minHeight: 2 }}>
@@ -355,6 +376,7 @@ export const CommentSection: React.FC<CommentSectionProps> = ({
                 onReply={(id, name) => { setReplyTo({ id, userName: name }); setNewComment(`@${name} `); }}
                 onLike={handleLikeComment}
                 onLongPress={(c, r, p) => { setSelectedComment({ ...c, isReply: r, parentId: p } as any); setShowOptions(true); }}
+                isStory={isStory}
               />
             )}
             contentContainerStyle={{ paddingBottom: 20 }}

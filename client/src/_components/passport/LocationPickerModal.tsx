@@ -54,7 +54,7 @@ export const LocationPickerModal: React.FC<LocationPickerModalProps> = ({
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <View style={styles.modalOverlay}>
         <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
           style={{ justifyContent: 'flex-end', flex: 1 }}
           keyboardVerticalOffset={0}
         >

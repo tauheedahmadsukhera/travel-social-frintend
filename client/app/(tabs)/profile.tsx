@@ -11,6 +11,7 @@ import {
   Dimensions,
   Image,
   Keyboard,
+  Modal,
   Platform,
   Pressable,
   ScrollView,
@@ -859,6 +860,20 @@ export default function Profile({ userIdProp }: any) {
             <Text style={{ textAlign: 'center', color: '#999', marginTop: 4 }}>Follow to see their posts and photos.</Text>
           </View>
         </ScrollView>
+      )}
+
+      {storiesViewerVisible && userStories.length > 0 && (
+        <Modal
+          visible={storiesViewerVisible}
+          transparent={false}
+          animationType="fade"
+          onRequestClose={() => setStoriesViewerVisible(false)}
+        >
+          <StoriesViewer
+            stories={userStories}
+            onClose={() => setStoriesViewerVisible(false)}
+          />
+        </Modal>
       )}
 
       <ProfileModals

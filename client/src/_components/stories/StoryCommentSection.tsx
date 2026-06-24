@@ -37,7 +37,7 @@ const StoryCommentSection: React.FC<StoryCommentSectionProps> = ({
 
   return (
     <View style={[StyleSheet.absoluteFillObject, { zIndex: 100 }]}>
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <View style={styles.overlay}>
           <TouchableOpacity style={{ flex: 1 }} onPress={onClose} />
           <View style={styles.modalContent}>

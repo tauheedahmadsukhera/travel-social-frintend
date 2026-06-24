@@ -487,46 +487,51 @@ const PostCard: React.FC<PostCardProps> = ({
         transparent={true}
         onRequestClose={() => setShowComments(false)}
       >
-        <Pressable 
-          style={{ flex: 1, backgroundColor: 'transparent' }} 
-          onPress={() => setShowComments(false)} 
-        />
-        <Animated.View 
-          style={{ 
-            height: '85%', 
-            backgroundColor: '#fff', 
-            borderTopLeftRadius: 30, 
-            borderTopRightRadius: 30, 
-            overflow: 'hidden',
-            marginTop: 'auto',
-            transform: [{ translateY }],
-            elevation: 0,
-            shadowOpacity: 0
-          }}
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          style={{ flex: 1 }}
         >
-          {/* Drag Handle */}
-          <View 
-            {...panResponder.panHandlers}
+          <Pressable 
+            style={{ flex: 1, backgroundColor: 'transparent' }} 
+            onPress={() => setShowComments(false)} 
+          />
+          <Animated.View 
             style={{ 
-              height: 40, 
-              width: '100%', 
-              alignItems: 'center', 
-              justifyContent: 'center',
-              backgroundColor: '#fff' 
+              height: '85%', 
+              backgroundColor: '#fff', 
+              borderTopLeftRadius: 30, 
+              borderTopRightRadius: 30, 
+              overflow: 'hidden',
+              marginTop: 'auto',
+              transform: [{ translateY }],
+              elevation: 0,
+              shadowOpacity: 0
             }}
           >
-            <View style={{ height: 5, width: 40, backgroundColor: '#ddd', borderRadius: 3 }} />
-          </View>
-          
-          <CommentSection 
-            postId={post._id || post.id}
-            postOwnerId={post?.userId?._id || post?.userId}
-            currentAvatar={currentUser?.avatar || currentUser?.photoURL || ''}
-            currentUser={currentUser}
-            maxHeight={Dimensions.get('window').height * 0.8}
-            initialTab={showComments === 'reactions' ? 'reactions' : 'comment'}
-          />
-        </Animated.View>
+            {/* Drag Handle */}
+            <View 
+              {...panResponder.panHandlers}
+              style={{ 
+                height: 40, 
+                width: '100%', 
+                alignItems: 'center', 
+                justifyContent: 'center',
+                backgroundColor: '#fff' 
+              }}
+            >
+              <View style={{ height: 5, width: 40, backgroundColor: '#ddd', borderRadius: 3 }} />
+            </View>
+            
+            <CommentSection 
+              postId={post._id || post.id}
+              postOwnerId={post?.userId?._id || post?.userId}
+              currentAvatar={currentUser?.avatar || currentUser?.photoURL || ''}
+              currentUser={currentUser}
+              maxHeight={Dimensions.get('window').height * 0.8}
+              initialTab={showComments === 'reactions' ? 'reactions' : 'comment'}
+            />
+          </Animated.View>
+        </KeyboardAvoidingView>
       </Modal>
 
       <Modal
@@ -581,6 +586,15 @@ const PostCard: React.FC<PostCardProps> = ({
           currentUserId={currentUser?._id || currentUser?.id || currentUser?.uid}
           sharePayload={post}
           modalVariant="home"
+          onAddToStory={() => {
+            router.push({
+              pathname: '/story-creator',
+              params: {
+                sharePostId: post._id || post.id || '',
+                sharePostData: encodeURIComponent(JSON.stringify(post))
+              }
+            } as any);
+          }}
         />
       )}
     </View>

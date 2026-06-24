@@ -152,11 +152,21 @@ router.post('/upload', verifyToken, upload.single('file'), handleMulterError, as
 
     const result = await uploadToCloudinary(req.file.buffer, folder, resourceType, { returnResult: true });
 
+    let thumbnailUrl;
+    if (result.resource_type === 'video') {
+      thumbnailUrl = cloudinary.url(result.public_id, {
+        resource_type: 'video', format: 'jpg', secure: true,
+        transformation: [{ width: 300, height: 300, crop: 'fill' }, { quality: 'auto' }]
+      });
+    }
+
     res.json({ 
       success: true, 
       url: result.secure_url, 
+      thumbnailUrl,
       data: { 
         url: result.secure_url,
+        thumbnailUrl,
         width: result.width,
         height: result.height,
         aspectRatio: result.width && result.height ? result.width / result.height : 1

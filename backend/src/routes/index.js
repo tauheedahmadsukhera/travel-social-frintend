@@ -31,6 +31,7 @@ router.use('/live-streams', livestreamRoutes);
 router.use('/notifications', notificationRoutes);
 router.use('/stories', storyRoutes);
 router.use('/users', userRoutes);
+router.use('/users', sectionRoutes);
 router.use('/categories', categoriesRoutes);
 router.use('/branding', brandingRoutes);
 router.use('/presence', presenceRoutes);

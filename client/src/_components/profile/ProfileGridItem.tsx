@@ -24,10 +24,16 @@ const ProfileGridItem = React.memo(({
   isVideoUrl,
   DEFAULT_IMAGE_URL
 }: ProfileGridItemProps) => {
-  const isVideo = item.mediaType === 'video' || isVideoUrl(item.imageUrl || item.mediaUrl);
-  const mediaUrl = item.thumbnailUrl || 
-                   (isVideo ? getVideoThumbnailUrl(item.imageUrl || item.mediaUrl || '') : (item.imageUrl || (Array.isArray(item.mediaUrls) && item.mediaUrls[0]) || (Array.isArray(item.imageUrls) && item.imageUrls[0]))) || 
-                   '';
+  const firstMedia = Array.isArray(item.media) ? item.media[0] : null;
+  const firstMediaUrl = firstMedia?.url || firstMedia?.mediaUrl || firstMedia?.imageUrl;
+  const firstMediaType = String(firstMedia?.type || firstMedia?.mediaType || '').toLowerCase();
+  const primaryMediaUrl = firstMediaUrl || item.mediaUrl || item.imageUrl ||
+    (Array.isArray(item.mediaUrls) && item.mediaUrls[0]) ||
+    (Array.isArray(item.imageUrls) && item.imageUrls[0]) ||
+    '';
+  const explicitThumbnailUrl = item.thumbnailUrl || firstMedia?.thumbnailUrl || firstMedia?.thumbnail || '';
+  const isVideo = item.mediaType === 'video' || firstMediaType === 'video' || isVideoUrl(primaryMediaUrl);
+  const mediaUrl = explicitThumbnailUrl || (isVideo ? getVideoThumbnailUrl(primaryMediaUrl) : primaryMediaUrl) || '';
   
   const normalizedUrl = normalizeMediaUrl(mediaUrl) || DEFAULT_IMAGE_URL;
 
@@ -52,7 +58,8 @@ const ProfileGridItem = React.memo(({
           style={styles.videoIcon}
         />
       )}
-      {(Array.isArray(item.imageUrls) && item.imageUrls.length > 1) || 
+      {(Array.isArray(item.media) && item.media.length > 1) ||
+       (Array.isArray(item.imageUrls) && item.imageUrls.length > 1) || 
        (Array.isArray(item.mediaUrls) && item.mediaUrls.length > 1) ? (
         <Ionicons
           name="copy-outline"

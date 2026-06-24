@@ -193,7 +193,7 @@ const ProfileModals: React.FC<ProfileModalsProps> = (props) => {
       <Modal visible={commentModalVisible} animationType="slide" transparent={true} onRequestClose={() => setCommentModalVisible(false)}>
         <KeyboardAvoidingView
           style={{ flex: 1 }}
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
           keyboardVerticalOffset={Platform.OS === 'ios' ? getKeyboardOffset() : 0}
         >
           <View style={styles.commentModalContainer}>

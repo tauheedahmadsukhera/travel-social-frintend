@@ -6,7 +6,7 @@ buildscript {
         minSdkVersion = Integer.parseInt(findProperty('android.minSdkVersion') ?: '24')
         compileSdkVersion = Integer.parseInt(findProperty('android.compileSdkVersion') ?: '35')
         targetSdkVersion = Integer.parseInt(findProperty('android.targetSdkVersion') ?: '34')
-        kotlinVersion = '1.9.24'
+        kotlinVersion = findProperty('android.kotlinVersion') ?: '1.9.25'
 
         ndkVersion = "26.1.10909125"
     }
@@ -39,4 +39,34 @@ allprojects {
         mavenCentral()
         maven { url 'https://www.jitpack.io' }
     }
+}
+
+// SENTRY_GRADLE_TASK_DEP_FIX
+// Fix: sentry_react-native packageReleaseResources depends on
+// sentry-react-native generateReleaseResValues but Gradle doesn't know.
+subprojects { subproject ->
+    if (subproject.name == 'sentry_react-native') {
+        def sentryHyphen = rootProject.findProject(':sentry-react-native')
+        if (sentryHyphen != null) {
+            subproject.tasks.matching { it.name.contains('packageReleaseResources') || it.name.contains('packageDebugResources') }.configureEach { task ->
+                if (task.name.contains('Release')) {
+                    task.dependsOn(':sentry-react-native:generateReleaseResValues')
+                } else if (task.name.contains('Debug')) {
+                    task.dependsOn(':sentry-react-native:generateDebugResValues')
+                }
+            }
+        }
+    }
+}
+
+
+subprojects {
+  tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).configureEach {
+    kotlinOptions {
+      freeCompilerArgs += [
+        "-P",
+        "plugin:androidx.compose.compiler.plugins.kotlin:suppressKotlinVersionCompatibilityCheck=true"
+      ]
+    }
+  }
 }

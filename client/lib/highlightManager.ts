@@ -32,7 +32,10 @@ export const highlightManager = {
 
       const coverImage = normalizedStory.imageUrl || normalizedStory.videoUrl || '';
 
-      const created = await createHighlightApi(params.userId, params.title.trim(), coverImage, [storyId], 'Public');
+      const created = await createHighlightApi(params.userId, params.title.trim(), coverImage, [storyId], 'Public', [normalizedStory]);
+      if (!created.success) {
+        return { success: false, error: created.error || 'Failed to create highlight' };
+      }
       const highlightId = resolveHighlightId(created?.highlight) || String(created?.highlightId || '').trim();
       if (!highlightId) return { success: false, error: 'Highlight id missing' };
 
@@ -172,7 +175,10 @@ export const highlightManager = {
       const cover = params.coverImage || firstStory.imageUrl || firstStory.videoUrl || '';
 
       // Create on backend
-      const created = await createHighlightApi(params.userId, params.title.trim(), cover, storyIds, params.visibility || 'Public');
+      const created = await createHighlightApi(params.userId, params.title.trim(), cover, storyIds, params.visibility || 'Public', normalizedStories);
+      if (!created.success) {
+        return { success: false, error: created.error || 'Failed to create highlight' };
+      }
       const highlightId = resolveHighlightId(created?.highlight) || String(created?.highlightId || '').trim();
       if (!highlightId) return { success: false, error: 'Highlight id missing' };
 

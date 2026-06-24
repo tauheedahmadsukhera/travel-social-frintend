@@ -34,7 +34,7 @@ export const StampSearchModal: React.FC<StampSearchModalProps> = ({
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <View style={styles.searchModalOverlay}>
         <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
           style={{ width: '100%', height: '100%', justifyContent: 'flex-end' }}
         >
           <View style={styles.searchModalContent}>

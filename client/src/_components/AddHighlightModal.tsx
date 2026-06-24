@@ -13,7 +13,7 @@ export default function AddHighlightModal({ visible, onClose, onAdd }: AddHighli
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
       <KeyboardAvoidingView
         style={{ flex: 1 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
         <View style={styles.overlay}>
           <TouchableOpacity

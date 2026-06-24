@@ -2,6 +2,9 @@
 const withPodfilePostInstall = require('./plugins/withPodfilePostInstall');
 const withSentryGradleFix = require('./plugins/withSentryGradleFix');
 const withKotlinVersionFix = require('./plugins/withKotlinVersionFix');
+const withAppAuthRedirectScheme = require('./plugins/withAppAuthRedirectScheme');
+const withAndroidManifestFix = require('./plugins/withAndroidManifestFix');
+const withNetworkSecurityConfig = require('./plugins/withNetworkSecurityConfig');
 
 export default {
   "expo": {
@@ -41,7 +44,7 @@ export default {
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.tauhee56.travesocial",
-      "buildNumber": "1",
+      "buildNumber": "3",
       "googleServicesFile": "./GoogleService-Info.plist",
       "config": {
         "googleMapsApiKey": process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY || "AIzaSyCQ1Fe55xOwt9fFfAiGIDVoEt01i2hL-zs"
@@ -90,8 +93,8 @@ export default {
             },
             "enableProguardInReleaseBuilds": false,
             "enableShrinkResourcesInReleaseBuilds": false,
-            "compileSdkVersion": 34,
-            "targetSdkVersion": 34,
+            "compileSdkVersion": 35,
+            "targetSdkVersion": 35,
             "kotlinVersion": "1.9.24",
             "enableMinifyInReleaseBuilds": false,
             "gradleProperties": {
@@ -141,7 +144,10 @@ export default {
       "react-native-compressor",
       withPodfilePostInstall,
       withSentryGradleFix,
-      withKotlinVersionFix
+      withKotlinVersionFix,
+      withAppAuthRedirectScheme,
+      withAndroidManifestFix,
+      withNetworkSecurityConfig
     ],
     "experiments": {
       "typedRoutes": true

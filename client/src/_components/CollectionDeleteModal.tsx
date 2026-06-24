@@ -73,8 +73,11 @@ export default function CollectionDeleteModal({
 
             // Some backends address sections by `_id`, others by `name`.
             // Try `_id` first, then fall back to `name`.
-            let res = await apiService.delete(`/users/${uid}/sections/${encodeURIComponent(collection._id)}`, payload);
-            if (!res?.success) {
+            let res;
+            try {
+                res = await apiService.delete(`/users/${uid}/sections/${encodeURIComponent(collection._id)}`, payload);
+            } catch (err) {
+                console.warn('Failed to delete section by ID, trying name...', err);
                 res = await apiService.delete(`/users/${uid}/sections/${encodeURIComponent(collection.name)}`, payload);
             }
 
@@ -84,9 +87,9 @@ export default function CollectionDeleteModal({
             } else {
                 Alert.alert('Error', res?.error || 'Failed to delete collection');
             }
-        } catch (e) {
+        } catch (e: any) {
             console.error('delete collection error', e);
-            Alert.alert('Error', 'Failed to delete collection');
+            Alert.alert('Error', e?.response?.data?.error || e?.message || 'Failed to delete collection');
         } finally {
             setLoading(false);
         }

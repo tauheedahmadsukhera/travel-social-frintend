@@ -10,12 +10,17 @@ import {
   Image, 
   Dimensions,
   ActivityIndicator,
-  Platform
+  Platform,
+  Linking,
+  Share,
+  Alert
 } from 'react-native';
+import * as Clipboard from 'expo-clipboard';
 import { Feather, Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { apiService } from '../_services/apiService'; // Fixed import path
 import { DEFAULT_AVATAR_URL } from '@/lib/api';
+import { getAPIBaseURL } from '../../config/environment';
 
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -51,6 +56,100 @@ export default function ShareModal({
   const [users, setUsers] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [selectedUsers, setSelectedUsers] = useState<string[]>([]);
+
+  const handleQuickAction = async (actionType: string) => {
+    const postId = sharePayload?._id || sharePayload?.id || '';
+    if (!postId) {
+      Alert.alert('Error', 'Unable to share: Content ID is missing.');
+      return;
+    }
+
+    const isStory = !!sharePayload?.isStory;
+    const contentType = isStory ? 'story' : 'post';
+    const apiBase = getAPIBaseURL();
+    const shareUrl = isStory 
+      ? `${apiBase}/share/story/${postId}`
+      : `${apiBase}/share/post/${postId}`;
+
+    switch (actionType) {
+      case 'story':
+        onClose();
+        if (onAddToStory) {
+          onAddToStory();
+        } else {
+          router.push({
+            pathname: '/story-creator',
+            params: {
+              sharePostId: postId,
+              sharePostData: JSON.stringify(sharePayload)
+            }
+          } as any);
+        }
+        break;
+
+      case 'whatsapp': {
+        const text = `Check out this ${contentType} on Trips!\n\n${shareUrl}`;
+        const whatsappUrl = `whatsapp://send?text=${encodeURIComponent(text)}`;
+        const webUrl = `https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`;
+        try {
+          const canOpen = await Linking.canOpenURL(whatsappUrl);
+          if (canOpen) {
+            await Linking.openURL(whatsappUrl);
+          } else {
+            await Linking.openURL(webUrl);
+          }
+        } catch {
+          await Linking.openURL(webUrl);
+        }
+        onClose();
+        break;
+      }
+
+      case 'copy_link':
+        try {
+          await Clipboard.setStringAsync(shareUrl);
+          Alert.alert('Copied', 'Link copied to clipboard!');
+        } catch (err) {
+          Alert.alert('Error', 'Failed to copy link');
+        }
+        onClose();
+        break;
+
+      case 'whatsapp_status': {
+        const text = `Check out my travel ${contentType} on Trips!\n\n${shareUrl}`;
+        const whatsappUrl = `whatsapp://send?text=${encodeURIComponent(text)}`;
+        const webUrl = `https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`;
+        try {
+          const canOpen = await Linking.canOpenURL(whatsappUrl);
+          if (canOpen) {
+            await Linking.openURL(whatsappUrl);
+          } else {
+            await Linking.openURL(webUrl);
+          }
+        } catch {
+          await Linking.openURL(webUrl);
+        }
+        onClose();
+        break;
+      }
+
+      case 'share':
+        try {
+          await Share.share({
+            message: `Check out this ${contentType} on Trips!\n\n${shareUrl}`,
+            url: shareUrl,
+            title: `Share ${isStory ? 'Story' : 'Post'}`
+          });
+        } catch (err) {
+          console.error('[ShareModal] Native share error:', err);
+        }
+        onClose();
+        break;
+
+      default:
+        break;
+    }
+  };
 
   useEffect(() => {
     if (visible && currentUserId) {
@@ -268,59 +367,76 @@ export default function ShareModal({
               )}
             </View>
 
-            {modalVariant === 'home' && (
-              <View style={styles.quickActionsRow}>
-                <TouchableOpacity
-                  style={styles.quickActionItem}
-                  activeOpacity={0.8}
-                  onPress={() => {
-                    onClose();
-                    onAddToStory?.();
-                  }}
-                >
-                  <View style={styles.quickActionIconCircle}>
-                    <Ionicons name="add-circle-outline" size={24} color="#111827" />
-                  </View>
-                  <Text style={styles.quickActionLabel}>Add to story</Text>
-                </TouchableOpacity>
+            {(modalVariant === 'home' || selectedUsers.length > 0) && (
+              <View style={styles.bottomContainer}>
+                {modalVariant === 'home' && (
+                  <View style={styles.quickActionsRow}>
+                    <TouchableOpacity
+                      style={styles.quickActionItem}
+                      activeOpacity={0.8}
+                      onPress={() => handleQuickAction('story')}
+                    >
+                      <View style={styles.quickActionIconCircle}>
+                        <Ionicons name="add-circle-outline" size={24} color="#111827" />
+                      </View>
+                      <Text style={styles.quickActionLabel}>Add to story</Text>
+                    </TouchableOpacity>
 
-                <TouchableOpacity style={styles.quickActionItem} activeOpacity={0.8}>
-                  <View style={[styles.quickActionIconCircle, styles.quickActionIconGreen]}>
-                    <Ionicons name="logo-whatsapp" size={24} color="#fff" />
-                  </View>
-                  <Text style={styles.quickActionLabel}>WhatsApp</Text>
-                </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.quickActionItem}
+                      activeOpacity={0.8}
+                      onPress={() => handleQuickAction('whatsapp')}
+                    >
+                      <View style={[styles.quickActionIconCircle, styles.quickActionIconGreen]}>
+                        <Ionicons name="logo-whatsapp" size={24} color="#fff" />
+                      </View>
+                      <Text style={styles.quickActionLabel}>WhatsApp</Text>
+                    </TouchableOpacity>
 
-                <TouchableOpacity style={styles.quickActionItem} activeOpacity={0.8}>
-                  <View style={styles.quickActionIconCircle}>
-                    <Ionicons name="link-outline" size={24} color="#111827" />
-                  </View>
-                  <Text style={styles.quickActionLabel}>Copy link</Text>
-                </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.quickActionItem}
+                      activeOpacity={0.8}
+                      onPress={() => handleQuickAction('copy_link')}
+                    >
+                      <View style={styles.quickActionIconCircle}>
+                        <Ionicons name="link-outline" size={24} color="#111827" />
+                      </View>
+                      <Text style={styles.quickActionLabel}>Copy link</Text>
+                    </TouchableOpacity>
 
-                <TouchableOpacity style={styles.quickActionItem} activeOpacity={0.8}>
-                  <View style={[styles.quickActionIconCircle, styles.quickActionIconGreen]}>
-                    <Ionicons name="refresh-circle-outline" size={24} color="#fff" />
-                  </View>
-                  <Text style={styles.quickActionLabel}>WhatsApp Status</Text>
-                </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.quickActionItem}
+                      activeOpacity={0.8}
+                      onPress={() => handleQuickAction('whatsapp_status')}
+                    >
+                      <View style={[styles.quickActionIconCircle, styles.quickActionIconGreen]}>
+                        <Ionicons name="refresh-circle-outline" size={24} color="#fff" />
+                      </View>
+                      <Text style={styles.quickActionLabel}>WhatsApp Status</Text>
+                    </TouchableOpacity>
 
-                <TouchableOpacity style={styles.quickActionItem} activeOpacity={0.8}>
-                  <View style={styles.quickActionIconCircle}>
-                    <Ionicons name="share-social-outline" size={24} color="#111827" />
+                    <TouchableOpacity
+                      style={styles.quickActionItem}
+                      activeOpacity={0.8}
+                      onPress={() => handleQuickAction('share')}
+                    >
+                      <View style={styles.quickActionIconCircle}>
+                        <Ionicons name="share-social-outline" size={24} color="#111827" />
+                      </View>
+                      <Text style={styles.quickActionLabel}>Share</Text>
+                    </TouchableOpacity>
                   </View>
-                  <Text style={styles.quickActionLabel}>Share</Text>
-                </TouchableOpacity>
+                )}
+
+                {selectedUsers.length > 0 && (
+                  <TouchableOpacity 
+                    style={styles.sendBtn} 
+                    onPress={() => { onSend(selectedUsers); onClose(); }}
+                  >
+                    <Text style={styles.sendBtnText}>Send</Text>
+                  </TouchableOpacity>
+                )}
               </View>
-            )}
-
-            {selectedUsers.length > 0 && (
-              <TouchableOpacity 
-                style={styles.sendBtn} 
-                onPress={() => { onSend(selectedUsers); onClose(); }}
-              >
-                <Text style={styles.sendBtnText}>Send</Text>
-              </TouchableOpacity>
             )}
           </TouchableOpacity>
         </TouchableOpacity>
@@ -390,59 +506,76 @@ export default function ShareModal({
             )}
           </View>
 
-          {modalVariant === 'home' && (
-            <View style={styles.quickActionsRow}>
-              <TouchableOpacity
-                style={styles.quickActionItem}
-                activeOpacity={0.8}
-                onPress={() => {
-                  onClose();
-                  onAddToStory?.();
-                }}
-              >
-                <View style={styles.quickActionIconCircle}>
-                  <Ionicons name="add-circle-outline" size={24} color="#111827" />
-                </View>
-                <Text style={styles.quickActionLabel}>Add to story</Text>
-              </TouchableOpacity>
+          {(modalVariant === 'home' || selectedUsers.length > 0) && (
+            <View style={styles.bottomContainer}>
+              {modalVariant === 'home' && (
+                <View style={styles.quickActionsRow}>
+                  <TouchableOpacity
+                    style={styles.quickActionItem}
+                    activeOpacity={0.8}
+                    onPress={() => handleQuickAction('story')}
+                  >
+                    <View style={styles.quickActionIconCircle}>
+                      <Ionicons name="add-circle-outline" size={24} color="#111827" />
+                    </View>
+                    <Text style={styles.quickActionLabel}>Add to story</Text>
+                  </TouchableOpacity>
 
-              <TouchableOpacity style={styles.quickActionItem} activeOpacity={0.8}>
-                <View style={[styles.quickActionIconCircle, styles.quickActionIconGreen]}>
-                  <Ionicons name="logo-whatsapp" size={24} color="#fff" />
-                </View>
-                <Text style={styles.quickActionLabel}>WhatsApp</Text>
-              </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.quickActionItem}
+                    activeOpacity={0.8}
+                    onPress={() => handleQuickAction('whatsapp')}
+                  >
+                    <View style={[styles.quickActionIconCircle, styles.quickActionIconGreen]}>
+                      <Ionicons name="logo-whatsapp" size={24} color="#fff" />
+                    </View>
+                    <Text style={styles.quickActionLabel}>WhatsApp</Text>
+                  </TouchableOpacity>
 
-              <TouchableOpacity style={styles.quickActionItem} activeOpacity={0.8}>
-                <View style={styles.quickActionIconCircle}>
-                  <Ionicons name="link-outline" size={24} color="#111827" />
-                </View>
-                <Text style={styles.quickActionLabel}>Copy link</Text>
-              </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.quickActionItem}
+                    activeOpacity={0.8}
+                    onPress={() => handleQuickAction('copy_link')}
+                  >
+                    <View style={styles.quickActionIconCircle}>
+                      <Ionicons name="link-outline" size={24} color="#111827" />
+                    </View>
+                    <Text style={styles.quickActionLabel}>Copy link</Text>
+                  </TouchableOpacity>
 
-              <TouchableOpacity style={styles.quickActionItem} activeOpacity={0.8}>
-                <View style={[styles.quickActionIconCircle, styles.quickActionIconGreen]}>
-                  <Ionicons name="refresh-circle-outline" size={24} color="#fff" />
-                </View>
-                <Text style={styles.quickActionLabel}>WhatsApp Status</Text>
-              </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.quickActionItem}
+                    activeOpacity={0.8}
+                    onPress={() => handleQuickAction('whatsapp_status')}
+                  >
+                    <View style={[styles.quickActionIconCircle, styles.quickActionIconGreen]}>
+                      <Ionicons name="refresh-circle-outline" size={24} color="#fff" />
+                    </View>
+                    <Text style={styles.quickActionLabel}>WhatsApp Status</Text>
+                  </TouchableOpacity>
 
-              <TouchableOpacity style={styles.quickActionItem} activeOpacity={0.8}>
-                <View style={styles.quickActionIconCircle}>
-                  <Ionicons name="share-social-outline" size={24} color="#111827" />
+                  <TouchableOpacity
+                    style={styles.quickActionItem}
+                    activeOpacity={0.8}
+                    onPress={() => handleQuickAction('share')}
+                  >
+                    <View style={styles.quickActionIconCircle}>
+                      <Ionicons name="share-social-outline" size={24} color="#111827" />
+                    </View>
+                    <Text style={styles.quickActionLabel}>Share</Text>
+                  </TouchableOpacity>
                 </View>
-                <Text style={styles.quickActionLabel}>Share</Text>
-              </TouchableOpacity>
+              )}
+
+              {selectedUsers.length > 0 && (
+                <TouchableOpacity 
+                  style={styles.sendBtn} 
+                  onPress={() => { onSend(selectedUsers); onClose(); }}
+                >
+                  <Text style={styles.sendBtnText}>Send</Text>
+                </TouchableOpacity>
+              )}
             </View>
-          )}
-
-          {selectedUsers.length > 0 && (
-            <TouchableOpacity 
-              style={styles.sendBtn} 
-              onPress={() => { onSend(selectedUsers); onClose(); }}
-            >
-              <Text style={styles.sendBtnText}>Send</Text>
-            </TouchableOpacity>
           )}
         </TouchableOpacity>
       </TouchableOpacity>
@@ -518,7 +651,7 @@ const styles = StyleSheet.create({
     paddingBottom: 20,
   },
   listContentWithActions: {
-    paddingBottom: 110,
+    paddingBottom: 20,
   },
   userItem: {
     width: SCREEN_WIDTH / 3 - 16,
@@ -553,15 +686,22 @@ const styles = StyleSheet.create({
     marginTop: 40,
     color: '#8e8e8e',
   },
+  bottomContainer: {
+    borderTopWidth: 1,
+    borderTopColor: '#ececec',
+    backgroundColor: '#fff',
+    paddingHorizontal: 6,
+    paddingTop: 10,
+    paddingBottom: Platform.OS === 'ios' ? 24 : 12,
+  },
   sendBtn: {
-    backgroundColor: '#0095f6',
+    backgroundColor: '#FF8D00',
     marginHorizontal: 16,
-    marginTop: 8,
+    marginTop: 16,
     borderRadius: 8,
     height: 44,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: Platform.OS === 'ios' ? 12 : 10,
   },
   sendBtnText: {
     color: '#fff',
@@ -569,16 +709,6 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   quickActionsRow: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: '#fff',
-    borderTopWidth: 1,
-    borderTopColor: '#ececec',
-    paddingHorizontal: 6,
-    paddingTop: 10,
-    paddingBottom: Platform.OS === 'ios' ? 24 : 12,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',

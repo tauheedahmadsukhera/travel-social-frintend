@@ -157,12 +157,15 @@ const styles = StyleSheet.create({
     },
     notificationContent: {
         flex: 1,
+        paddingRight: 8,
     },
     notificationMessage: {
         fontSize: 14,
         fontWeight: '500',
         color: '#1f2937',
         marginBottom: 4,
+        flexShrink: 1,
+        flexWrap: 'wrap',
     },
     notificationTime: {
         fontSize: 12,
