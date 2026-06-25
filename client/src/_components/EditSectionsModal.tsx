@@ -171,7 +171,7 @@ export default function EditSectionsModal({
     if (!currentUserId) return;
     setLoadingFollowers(true);
     try {
-      const res = await apiService.get(`/users/${currentUserId}/followers`);
+      const res = await apiService.get(`/follow/users/${currentUserId}/followers`);
       const list = res?.data || res || [];
       setFollowers(Array.isArray(list) ? list : []);
     } catch (e) {

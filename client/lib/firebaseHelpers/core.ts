@@ -414,8 +414,8 @@ export function getCurrentUserSync() {
 // Helper to check if user is approved follower
 export async function isApprovedFollower(userId: string, checkUserId: string) {
   try {
-    const res = await apiService.get(`/users/${userId}/followers/${checkUserId}`);
-    return res?.isApproved || false;
+    const res = await apiService.get(`/follow/status?followerId=${checkUserId}&followingId=${userId}`);
+    return res?.isFollowing || false;
   } catch (error) {
     return false;
   }

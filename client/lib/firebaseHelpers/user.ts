@@ -4,9 +4,9 @@ import { DEFAULT_AVATAR_URL } from '@/lib/api';
  */
 export async function isApprovedFollower(userId: string, checkUserId: string) {
   try {
-    const res = await fetch(`/api/users/${userId}/followers/${checkUserId}`);
-    const data = await res.json();
-    return data.isApproved || false;
+    const { apiService } = await import('@/src/_services/apiService');
+    const res = await apiService.get(`/follow/status?followerId=${checkUserId}&followingId=${userId}`);
+    return res?.isFollowing || false;
   } catch (error: any) {
     return false;
   }

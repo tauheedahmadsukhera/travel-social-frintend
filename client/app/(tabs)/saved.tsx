@@ -301,7 +301,7 @@ export default function SavedScreen() {
     setLoadingFollowers(true);
     try {
       const { apiService } = await import('@/src/_services/apiService');
-      const res = await apiService.get(`/users/${currentUserId}/followers`);
+      const res = await apiService.get(`/follow/users/${currentUserId}/followers`);
       const list = res?.data || res || [];
       setFollowers(Array.isArray(list) ? list : []);
     } catch (e) { console.error('loadFollowers error', e); }
@@ -410,7 +410,6 @@ export default function SavedScreen() {
     setEditAllowedUsers(col.allowedUsers || []);
     setEditAllowedGroups((col as any).allowedGroups || []);
     setEditSubScreen('main');
-    setCollDropdownOpen(false);
     
     // Initialize temp states
     setTempSelectedGroups((col as any).allowedGroups || []);
@@ -423,17 +422,11 @@ export default function SavedScreen() {
 
   const openEdit = (col: Collection) => {
     hapticLight();
-    setCollDropdownOpen(false);
-    setTimeout(() => {
-      applyEditState(col);
-    }, 450);
+    applyEditState(col);
   };
   const openDelete = (col: Collection) => {
     hapticLight();
-    setCollDropdownOpen(false);
-    setTimeout(() => {
-      setDeleteTarget(col);
-    }, 450);
+    setDeleteTarget(col);
   };
 
   useEffect(() => {
@@ -811,11 +804,8 @@ export default function SavedScreen() {
               style={styles.newCollBtn}
               onPress={() => {
                 hapticLight();
-                setCollDropdownOpen(false);
-                setTimeout(() => {
-                  setCreateModalInitialScreen('new');
-                  setCreateModalVisible(true);
-                }, 450);
+                setCreateModalInitialScreen('new');
+                setCreateModalVisible(true);
               }}
             >
               <Feather name="plus" size={14} color="#FF8D00" />
@@ -897,8 +887,7 @@ export default function SavedScreen() {
 
   // Edit collection bottom sheet
   const renderEditSheet = () => {
-    if (!editTarget) return null;
-    const isOwnerOfColl = editTarget.userId === currentUserId;
+    const isOwnerOfColl = editTarget?.userId === currentUserId;
     return (
       <Modal
         visible={!!editTarget}
@@ -911,14 +900,15 @@ export default function SavedScreen() {
           <View style={styles.sheetBackdrop} />
         </TouchableWithoutFeedback>
 
-        <KeyboardAvoidingView
-          behavior={(Platform.OS as any) === 'ios' ? 'padding' : undefined}
-          enabled={(Platform.OS as any) === 'ios'}
-          style={{ justifyContent: 'flex-end', flex: 1 }}
-          keyboardVerticalOffset={(Platform.OS as any) === 'ios' ? 0 : 0}
-        >
-          <View style={[styles.sheet, { paddingBottom: insets.bottom + 8, minHeight: SCREEN_H * 0.5 }]}>
-            <View style={styles.dragHandle} />
+        {editTarget ? (
+          <KeyboardAvoidingView
+            behavior={(Platform.OS as any) === 'ios' ? 'padding' : undefined}
+            enabled={(Platform.OS as any) === 'ios'}
+            style={{ justifyContent: 'flex-end', flex: 1 }}
+            keyboardVerticalOffset={(Platform.OS as any) === 'ios' ? 0 : 0}
+          >
+            <View style={[styles.sheet, { paddingBottom: insets.bottom + 8, minHeight: SCREEN_H * 0.5 }]}>
+              <View style={styles.dragHandle} />
 
             {editSubScreen === 'main' ? (
               <>
@@ -1020,7 +1010,13 @@ export default function SavedScreen() {
                 {isOwnerOfColl && (
                   <TouchableOpacity 
                     style={[styles.optionRow, { marginTop: 12, borderBottomWidth: 0 }]} 
-                    onPress={() => { setDeleteTarget(editTarget); setEditTarget(null); }}
+                    onPress={() => {
+                      const target = editTarget;
+                      setEditTarget(null);
+                      setTimeout(() => {
+                        setDeleteTarget(target);
+                      }, 500);
+                    }}
                   >
                     <Ionicons name="trash-outline" size={20} color="#ff3b30" />
                     <Text style={[styles.optionLabel, { color: '#ff3b30' }]}>Delete Collection</Text>
@@ -1122,6 +1118,7 @@ export default function SavedScreen() {
             )}
           </View>
         </KeyboardAvoidingView>
+        ) : null}
       </Modal>
     );
   };

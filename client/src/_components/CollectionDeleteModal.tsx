@@ -54,14 +54,12 @@ export default function CollectionDeleteModal({
         }
     }, [visible]);
 
-    if (!collection) return null;
-
-    const otherCollections = allCollections.filter(c => c._id !== collection._id);
-    const hasContent = collection.postIds?.length > 0;
+    const otherCollections = allCollections.filter(c => c._id !== collection?._id);
+    const hasContent = (collection?.postIds?.length || 0) > 0;
 
     const doDelete = async (targetId?: string) => {
         const uid = currentUserId;
-        if (!uid) return;
+        if (!uid || !collection) return;
         setLoading(true);
         try {
             const payload = {
@@ -175,16 +173,18 @@ export default function CollectionDeleteModal({
     );
 
     return (
-        <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose} statusBarTranslucent>
+        <Modal visible={visible && !!collection} transparent animationType="slide" onRequestClose={onClose} statusBarTranslucent>
             <TouchableWithoutFeedback onPress={onClose}>
                 <View style={styles.backdrop} />
             </TouchableWithoutFeedback>
 
-            <View style={[styles.sheet, { paddingBottom: insets.bottom + 12 }]}>
-                <View style={styles.dragHandle} />
-                {step === 'confirm' && renderConfirm()}
-                {step === 'migrate-pick' && renderMigratePick()}
-            </View>
+            {collection ? (
+                <View style={[styles.sheet, { paddingBottom: insets.bottom + 12 }]}>
+                    <View style={styles.dragHandle} />
+                    {step === 'confirm' && renderConfirm()}
+                    {step === 'migrate-pick' && renderMigratePick()}
+                </View>
+            ) : null}
         </Modal>
     );
 }

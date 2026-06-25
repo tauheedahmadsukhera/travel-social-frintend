@@ -228,7 +228,7 @@ export default function SaveToCollectionModal({
                                   setTempSelectedCollaborators([...newCollaborators]);
                                   if (followers.length === 0) {
                                       setLoadingFollowers(true);
-                                      const res = await apiService.get(`/users/${currentUid}/followers`);
+                                      const res = await apiService.get(`/follow/users/${currentUid}/followers`);
                                       setFollowers(res?.data || []);
                                       setLoadingFollowers(false);
                                   }
