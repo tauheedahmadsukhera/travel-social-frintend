@@ -130,3 +130,7 @@ debug_*.js
 verify_*.js
 resolved_ips.txt
 users_log.txt
+
+# Ignore the entire backend directory (tracked in its own separate repository)
+/backend/
+
