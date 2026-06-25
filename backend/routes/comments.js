@@ -58,7 +58,6 @@ router.get('/:postId/comments', optionalAuth, async (req, res) => {
           return res.status(403).json({ success: false, error: 'Private content: Please log in to view comments', data: [] });
         }
 
-        const { resolveUserIdentifiers } = require('../src/utils/userUtils');
         const viewer = await resolveUserIdentifiers(viewerId);
         
         const isSelf = viewer.candidates.some(c => 

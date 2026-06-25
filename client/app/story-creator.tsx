@@ -32,7 +32,16 @@ import { createStory } from '@/lib/firebaseHelpers/index';
 import { getAuthenticatedUserId } from '@/lib/currentUser';
 import { apiService } from '@/src/_services/apiService';
 import { hapticLight, hapticMedium, hapticSuccess } from '@/lib/haptics';
-import { captureRef } from 'react-native-view-shot';
+// Safely import captureRef — react-native-view-shot requires a custom dev build.
+// In Expo Go this native module is unavailable, so we fall back to a no-op.
+let captureRef: ((ref: any, opts?: any) => Promise<string>) | null = null;
+try {
+    const viewShot = require('react-native-view-shot');
+    captureRef = viewShot.captureRef;
+} catch (_) {
+    // Module not available in Expo Go — text overlays won't be baked into the image.
+    captureRef = null;
+}
 
 // ─────────────────────────────────────────────
 // Types
@@ -389,7 +398,7 @@ export default function StoryCreatorScreen() {
             let uploadUri = selectedUri;
             const mediaType = selectedAsset?.mediaType || 'photo';
             if (mediaType === 'photo') {
-                if (textOverlays.length > 0) {
+                if (textOverlays.length > 0 && captureRef !== null) {
                     try {
                         setSelectedOverlayId(null);
                         await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));

@@ -194,6 +194,8 @@ exports.addStoryToHighlight = async (req, res) => {
     }
 
     highlight.updatedAt = new Date();
+    highlight.markModified('items');
+    highlight.markModified('stories');
     await highlight.save();
 
     res.json({ success: true, data: highlight });

@@ -15,6 +15,8 @@ router.post('/', verifyToken, async (req, res) => {
     const { name, coverImage, posts, postIds, visibility, collaborators } = req.body;
     const userId = req.userId; // Always use authenticated userId
 
+    const user = await resolveUserIdentifiers(userId);
+
     // Get max order for this user
     const lastSection = await Section.findOne({ userId: { $in: user.candidates } }).sort({ order: -1 });
     const nextOrder = (lastSection?.order || 0) + 1;
@@ -171,7 +173,7 @@ router.patch('/:sectionId', verifyToken, async (req, res) => {
       return res.status(404).json({ success: false, error: 'Section not found' });
     }
     
-    if (existingSection.userId !== requesterId) {
+    if (String(existingSection.userId) !== String(requesterId)) {
       const isCollaborator = existingSection.collaborators && existingSection.collaborators.includes(requesterId);
       if (isCollaborator) {
         // Collaborators can ONLY update postIds (add/remove posts)
@@ -282,7 +284,7 @@ router.delete('/:sectionId', verifyToken, async (req, res) => {
       return res.status(404).json({ success: false, error: 'Section not found' });
     }
 
-    if (existingSection.userId !== requesterId) {
+    if (String(existingSection.userId) !== String(requesterId)) {
       return res.status(403).json({ success: false, error: 'Unauthorized: Only owner can delete' });
     }
 

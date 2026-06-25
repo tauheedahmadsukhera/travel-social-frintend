@@ -40,11 +40,6 @@ const CommentItemComponent: React.FC<CommentItemProps> = ({
   onLongPress,
   isStory = false,
 }) => {
-  const isOwner = useMemo(() => {
-    const uid = currentUser?.uid || currentUser?._id || currentUser?.id;
-    return uid && String(uid) === String(comment.userId);
-  }, [currentUser, comment.userId]);
-
   const timeText = useMemo(() => getCommentTime(comment.createdAt), [comment.createdAt]);
   const isLiked = comment.likes?.includes(currentUserId);
   const likeCount = comment.likesCount || comment.likes?.length || 0;
@@ -53,13 +48,9 @@ const CommentItemComponent: React.FC<CommentItemProps> = ({
     <View style={[styles.commentRow, isReply && styles.replyRow]}>
       <CommentAvatar userId={comment.userId} userAvatar={comment.userAvatar} size={isReply ? 24 : 36} />
       <View style={styles.commentContent}>
-        <TouchableOpacity 
+        <TouchableOpacity
           activeOpacity={0.7}
-          onLongPress={() => {
-            if (isOwner) {
-              onLongPress(comment, isReply, parentId);
-            }
-          }}
+          onLongPress={() => onLongPress(comment, isReply, parentId)}
         >
           <View style={{ flexDirection: 'row', alignItems: 'center' }}>
             <Text style={styles.userName}>{comment.userName}</Text>
@@ -74,15 +65,32 @@ const CommentItemComponent: React.FC<CommentItemProps> = ({
               <Text style={styles.footerAction}>Reply</Text>
             </TouchableOpacity>
           )}
+          <View style={{ flex: 1 }} />
+          {!isStory && (
+            <TouchableOpacity
+              style={styles.likeButton}
+              onPress={() => onLike(comment.id, isReply, parentId)}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <Ionicons
+                name={isLiked ? 'heart' : 'heart-outline'}
+                size={14}
+                color={isLiked ? '#FF3B30' : '#999'}
+              />
+              {likeCount > 0 && (
+                <Text style={styles.likeCount}>{likeCount}</Text>
+              )}
+            </TouchableOpacity>
+          )}
         </View>
-        
+
         {comment.replies && comment.replies.length > 0 && (
           <View style={{ marginTop: 5 }}>
             {comment.replies.map(reply => (
-              <CommentItem 
+              <CommentItem
                 key={reply.id}
-                comment={reply} 
-                isReply={true} 
+                comment={reply}
+                isReply={true}
                 parentId={comment.id}
                 currentUser={currentUser}
                 currentUserId={currentUserId}
@@ -95,22 +103,6 @@ const CommentItemComponent: React.FC<CommentItemProps> = ({
           </View>
         )}
       </View>
-
-      {!isStory && (
-        <TouchableOpacity 
-          style={styles.likeButton}
-          onPress={() => onLike(comment.id, isReply, parentId)}
-        >
-          <Ionicons 
-            name={isLiked ? "heart" : "heart-outline"} 
-            size={14} 
-            color={isLiked ? "#FF3B30" : "#999"} 
-          />
-          {likeCount > 0 && (
-            <Text style={styles.likeCount}>{likeCount}</Text>
-          )}
-        </TouchableOpacity>
-      )}
     </View>
   );
 };
@@ -123,8 +115,8 @@ const styles = StyleSheet.create({
   commentText: { fontSize: 14, color: '#333', marginTop: 4, lineHeight: 18 },
   commentFooter: { flexDirection: 'row', alignItems: 'center', marginTop: 8 },
   footerAction: { fontSize: 12, color: '#999', marginRight: 15, fontWeight: '600' },
-  likeButton: { padding: 10, alignItems: 'center', justifyContent: 'center', minWidth: 40 },
-  likeCount: { fontSize: 10, color: '#999', marginTop: 2 },
+  likeButton: { flexDirection: 'row', alignItems: 'center', gap: 3 },
+  likeCount: { fontSize: 10, color: '#999' },
 });
 
 export const CommentItem = React.memo(CommentItemComponent);

@@ -153,32 +153,88 @@ export const CommentSection: React.FC<CommentSectionProps> = ({
   const handleAddComment = async () => {
     if (!newComment.trim() || isSubmitting) return;
     setIsSubmitting(true);
+
+    const trimmedText = newComment.trim();
+    const optimisticId = `optimistic-${Date.now()}`;
+
     try {
       if (isStory) {
         await apiService.post(`/stories/${postId}/comments`, {
-          text: newComment.trim(),
+          text: trimmedText,
           userName: currentUser?.displayName || 'User'
         });
+        setNewComment('');
+        setReplyTo(null);
+        await loadData();
       } else if (replyTo) {
+        // Optimistically insert reply immediately
+        const optimisticReply: Comment = {
+          id: optimisticId,
+          text: trimmedText,
+          userId: currentUserId,
+          userName: currentUser?.displayName || 'User',
+          userAvatar: resolvedCurrentAvatar,
+          createdAt: new Date().toISOString(),
+          likes: [],
+          likesCount: 0,
+          replies: [],
+          reactions: {},
+        };
+
+        setComments(prev =>
+          prev.map(c =>
+            c.id === replyTo.id
+              ? { ...c, replies: [...(c.replies || []), optimisticReply] }
+              : c
+          )
+        );
+        setNewComment('');
+        setReplyTo(null);
+
+        // Send to server and reconcile in background
         await addCommentReply(postId, replyTo.id, {
           userId: currentUserId,
           userName: currentUser?.displayName || 'User',
           userAvatar: resolvedCurrentAvatar,
-          text: newComment.trim()
+          text: trimmedText,
         });
+        // Sync real data silently
+        loadData().catch(() => {});
       } else {
-        await addComment(postId, currentUserId, currentUser?.displayName || 'User', resolvedCurrentAvatar, newComment.trim());
+        // Optimistically insert top-level comment immediately
+        const optimisticComment: Comment = {
+          id: optimisticId,
+          text: trimmedText,
+          userId: currentUserId,
+          userName: currentUser?.displayName || 'User',
+          userAvatar: resolvedCurrentAvatar,
+          createdAt: new Date().toISOString(),
+          likes: [],
+          likesCount: 0,
+          replies: [],
+          reactions: {},
+        };
+        setComments(prev => [optimisticComment, ...prev]);
+        setNewComment('');
+        setReplyTo(null);
+
+        await addComment(postId, currentUserId, currentUser?.displayName || 'User', resolvedCurrentAvatar, trimmedText);
+        feedEventEmitter.emit('commentAdded', { postId });
+        // Sync real data silently
+        loadData().catch(() => {});
       }
-      setNewComment("");
-      setReplyTo(null);
-      await loadData();
-      feedEventEmitter.emit("commentAdded", { postId });
     } catch (e) {
       console.error(e);
+      // Rollback optimistic update on error
+      setComments(prev => prev.filter(c => {
+        if (c.id === optimisticId) return false;
+        return { ...c, replies: (c.replies || []).filter(r => r.id !== optimisticId) };
+      }));
     } finally {
       setIsSubmitting(false);
     }
   };
+
 
   const handleLikeComment = async (commentId: string, isReply: boolean, parentId?: string) => {
     const originalComments = [...comments];

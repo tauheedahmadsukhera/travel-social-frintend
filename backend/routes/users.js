@@ -423,7 +423,6 @@ router.get('/:userId/aggregated', optionalAuth, async (req, res) => {
     // 2. Resolve requester variants for follow check
     let requesterResolved = null;
     if (requesterUserId) {
-      const { resolveUserIdentifiers } = require('../src/utils/userUtils');
       requesterResolved = await resolveUserIdentifiers(requesterUserId);
     }
 
@@ -1239,7 +1238,6 @@ router.put('/:userId/sections/:sectionId', verifyToken, async (req, res) => {
     const { name, postIds, coverImage, visibility, collaborators, allowedUsers, allowedGroups, addPostId, removePostId } = req.body;
 
     const Section = mongoose.model('Section');
-    const { resolveUserIdentifiers } = require('../src/utils/userUtils');
 
     const user = await resolveUserIdentifiers(userId);
     const userIdCandidates = [...user.candidates];
@@ -1317,7 +1315,6 @@ router.delete('/:userId/sections/:sectionId', verifyToken, async (req, res) => {
     const { migrateToSectionId } = req.body || {};
 
     const Section = mongoose.model('Section');
-    const { resolveUserIdentifiers } = require('../src/utils/userUtils');
 
     const resolved = await resolveUserIdentifiers(authenticatedUserId);
 
@@ -1792,7 +1789,6 @@ router.delete('/:userId', async (req, res) => {
       return res.status(404).json({ success: false, error: 'User not found' });
     }
 
-    const { resolveUserIdentifiers } = require('../src/utils/userUtils');
     const userCandidates = await resolveUserIdentifiers(userId);
     const candidateStrings = userCandidates.candidates.map(String);
 
