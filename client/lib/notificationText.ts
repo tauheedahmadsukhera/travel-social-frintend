@@ -10,7 +10,9 @@ export function getNotificationActionText(item: any): string {
   if (type === 'mention') return 'mentioned you in a post';
   if (type === 'tag') return 'tagged you in a post';
   if (type === 'live') return 'started a live stream';
-  if (type === 'story' || type === 'story-mention' || type === 'story-reply') return 'updated your story';
+  if (type === 'story') return 'posted a new story';
+  if (type === 'story-mention') return 'mentioned you in a story';
+  if (type === 'story-reply') return 'replied to your story';
 
   const msg = typeof item?.message === 'string' ? item.message.trim() : '';
   if (msg) return msg;
@@ -21,5 +23,18 @@ export function getNotificationActionText(item: any): string {
 export function getNotificationDisplayText(item: any): string {
   const senderNameRaw = item?.senderName;
   const senderName = typeof senderNameRaw === 'string' && senderNameRaw.trim() ? senderNameRaw.trim() : 'Someone';
+  
+  const msg = typeof item?.message === 'string' ? item.message.trim() : '';
+  if (msg) {
+    // If the message already starts with the senderName or "Someone", use it directly.
+    if (msg.toLowerCase().startsWith(senderName.toLowerCase()) || msg.toLowerCase().startsWith('someone')) {
+      return msg;
+    }
+    // If the message is a location welcome or other auto-notification, use it directly.
+    if (item.type === 'location_change' || msg.toLowerCase().startsWith('welcome')) {
+      return msg;
+    }
+  }
+
   return `${senderName} ${getNotificationActionText(item)}`;
 }
