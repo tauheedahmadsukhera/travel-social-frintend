@@ -103,9 +103,6 @@ export default function SavedScreen() {
   const [createModalVisible, setCreateModalVisible] = useState(false);
   const [createModalInitialScreen, setCreateModalInitialScreen] = useState<'list' | 'new'>('list');
   const [deleteTarget, setDeleteTarget] = useState<Collection | null>(null);
-  const pendingModalRef = useRef<'create' | 'edit' | 'delete' | null>(null);
-  const pendingEditTargetRef = useRef<Collection | null>(null);
-  const pendingDeleteTargetRef = useRef<Collection | null>(null);
 
   // Edit sheet state
   const [editTarget, setEditTarget] = useState<Collection | null>(null);
@@ -426,42 +423,18 @@ export default function SavedScreen() {
 
   const openEdit = (col: Collection) => {
     hapticLight();
-    pendingEditTargetRef.current = col;
-    pendingModalRef.current = 'edit';
     setCollDropdownOpen(false);
+    setTimeout(() => {
+      applyEditState(col);
+    }, 450);
   };
   const openDelete = (col: Collection) => {
     hapticLight();
-    pendingDeleteTargetRef.current = col;
-    pendingModalRef.current = 'delete';
     setCollDropdownOpen(false);
+    setTimeout(() => {
+      setDeleteTarget(col);
+    }, 450);
   };
-
-  useEffect(() => {
-    // Robust modal queuing: trigger the next modal ONLY after the dropdown has fully closed
-    if (collDropdownOpen) return;
-    if (!pendingModalRef.current) return;
-
-    const modalToOpen = pendingModalRef.current;
-    pendingModalRef.current = null; // Clear it immediately
-
-    if (__DEV__) console.log('[Saved] Triggering pending modal:', modalToOpen);
-
-    const timer = setTimeout(() => {
-      if (modalToOpen === 'create') {
-        setCreateModalInitialScreen('new');
-        setCreateModalVisible(true);
-      } else if (modalToOpen === 'edit' && pendingEditTargetRef.current) {
-        applyEditState(pendingEditTargetRef.current);
-        pendingEditTargetRef.current = null;
-      } else if (modalToOpen === 'delete' && pendingDeleteTargetRef.current) {
-        setDeleteTarget(pendingDeleteTargetRef.current);
-        pendingDeleteTargetRef.current = null;
-      }
-    }, 400); // 400ms is safer for Android transitions
-
-    return () => clearTimeout(timer);
-  }, [collDropdownOpen, applyEditState]);
 
   useEffect(() => {
     const subRefresh = feedEventEmitter.addListener('feedUpdated', () => {
@@ -838,8 +811,11 @@ export default function SavedScreen() {
               style={styles.newCollBtn}
               onPress={() => {
                 hapticLight();
-                pendingModalRef.current = 'create';
                 setCollDropdownOpen(false);
+                setTimeout(() => {
+                  setCreateModalInitialScreen('new');
+                  setCreateModalVisible(true);
+                }, 450);
               }}
             >
               <Feather name="plus" size={14} color="#FF8D00" />
