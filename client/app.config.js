@@ -44,7 +44,7 @@ export default {
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.tauhee56.travesocial",
-      "buildNumber": "6",
+      "buildNumber": "20",
       "googleServicesFile": "./GoogleService-Info.plist",
       "config": {
         "googleMapsApiKey": process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY || "AIzaSyDKZ-vpdhQYe2gBak9utt0UOjMCy1BMsXQ"
