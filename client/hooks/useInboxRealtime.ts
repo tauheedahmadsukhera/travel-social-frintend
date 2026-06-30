@@ -65,28 +65,26 @@ export function useInboxRealtime(userId: string | null) {
     }
 
     let isMounted = true;
-    
+    let activeSocket: any = null;
+
+    const handleNewMessage = () => {
+      if (isMounted) {
+        // Refresh conversations when a new message is received globally
+        fetchConversations();
+      }
+    };
+
     // Initial fetch
     fetchConversations();
 
     // Initialize Socket.io listener
     initializeSocket(userId).then((socket) => {
       if (!isMounted) return;
-
-      const handleNewMessage = () => {
-        // Refresh conversations when a new message is received globally
-        fetchConversations();
-      };
+      activeSocket = socket;
 
       // Listen for any new messages
       socket.on('newMessage', handleNewMessage);
       socket.on('messageRead', handleNewMessage); // Update unread counts
-      
-      // Cleanup
-      return () => {
-        socket.off('newMessage', handleNewMessage);
-        socket.off('messageRead', handleNewMessage);
-      };
     });
 
     // Handle AppState changes (Foreground refresh)
@@ -114,10 +112,15 @@ export function useInboxRealtime(userId: string | null) {
       clearTimeout(emergencyTimeout);
       subscription.remove();
       
-      const socket = getSocket();
-      if (socket) {
-        socket.off('newMessage');
-        socket.off('messageRead');
+      if (activeSocket) {
+        activeSocket.off('newMessage', handleNewMessage);
+        activeSocket.off('messageRead', handleNewMessage);
+      } else {
+        const socket = getSocket();
+        if (socket) {
+          socket.off('newMessage', handleNewMessage);
+          socket.off('messageRead', handleNewMessage);
+        }
       }
     };
   }, [userId, fetchConversations]);

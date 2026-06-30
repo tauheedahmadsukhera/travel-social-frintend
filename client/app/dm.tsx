@@ -178,8 +178,18 @@ export default function DM() {
     // Only scroll if it's from the other person or if we are near bottom
     if (msg.senderId !== currentUserId) {
        flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
+       if (conversationId && currentUserId) {
+         markConversationAsRead(conversationId, currentUserId).catch(() => {});
+       }
     }
   });
+
+  // Mark conversation as read when entering the chat
+  useEffect(() => {
+    if (conversationId && currentUserId) {
+      markConversationAsRead(conversationId, currentUserId).catch(() => {});
+    }
+  }, [conversationId, currentUserId]);
 
   const {
     recording,

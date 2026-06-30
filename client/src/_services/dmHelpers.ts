@@ -90,6 +90,13 @@ export const mergeMessages = (existing: any[], incoming: any[]): any[] => {
 
   incoming.forEach((m) => {
     const n = normalizeMessage(m);
+    
+    // Optimistic UI Deduplication: If the incoming message has a tempId,
+    // remove the temporary message from the map to prevent duplicate rendering.
+    if (n.tempId) {
+      map.delete(String(n.tempId));
+    }
+    
     const prev = map.get(n.id) || {};
     
     map.set(n.id, {
