@@ -463,9 +463,9 @@ exports.tiktokAuth = functions.https.onRequest(async (req: any, res: any) => {
       return;
     }
 
-    // TikTok credentials from environment variables
-    const clientKey = functions.config().tiktok?.client_key;
-    const clientSecret = functions.config().tiktok?.client_secret;
+    // TikTok credentials — process.env (functions/.env) first, then functions.config() fallback
+    const clientKey = process.env.TIKTOK_CLIENT_KEY || functions.config().tiktok?.client_key;
+    const clientSecret = process.env.TIKTOK_CLIENT_SECRET || functions.config().tiktok?.client_secret;
 
     if (!clientKey || !clientSecret) {
       console.error('❌ TikTok credentials not configured');
@@ -558,8 +558,9 @@ exports.snapchatAuth = functions.https.onRequest(async (req: any, res: any) => {
       return;
     }
 
-    const clientId = functions.config().snapchat?.client_id;
-    const clientSecret = functions.config().snapchat?.client_secret;
+    // Snapchat credentials — process.env (functions/.env) first, then functions.config() fallback
+    const clientId = process.env.SNAPCHAT_CLIENT_ID || functions.config().snapchat?.client_id;
+    const clientSecret = process.env.SNAPCHAT_CLIENT_SECRET || functions.config().snapchat?.client_secret;
 
     if (!clientId || !clientSecret) {
       console.error('❌ Snapchat credentials not configured');

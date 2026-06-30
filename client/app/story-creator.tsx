@@ -2,6 +2,7 @@ import { Feather } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import * as MediaLibrary from 'expo-media-library';
 import * as ImageManipulator from 'expo-image-manipulator';
+import * as FileSystem from 'expo-file-system';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
@@ -198,8 +199,109 @@ const DraggableText = ({
 };
 
 // ─────────────────────────────────────────────
-// Main Screen
-// ─────────────────────────────────────────────
+// Helper: copy native video URI to cache for expo-av playback
+async function copyStoryVideoToCache(nativeUri: string): Promise<string> {
+  const hash = nativeUri.replace(/[^a-zA-Z0-9]/g, '_').slice(-60);
+  const dest = `${FileSystem.cacheDirectory}storyvidcache_${hash}.mp4`;
+  const info = await FileSystem.getInfoAsync(dest);
+  if (info.exists) return dest;
+
+  try {
+    await FileSystem.copyAsync({ from: nativeUri, to: dest });
+    const check = await FileSystem.getInfoAsync(dest);
+    if (check.exists) return dest;
+  } catch (_) {}
+
+  // Fallback: MediaLibrary localUri
+  try {
+    const assetId = nativeUri.startsWith('ph://')
+      ? nativeUri.replace('ph://', '').split('/')[0]
+      : nativeUri;
+    const assetInfo = await MediaLibrary.getAssetInfoAsync(assetId, { copyToLocalContainer: true } as any);
+    if (assetInfo?.localUri) {
+      await FileSystem.copyAsync({ from: assetInfo.localUri, to: dest });
+      const check2 = await FileSystem.getInfoAsync(dest);
+      if (check2.exists) return dest;
+      return assetInfo.localUri;
+    }
+  } catch (_) {}
+
+  return nativeUri;
+}
+
+function isNativeVideoUri(u: string): boolean {
+  return u.startsWith('ph://') || u.startsWith('assets-library://') || u.startsWith('content://');
+}
+
+const AutoplayVideoPreview: React.FC<{ uri: string; rawUri?: string; style: any }> = ({ uri, rawUri, style }) => {
+  const videoRef = React.useRef<Video>(null);
+  const [playableUri, setPlayableUri] = useState<string | null>(null);
+  const [isLoaded, setIsLoaded] = useState(false);
+
+  const sourceUri = rawUri || uri;
+
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      if (!isNativeVideoUri(sourceUri)) {
+        if (active) setPlayableUri(sourceUri);
+        return;
+      }
+      try {
+        const cached = await copyStoryVideoToCache(sourceUri);
+        if (active) setPlayableUri(cached);
+      } catch {
+        if (active) setPlayableUri(sourceUri);
+      }
+    })();
+    return () => { active = false; };
+  }, [sourceUri]);
+
+  useEffect(() => {
+    if (isLoaded && videoRef.current) {
+      videoRef.current.playAsync().catch(() => {});
+    }
+  }, [isLoaded, playableUri]);
+
+  return (
+    <View style={style}>
+      {!isLoaded && (
+        <View style={StyleSheet.absoluteFillObject}>
+          {(sourceUri.startsWith('ph://') || sourceUri.startsWith('assets-library://')) ? (
+            <Image
+              source={{ uri: sourceUri }}
+              style={{ width: '100%', height: '100%' }}
+              resizeMode="contain"
+            />
+          ) : (
+            <View style={{ flex: 1, backgroundColor: '#000', justifyContent: 'center', alignItems: 'center' }}>
+              <ActivityIndicator size="small" color="#FF8D00" />
+            </View>
+          )}
+        </View>
+      )}
+      {playableUri && (
+        <Video
+          ref={videoRef}
+          source={{ uri: playableUri }}
+          style={{ width: '100%', height: '100%', opacity: isLoaded ? 1 : 0 }}
+          resizeMode={ResizeMode.CONTAIN}
+          useNativeControls={false}
+          shouldPlay
+          isMuted
+          isLooping
+          onLoad={() => setIsLoaded(true)}
+          onPlaybackStatusUpdate={(status) => {
+            if (status.isLoaded && status.positionMillis >= 2000) {
+              videoRef.current?.setStatusAsync({ positionMillis: 0, shouldPlay: true }).catch(() => {});
+            }
+          }}
+        />
+      )}
+    </View>
+  );
+};
+
 export default function StoryCreatorScreen() {
     const router = useRouter();
     const insets = useSafeAreaInsets();
@@ -432,6 +534,15 @@ export default function StoryCreatorScreen() {
                 return Object.keys(meta).length > 0 ? meta : undefined;
             })();
 
+            console.log('[StoryCreator] 📤 Sharing story:', {
+                authUserId,
+                mediaType,
+                hasLocation: !!selectedLocation,
+                hasPostMetadata: !!finalPostMetadata,
+                overlaysCount: textOverlays.length
+            });
+            console.log('[StoryCreator] 📤 finalPostMetadata payload:', JSON.stringify(finalPostMetadata, null, 2));
+
             const storyRes = await createStory(
                 authUserId,
                 uploadUri,
@@ -524,17 +635,19 @@ export default function StoryCreatorScreen() {
                     activeOpacity={0.85}
                     onPress={async () => {
                         let targetUri = item.uri;
-                        if (item.uri.startsWith('ph://') || item.uri.startsWith('assets-library://')) {
+                        if (item.uri.startsWith('ph://') || item.uri.startsWith('assets-library://') || item.uri.startsWith('content://')) {
                             try {
                                 const assetId = item.uri.startsWith('ph://')
                                     ? item.uri.replace('ph://', '').split('/')[0]
+                                    : item.uri.startsWith('content://')
+                                    ? item.uri.split('/').pop() || item.uri
                                     : item.uri;
-                                const assetInfo = await MediaLibrary.getAssetInfoAsync(assetId, { copyToLocalContainer: true });
+                                const assetInfo = await MediaLibrary.getAssetInfoAsync(assetId, { copyToLocalContainer: true } as any);
                                 if (assetInfo) {
-                                    targetUri = assetInfo.localUri || assetInfo.uri || item.uri;
+                                    targetUri = assetInfo.localUri || item.uri;
                                 }
                             } catch (e) {
-                                console.warn('[story-creator] Failed to resolve iOS local URI for preview:', e);
+                                console.warn('[story-creator] Failed to resolve local URI for preview:', e);
                             }
                         }
                         setSelectedUri(targetUri);
@@ -680,15 +793,7 @@ export default function StoryCreatorScreen() {
                             <View ref={previewRef} collapsable={false} style={styles.preview}>
                                 {selectedUri ? (
                                     selectedAsset?.mediaType === 'video' ? (
-                                        <Video
-                                            source={{ uri: selectedUri }}
-                                            style={styles.previewImg}
-                                            resizeMode={ResizeMode.CONTAIN}
-                                            shouldPlay={true}
-                                            isLooping={true}
-                                            isMuted={true}
-                                            useNativeControls={false}
-                                        />
+                                        <AutoplayVideoPreview uri={selectedUri} rawUri={selectedAsset?.uri} style={styles.previewImg} />
                                     ) : (
                                         <Image source={{ uri: selectedUri }} style={styles.previewImg} resizeMode="contain" />
                                     )

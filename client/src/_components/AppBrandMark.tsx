@@ -100,10 +100,9 @@ export function AppBrandMark({
             },
             isTabBar ? { 
               letterSpacing: TAB_BAR.letter,
-              lineHeight: 28,
+              lineHeight: TAB_BAR.icon,
               includeFontPadding: false,
               textAlignVertical: 'center',
-              transform: [{ translateY: 1 }],
             } : null,
           ]}
         >

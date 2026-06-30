@@ -91,19 +91,35 @@ export default function SaveToCollectionModal({
     const toastAnim = useRef(new Animated.Value(0)).current;
     const nameInputRef = useRef<TextInput>(null);
 
-    const [keyboardHeight, setKeyboardHeight] = useState(0);
+    const keyboardOffsetAnim = useRef(new Animated.Value(0)).current;
 
-    // Adjust for keyboard appearance to keep modal visible
+    // Slide the sheet up by keyboard height — keeps content visible without squishing
     useEffect(() => {
-        const showSub = Keyboard.addListener('keyboardDidShow', (e) => {
-            setKeyboardHeight(e.endCoordinates?.height || 0);
-        });
-        const hideSub = Keyboard.addListener('keyboardDidHide', () => setKeyboardHeight(0));
+        const showSub = Keyboard.addListener(
+            Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
+            (e) => {
+                Animated.timing(keyboardOffsetAnim, {
+                    toValue: -(e.endCoordinates?.height || 0),
+                    duration: Platform.OS === 'ios' ? (e.duration || 250) : 200,
+                    useNativeDriver: true,
+                }).start();
+            }
+        );
+        const hideSub = Keyboard.addListener(
+            Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide',
+            (e) => {
+                Animated.timing(keyboardOffsetAnim, {
+                    toValue: 0,
+                    duration: Platform.OS === 'ios' ? (e.duration || 250) : 200,
+                    useNativeDriver: true,
+                }).start();
+            }
+        );
         return () => {
             showSub.remove();
             hideSub.remove();
         };
-    }, []);
+    }, [keyboardOffsetAnim]);
 
     const showToast = useCallback((message: string) => {
         setToast({ visible: true, message });
@@ -187,16 +203,26 @@ export default function SaveToCollectionModal({
 
     return (
         <Modal visible={visible} transparent animationType="none" onRequestClose={() => { Keyboard.dismiss(); handleModalClose(); }}>
-            <KeyboardAvoidingView
-                style={{ flex: 1 }}
-                behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-                keyboardVerticalOffset={0}
-            >
-                <View style={styles.backdrop}>
-                    <TouchableOpacity style={StyleSheet.absoluteFill} activeOpacity={1} onPress={() => { Keyboard.dismiss(); handleModalClose(); }} />
-                    <Animated.View 
-                        style={[styles.sheet, { transform: [{ translateY: sheetTranslateY }], paddingBottom: insets.bottom || 20 }]}
-                    >
+            <View style={styles.backdrop}>
+                {/* Flex spacer — only covers the dark area ABOVE the sheet. Does NOT overlap the sheet. */}
+                <TouchableOpacity
+                    style={{ flex: 1 }}
+                    activeOpacity={1}
+                    onPress={() => { Keyboard.dismiss(); handleModalClose(); }}
+                />
+                <Animated.View 
+                    style={[
+                        styles.sheet,
+                        {
+                            transform: [
+                                { translateY: sheetTranslateY },
+                                { translateY: keyboardOffsetAnim },
+                            ],
+                            paddingBottom: screen === 'new' ? (insets.bottom || 8) : (insets.bottom || 20),
+                            minHeight: screen === 'new' ? undefined : SCREEN_H * 0.75,
+                        }
+                    ]}
+                >
                     <View style={styles.dragBarContainer} {...sheetPanResponder.panHandlers}>
                         <View style={styles.dragBar} />
                     </View>
@@ -270,15 +296,14 @@ export default function SaveToCollectionModal({
                               onGoBack={() => setScreen('new')} Header={Header}
                           />
                       )}
-                      </Animated.View>
+                </Animated.View>
 
-                    {toast.visible && (
-                        <Animated.View style={[styles.toast, { opacity: toastAnim, transform: [{ translateY: toastAnim.interpolate({ inputRange: [0, 1], outputRange: [20, 0] }) }] }]}>
-                            <Text style={styles.toastText}>{toast.message}</Text>
-                        </Animated.View>
-                    )}
-                </View>
-            </KeyboardAvoidingView>
+                {toast.visible && (
+                    <Animated.View style={[styles.toast, { opacity: toastAnim, transform: [{ translateY: toastAnim.interpolate({ inputRange: [0, 1], outputRange: [20, 0] }) }] }]}>
+                        <Text style={styles.toastText}>{toast.message}</Text>
+                    </Animated.View>
+                )}
+            </View>
         </Modal>
       );
   }

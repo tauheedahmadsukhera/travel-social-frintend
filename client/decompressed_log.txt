@@ -1,0 +1,10 @@
+<?xml version='1.0' encoding='UTF-8'?><Error><Code>SignatureDoesNotMatch</Code><Message>Access denied.</Message><Details>The request signature we calculated does not match the signature you provided. Check your Google secret key and signing method.</Details><StringToSign>GOOG4-RSA-SHA256
+20260623T142539Z
+20260623/auto/storage/goog4_request
+df97e847a479cece6206a157f39eb94e7c0cc9c1ca319aab15d10b9bdae84b91</StringToSign><CanonicalRequest>GET
+/eas-workflows-production/logs/3ab87f13-3f1d-487a-8ff7-0374f04f7aa6/17ffb343-d4a5-449d-9c98-f32cf4c7faa6/2026-06-23T14%3A24%3A20Z-c93e55fb-8aa8-4594-9602-7d372824ec68.txt
+X-Goog-Algorithm=GOOG4-RSA-SHA256&amp;X-Goog-Credential=www-production%40exponentjs.iam.gserviceaccount.com%2F20260623%2Fauto%2Fstorage%2Fgoog4_request&amp;X-Goog-Date=20260623T142539Z&amp;X-Goog-Expires=900&amp;X-Goog-SignedHeaders=host
+host:storage.googleapis.com
+
+host
+UNSIGNED-PAYLOAD</CanonicalRequest></Error>

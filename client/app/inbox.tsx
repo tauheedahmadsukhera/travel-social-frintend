@@ -424,10 +424,13 @@ function Inbox() {
         Alert.alert('Session Expired', 'Please log out and back in to continue.');
         console.warn('[Inbox] Auth session expired. Please log out and back in.');
       } else {
-        Alert.alert('Error', 'Failed to load inbox.', [
-          { text: 'Retry', onPress: refreshInbox },
-          { text: 'Dismiss' }
-        ]);
+        // Only show alert if we don't have any conversations displayed yet
+        if (!conversations || conversations.length === 0) {
+          Alert.alert('Error', 'Failed to load inbox.', [
+            { text: 'Retry', onPress: refreshInbox },
+            { text: 'Dismiss' }
+          ]);
+        }
       }
     } finally {
       setFollowingLoading(false);

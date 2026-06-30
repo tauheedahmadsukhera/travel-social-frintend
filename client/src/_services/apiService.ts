@@ -117,8 +117,8 @@ function getTimeoutMs(method: string, url: string): number {
   // Media upload can take longer.
   if (/\/media\/upload/i.test(u)) return 120000;
 
-  // Real-time endpoints: keep responsive (avoid long spinners).
-  if (/\/(conversations|messages|notifications|inbox)/i.test(u)) return 22000;
+  // Real-time endpoints: keep responsive (avoid long spinners) but allow cold start (45s).
+  if (/\/(conversations|messages|notifications|inbox)/i.test(u)) return 45000;
 
   // Feeds can be heavier but should not stall forever.
   if (m === 'get' && /\/(posts|stories|highlights)/i.test(u)) return 28000;

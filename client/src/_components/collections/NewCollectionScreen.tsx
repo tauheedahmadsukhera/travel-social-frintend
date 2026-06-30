@@ -45,7 +45,7 @@ export const NewCollectionScreen: React.FC<NewCollectionScreenProps> = ({
         rightDisabled={saving || !newName.trim()}
         rightLabel={saving ? '...' : 'Save'}
       />
-      <ScrollView keyboardShouldPersistTaps="handled" style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 20 }}>
+      <ScrollView keyboardShouldPersistTaps="handled" style={styles.scrollView} contentContainerStyle={styles.scrollViewContent}>
         {postImageUrl ? (
           <View style={styles.newPostThumbContainer}>
             <ExpoImage source={{ uri: postImageUrl }} style={styles.newPostThumb} contentFit="cover" />
@@ -130,16 +130,18 @@ export const NewCollectionScreen: React.FC<NewCollectionScreenProps> = ({
 };
 
 const styles = StyleSheet.create({
-  newPostThumbContainer: { width: '100%', height: 180, backgroundColor: '#f5f5f5', marginBottom: 20 },
+  newPostThumbContainer: { width: '100%', height: 180, backgroundColor: '#f5f5f5', marginBottom: 12 },
   newPostThumb: { width: '100%', height: '100%' },
   collThumbPlaceholder: { alignItems: 'center', justifyContent: 'center', backgroundColor: '#f5f5f5' },
-  newInputContainer: { flexDirection: 'row', alignItems: 'center', marginHorizontal: 16, paddingBottom: 8, marginBottom: 20 },
-  newNameInput: { flex: 1, fontSize: 18, fontWeight: '700', color: '#111', paddingVertical: 8 },
+  newInputContainer: { flexDirection: 'row', alignItems: 'center', marginHorizontal: 16, paddingBottom: 6, marginBottom: 12 },
+  newNameInput: { flex: 1, fontSize: 18, fontWeight: '700', color: '#111', paddingVertical: 6 },
   clearInput: { padding: 4 },
-  newOptionRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 10 },
+  newOptionRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 8 },
   newOptionLabel: { flex: 1, fontSize: 15, color: '#111', marginLeft: 12 },
   optionRight: { flexDirection: 'row', alignItems: 'center' },
   optionValue: { fontSize: 14, color: '#666', marginRight: 6 },
-  collabInfo: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, marginTop: 12 },
+  collabInfo: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, marginTop: 10 },
   collabChips: { flex: 1, fontSize: 13, color: '#FF8D00', marginLeft: 8, fontWeight: '600' },
+  scrollView: { flexGrow: 0, flexShrink: 1 },
+  scrollViewContent: { paddingBottom: 6 },
 });

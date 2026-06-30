@@ -1,5 +1,6 @@
 import { Feather, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { AVPlaybackStatus, ResizeMode, Video } from 'expo-av';
+import { Image as ExpoImage } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 // Firebase removed - using Backend API
 import React, { useEffect, useMemo, useRef, useState } from 'react';
@@ -56,16 +57,18 @@ const FONT_STYLES: Record<string, { fontFamily?: string; letterSpacing?: number;
 const STORY_MEDIA_H = width * 1.1;
 const STORY_MEDIA_TOP = (height - STORY_MEDIA_H) / 2;
 
-function StoryTextOverlays({ postMetadata }: { postMetadata?: any }) {
+function StoryTextOverlays({ postMetadata, mediaLoaded }: { postMetadata?: any; mediaLoaded: boolean }) {
   const parsedOverlays = parseStoryTextOverlays(postMetadata);
-  if (!parsedOverlays.length) return null;
+  // Don't render overlays until the background media is ready — mirrors Instagram behaviour
+  if (!parsedOverlays.length || !mediaLoaded) return null;
 
   return (
-    <View
+    <Animated.View
       style={{
         ...StyleSheet.absoluteFillObject,
         zIndex: 15,
         elevation: 15,
+        opacity: 1,
       }}
       pointerEvents="none"
     >
@@ -112,7 +115,7 @@ function StoryTextOverlays({ postMetadata }: { postMetadata?: any }) {
         );
       })}
       </View>
-    </View>
+    </Animated.View>
   );
 }
 
@@ -299,17 +302,15 @@ export default function StoriesViewer({ stories, onClose, initialIndex = 0, isHi
     loadCurrentUser();
   }, []);
 
-  // Preload current + next story media to reduce visible loading spinners
+  // Aggressively preload current + next 3 stories on each index change
   useEffect(() => {
     try {
-      const cur = localStories?.[currentIndex];
-      const next = localStories?.[currentIndex + 1];
-      const urls = [cur, next]
-        .map((s: any) => String(s?.imageUrl || s?.videoUrl || ''))
+      const toBePrefetched = localStories.slice(currentIndex, currentIndex + 4);
+      const urls = toBePrefetched
+        .map((s: any) => String(s?.imageUrl || s?.thumbnailUrl || ''))
         .filter((u) => typeof u === 'string' && u.startsWith('http'));
-      urls.forEach((u) => {
-        Image.prefetch(u).catch(() => {});
-      });
+      // expo-image prefetch writes to disk cache — subsequent loads are near-instant
+      ExpoImage.prefetch(urls).catch(() => {});
     } catch { }
   }, [localStories, currentIndex]);
 
@@ -611,7 +612,7 @@ export default function StoriesViewer({ stories, onClose, initialIndex = 0, isHi
           }}
           style={{ flex: 1 }}
         >
-          <View style={{ flex: 1, backgroundColor: '#000' }}>
+          <View style={{ flex: 1, backgroundColor: '#000', position: 'relative' }}>
             {/* Instagram-like: never show a spinner/skeleton in viewer.
                 Show an instant blurred placeholder while media decodes. */}
             {imageLoading && (
@@ -733,10 +734,12 @@ export default function StoriesViewer({ stories, onClose, initialIndex = 0, isHi
                       }}
                     />
                   ) : currentStoryImageUrl ? (
-                    <Image
+                    <ExpoImage
                       source={{ uri: currentStoryImageUrl }}
                       style={viewerStyles.fullScreenMedia}
-                      resizeMode="contain"
+                      contentFit="contain"
+                      cachePolicy="memory-disk"
+                      transition={120}
                       onLoadStart={() => setImageLoading(true)}
                       onLoad={() => setImageLoading(false)}
                       onError={() => setImageLoading(false)}
@@ -750,9 +753,8 @@ export default function StoriesViewer({ stories, onClose, initialIndex = 0, isHi
               )}
 
             </View>
+            <StoryTextOverlays postMetadata={currentStory?.postMetadata} mediaLoaded={!imageLoading} />
           </View>
-
-          <StoryTextOverlays postMetadata={currentStory?.postMetadata} />
         </Pressable>
 
         {/* Absolute Top Overlay (Progress & Header) */}

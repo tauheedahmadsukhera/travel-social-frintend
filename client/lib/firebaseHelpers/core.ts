@@ -674,7 +674,7 @@ export async function uploadMedia(
           ? uri.replace('ph://', '').split('/')[0] 
           : uri;
         
-        const assetInfo = await MediaLibrary.getAssetInfoAsync(assetId, { copyToLocalContainer: true });
+        const assetInfo = await MediaLibrary.getAssetInfoAsync(assetId, { copyToLocalContainer: true } as any);
         if (!assetInfo) {
           throw new Error(`Asset info not found for ID: ${assetId}`);
         }
@@ -788,7 +788,7 @@ async function uploadStoryMedia(uri: string, userId: string, mediaType: 'image' 
         const assetId = uri.startsWith('ph://') 
           ? uri.replace('ph://', '').split('/')[0] 
           : uri;
-        const assetInfo = await MediaLibrary.getAssetInfoAsync(assetId, { copyToLocalContainer: true });
+        const assetInfo = await MediaLibrary.getAssetInfoAsync(assetId, { copyToLocalContainer: true } as any);
         if (assetInfo) {
           finalUri = assetInfo.localUri || assetInfo.uri || uri;
         } else {

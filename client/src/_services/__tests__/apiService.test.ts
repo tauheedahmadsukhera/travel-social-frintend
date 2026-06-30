@@ -15,7 +15,7 @@ jest.mock('../../../config/environment', () => ({
 }));
 
 describe('apiService', () => {
-  let axiosInstanceMock: jest.Mock;
+  let axiosInstanceMock: any;
   let apiService: any;
   let mockedAxios: any;
   let mockedAsyncStorage: any;

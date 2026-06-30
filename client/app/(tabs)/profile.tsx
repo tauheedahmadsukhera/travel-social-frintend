@@ -308,6 +308,26 @@ export default function Profile({ userIdProp }: any) {
   const [followLoading, setFollowLoading] = useState(false);
   const [likedPosts, setLikedPosts] = useState<{ [key: string]: boolean }>({});
   const [savedPosts, setSavedPosts] = useState<{ [key: string]: boolean }>({});
+
+  // ── Local optimistic follow state ──────────────────────────────────────
+  // These update INSTANTLY on tap so there's zero visible delay, regardless
+  // of when React Query propagates the cache update.
+  const [localIsFollowing, setLocalIsFollowing] = useState<boolean | null>(null);
+  const [localFollowersCount, setLocalFollowersCount] = useState<number | null>(null);
+  const [localFollowRequestPending, setLocalFollowRequestPending] = useState<boolean | null>(null);
+  // Sync from server whenever profile data changes
+  useEffect(() => {
+    if (profile) {
+      setLocalIsFollowing(!!profile.isFollowing);
+      setLocalFollowersCount(
+        typeof profile.followersCount === 'number'
+          ? profile.followersCount
+          : Array.isArray(profile.followers) ? profile.followers.length
+          : Number(profile.followersCount) || 0
+      );
+      setLocalFollowRequestPending(!!profile.followRequestPending);
+    }
+  }, [profile?.isFollowing, profile?.followersCount, profile?.followRequestPending]);
   const [commentModalVisible, setCommentModalVisible] = useState(false);
   const [commentModalPostId, setCommentModalPostId] = useState<string>('');
   const [commentModalAvatar, setCommentModalAvatar] = useState<string>('');
@@ -334,6 +354,18 @@ export default function Profile({ userIdProp }: any) {
     await refetchAll();
     setRefreshing(false);
   }, [refetchAll]);
+
+  // Throttled focus-refetch: only refresh once per 60 s to avoid 429 spam
+  const lastFocusRefetchRef = useRef<number>(0);
+  useFocusEffect(
+    useCallback(() => {
+      const now = Date.now();
+      if (now - lastFocusRefetchRef.current > 60_000) {
+        lastFocusRefetchRef.current = now;
+        refetchAll().catch(() => {});
+      }
+    }, [refetchAll])
+  );
 
   // Header padding is handled by Tabs sceneStyle (see (tabs)/_layout.tsx)
   const headerHeight = 0;
@@ -419,6 +451,9 @@ export default function Profile({ userIdProp }: any) {
   }, [PROFILE_MAP_ENABLED, segmentTab]);
 
   // Hook for actions
+  // NOTE: setIsFollowing / setProfile / setApprovedFollower / setFollowRequestPending are
+  // now no-ops here because useProfileActions handles optimistic cache updates internally
+  // via queryClient.setQueryData and then syncs with the server in the background.
   const {
     followLoading: actionFollowLoading,
     handleFollowToggle,
@@ -431,9 +466,9 @@ export default function Profile({ userIdProp }: any) {
     isOwnProfile,
     isPrivate: !!profile?.isPrivate,
     isFollowing: !!profile?.isFollowing,
-    setIsFollowing: () => refetchAll(), // Refresh after follow
-    setProfile: () => {}, // Handled by refetch
-    setApprovedFollower: () => {}, 
+    setIsFollowing: () => {}, // Optimistic update handled inside the hook
+    setProfile: () => {},     // Optimistic update handled inside the hook
+    setApprovedFollower: () => {},
     setFollowRequestPending: () => {},
     likedPosts,
     setLikedPosts,
@@ -446,6 +481,28 @@ export default function Profile({ userIdProp }: any) {
   useEffect(() => {
     setFollowLoading(actionFollowLoading);
   }, [actionFollowLoading]);
+
+  // Wrapper that updates local state INSTANTLY on tap, then delegates to the hook
+  const handleFollowToggleLocal = useCallback(() => {
+    if (!currentUserId || !viewedUserId || followLoading || isOwnProfile) return;
+    const wasFollowing = localIsFollowing ?? !!profile?.isFollowing;
+    const wasPending = localFollowRequestPending ?? !!profile?.followRequestPending;
+    const currentCount = localFollowersCount ?? (typeof profile?.followersCount === 'number' ? profile.followersCount : 0);
+
+    if (!!profile?.isPrivate && !wasFollowing) {
+      // Private: will become pending
+      setLocalFollowRequestPending(true);
+    } else if (wasFollowing) {
+      // Unfollow: instantly decrement
+      setLocalIsFollowing(false);
+      setLocalFollowersCount(Math.max(0, currentCount - 1));
+    } else {
+      // Follow: instantly increment
+      setLocalIsFollowing(true);
+      setLocalFollowersCount(currentCount + 1);
+    }
+    handleFollowToggle();
+  }, [currentUserId, viewedUserId, followLoading, isOwnProfile, localIsFollowing, localFollowersCount, localFollowRequestPending, profile, handleFollowToggle]);
 
   const handleMessage = () => {
     hookHandleMessage(profile, !!profile?.isApprovedFollower);
@@ -580,130 +637,146 @@ export default function Profile({ userIdProp }: any) {
       sub.remove();
     };
   }, [refetchAll]);
-
-
-  const renderProfileHeader = useMemo(() => {
-    return (
-      <View style={styles.content}>
-        {(!profile?.isPrivate || isOwnProfile || !!profile?.isApprovedFollower) && highlights && highlights.length > 0 && (
-          <View style={{ marginBottom: 10 }}>
-            <View style={{ paddingHorizontal: 12, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-              <Text style={{ fontSize: 13, fontWeight: '500', color: '#888', letterSpacing: 0.5 }}>HIGHLIGHTS</Text>
-              {isOwnProfile && (
-                <TouchableOpacity 
-                  style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#f5f5f5', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, gap: 4 }}
-                  onPress={handleAddStory}
-                >
-                  <Feather name="plus" size={12} color="#000" />
-                  <Text style={{ fontSize: 12, fontWeight: '600', color: '#000' }}>Add a story</Text>
-                </TouchableOpacity>
-              )}
-            </View>
-            <HighlightCarousel 
-              highlights={highlights} 
-              onPressHighlight={handlePressHighlight} 
-              isOwnProfile={isOwnProfile} 
-            />
+  // IMPORTANT: This must be a function (useCallback), NOT a pre-rendered element (useMemo).
+  // FlashList caches ReactElement headers and won't update them when state changes.
+  // A function reference ensures FlashList calls it on each render, so localFollowersCount
+  // and localIsFollowing changes are reflected immediately without reload.
+  const renderProfileHeader = useCallback(() => (
+    <View style={styles.content}>
+      {(!profile?.isPrivate || isOwnProfile || !!profile?.isApprovedFollower) && highlights && highlights.length > 0 && (
+        <View style={{ marginBottom: 10 }}>
+          <View style={{ paddingHorizontal: 12, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+            <Text style={{ fontSize: 13, fontWeight: '500', color: '#888', letterSpacing: 0.5 }}>HIGHLIGHTS</Text>
+            {isOwnProfile && (
+              <TouchableOpacity 
+                style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#f5f5f5', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, gap: 4 }}
+                onPress={handleAddStory}
+              >
+                <Feather name="plus" size={12} color="#000" />
+                <Text style={{ fontSize: 12, fontWeight: '600', color: '#000' }}>Add a story</Text>
+              </TouchableOpacity>
+            )}
           </View>
-        )}
-
-        {/* Edit Button Bubble & Profile Header */}
-        <View style={{ position: 'relative' }}>
-          <ProfileHeader 
-            profile={profile}
-            userStories={userStories}
-            isOwnProfile={isOwnProfile}
-            isPrivate={!!profile?.isPrivate}
-            approvedFollower={!!profile?.isApprovedFollower}
-            onPressAvatar={() => {
-              hapticLight();
-              if (userStories.length > 0) {
-                setStoriesViewerVisible(true);
-              } else if (isOwnProfile) {
-                handleAvatarPick();
-              }
-            }}
-            onAddStory={handleAddStory}
-            onPressPassport={() => {
-              hapticLight();
-              router.push({ pathname: '/passport', params: { user: viewedUserId } } as any);
-            }}
-            onEditProfile={() => {
-              hapticLight();
-              router.push({ pathname: '/edit-profile', params: { userId: viewedUserId } } as any);
-            }}
-            isFollowing={!!profile?.isFollowing}
-            followRequestPending={!!profile?.followRequestPending}
-            followLoading={followLoading}
-            onFollowToggle={handleFollowToggle}
-            onMessage={handleMessage}
-            followersCount={Math.max(0, Number(profile?.followersCount ?? profile?.followers ?? 0))}
-            followingCount={Math.max(0, Number(profile?.followingCount ?? profile?.following ?? 0))}
-            onPressFollowers={() => {
-              router.push(`/friends?userId=${viewedUserId}&tab=followers` as any);
-            }}
-            onPressFollowing={() => {
-              router.push(`/friends?userId=${viewedUserId}&tab=following` as any);
-            }}
+          <HighlightCarousel 
+            highlights={highlights} 
+            onPressHighlight={handlePressHighlight} 
+            isOwnProfile={isOwnProfile} 
           />
         </View>
+      )}
 
-        <ProfileStats 
-          locationsCount={passportLocationsCount}
-          postsCount={Number(profile?.postsCount ?? posts.length)}
-          taggedCount={taggedPosts?.length ?? 0}
-          collectionsCount={sections?.length ?? 0}
-          onPressLocations={() => {
-            if (!viewedUserId) return;
-            router.push({
-              pathname: '/user/[userId]/locations',
-              params: { userId: String(viewedUserId) }
-            } as any);
-          }}
-          onPressPosts={() => {
-            setSegmentTab('grid');
-            setSelectedSection(null);
-          }}
-          onPressTags={() => {
-            setSegmentTab('tagged');
-            setSelectedSection(null);
-          }}
-          onPressCollections={
-            (!profile?.isPrivate || isOwnProfile || !!profile?.isApprovedFollower)
-              ? () => {
-                  hapticLight();
-                  if (isOwnProfile) {
-                    router.push('/(tabs)/saved' as any);
-                  } else {
-                    setViewCollectionsModal(true);
-                  }
-                }
-              : undefined
-          }
-          isPrivate={!!profile?.isPrivate}
+      {/* Edit Button Bubble & Profile Header */}
+      <View style={{ position: 'relative' }}>
+        <ProfileHeader 
+          profile={profile}
+          userStories={userStories}
           isOwnProfile={isOwnProfile}
+          isPrivate={!!profile?.isPrivate}
           approvedFollower={!!profile?.isApprovedFollower}
+          onPressAvatar={() => {
+            hapticLight();
+            if (userStories.length > 0) {
+              setStoriesViewerVisible(true);
+            } else if (isOwnProfile) {
+              handleAvatarPick();
+            }
+          }}
+          onAddStory={handleAddStory}
+          onPressPassport={() => {
+            hapticLight();
+            router.push({ pathname: '/passport', params: { user: viewedUserId } } as any);
+          }}
+          onEditProfile={() => {
+            hapticLight();
+            router.push({ pathname: '/edit-profile', params: { userId: viewedUserId } } as any);
+          }}
+          isFollowing={localIsFollowing ?? !!profile?.isFollowing}
+          followRequestPending={localFollowRequestPending ?? !!profile?.followRequestPending}
+          followLoading={followLoading}
+          onFollowToggle={handleFollowToggleLocal}
+          onMessage={handleMessage}
+          followersCount={localFollowersCount ?? (
+            typeof profile?.followersCount === 'number'
+              ? profile.followersCount
+              : Array.isArray(profile?.followers)
+                ? profile.followers.length
+                : typeof profile?.followers === 'string' && !isNaN(Number(profile.followers))
+                  ? Number(profile.followers)
+                  : Number(profile?.followersCount) || 0
+          )}
+          followingCount={
+            typeof profile?.followingCount === 'number'
+              ? profile.followingCount
+              : Array.isArray(profile?.following)
+                ? profile.following.length
+                : typeof profile?.following === 'string' && !isNaN(Number(profile.following))
+                  ? Number(profile.following)
+                  : Number(profile?.followingCount) || 0
+          }
+          onPressFollowers={() => {
+            router.push(`/friends?userId=${viewedUserId}&tab=followers` as any);
+          }}
+          onPressFollowing={() => {
+            router.push(`/friends?userId=${viewedUserId}&tab=following` as any);
+          }}
         />
-
-        {(!profile?.isPrivate || isOwnProfile || !!profile?.isApprovedFollower) && segmentTab === 'grid' && sections && sections.length > 0 && (
-          <View>
-            <View style={{ paddingHorizontal: 12 }}>
-              <Text style={{ fontSize: 13, fontWeight: '500', color: '#888', marginBottom: 10, letterSpacing: 0.5 }}>COLLECTIONS</Text>
-            </View>
-            <ProfileSections
-              sections={sections}
-              selectedSection={selectedSection}
-              onSelectSection={setSelectedSection}
-              sectionSourcePosts={sectionSourcePosts}
-              getPostId={getPostId}
-              isOwnProfile={isOwnProfile}
-              currentUserId={currentUserId}
-            />
-          </View>
-        )}
       </View>
-    );
-  }, [profile, userStories, isOwnProfile, profileLoading, passportLocationsCount, posts.length, highlights, highlightViewerVisible, selectedHighlightId, segmentTab, sections, selectedSection, followLoading, viewedUserId]);
+
+      <ProfileStats 
+        locationsCount={passportLocationsCount}
+        postsCount={Number(profile?.postsCount ?? posts.length)}
+        taggedCount={taggedPosts?.length ?? 0}
+        collectionsCount={sections?.length ?? 0}
+        onPressLocations={() => {
+          if (!viewedUserId) return;
+          router.push({
+            pathname: '/user/[userId]/locations',
+            params: { userId: String(viewedUserId) }
+          } as any);
+        }}
+        onPressPosts={() => {
+          setSegmentTab('grid');
+          setSelectedSection(null);
+        }}
+        onPressTags={() => {
+          setSegmentTab('tagged');
+          setSelectedSection(null);
+        }}
+        onPressCollections={
+          (!profile?.isPrivate || isOwnProfile || !!profile?.isApprovedFollower)
+            ? () => {
+                hapticLight();
+                if (isOwnProfile) {
+                  router.push('/(tabs)/saved' as any);
+                } else {
+                  setViewCollectionsModal(true);
+                }
+              }
+            : undefined
+        }
+        isPrivate={!!profile?.isPrivate}
+        isOwnProfile={isOwnProfile}
+        approvedFollower={!!profile?.isApprovedFollower}
+      />
+
+      {(!profile?.isPrivate || isOwnProfile || !!profile?.isApprovedFollower) && segmentTab === 'grid' && sections && sections.length > 0 && (
+        <View>
+          <View style={{ paddingHorizontal: 12 }}>
+            <Text style={{ fontSize: 13, fontWeight: '500', color: '#888', marginBottom: 10, letterSpacing: 0.5 }}>COLLECTIONS</Text>
+          </View>
+          <ProfileSections
+            sections={sections}
+            selectedSection={selectedSection}
+            onSelectSection={setSelectedSection}
+            sectionSourcePosts={sectionSourcePosts}
+            getPostId={getPostId}
+            isOwnProfile={isOwnProfile}
+            currentUserId={currentUserId}
+          />
+        </View>
+      )}
+    </View>
+  ), [profile, userStories, isOwnProfile, profileLoading, passportLocationsCount, posts.length, highlights, highlightViewerVisible, selectedHighlightId, segmentTab, sections, selectedSection, followLoading, viewedUserId, localIsFollowing, localFollowersCount, localFollowRequestPending, handleFollowToggleLocal]);
 
   const currentPostsArray = useMemo(() => {
     if (segmentTab === 'grid') {
@@ -743,6 +816,42 @@ export default function Profile({ userIdProp }: any) {
           >
             <Text style={{ color: '#fff', fontSize: 16, fontWeight: 'bold' }}>Go to Login</Text>
           </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  // Show "Account Deleted" if the profile is not found (and we are not looking at our own profile)
+  if (!loading && !profile && !isOwnProfile) {
+    return (
+      <SafeAreaView style={styles.container} edges={['top']}>
+        {/* Header to allow going back */}
+        <View style={{
+          flexDirection: 'row',
+          alignItems: 'center',
+          paddingHorizontal: 16,
+          paddingVertical: 12,
+          borderBottomWidth: 1,
+          borderBottomColor: '#e0e0e0',
+          backgroundColor: '#fff',
+        }}>
+          <TouchableOpacity
+            onPress={() => {
+              hapticLight();
+              safeRouterBack();
+            }}
+            style={{ padding: 4 }}
+          >
+            <Feather name="arrow-left" size={24} color="#000" />
+          </TouchableOpacity>
+          <Text style={{ fontSize: 18, fontWeight: '700', marginLeft: 16 }}>User Not Found</Text>
+        </View>
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20, backgroundColor: '#fff' }}>
+          <Ionicons name="person-remove-outline" size={64} color="#ccc" />
+          <Text style={{ fontSize: 18, fontWeight: '600', color: '#222', marginTop: 16 }}>Account Deleted</Text>
+          <Text style={{ fontSize: 14, color: '#999', textAlign: 'center', marginTop: 8, paddingHorizontal: 20 }}>
+            This account has been permanently deleted and is no longer available.
+          </Text>
         </View>
       </SafeAreaView>
     );
@@ -853,7 +962,7 @@ export default function Profile({ userIdProp }: any) {
         />
       ) : (
         <ScrollView contentContainerStyle={{ paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
-          {renderProfileHeader}
+          {renderProfileHeader()}
           <View style={{ padding: 40, alignItems: 'center' }}>
             <Ionicons name="lock-closed" size={48} color="#ccc" />
             <Text style={{ marginTop: 10, color: '#999' }}>This account is private</Text>

@@ -1,7 +1,7 @@
 import { Feather, Ionicons } from '@expo/vector-icons';
 import { Image as ExpoImage } from 'expo-image';
-import { useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
+import React, { useEffect, useState, useCallback } from 'react';
 import { ActivityIndicator, Alert, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { FlashList } from '@shopify/flash-list';
@@ -13,6 +13,7 @@ import { DEFAULT_AVATAR_URL } from '@/lib/api';
 import { hapticLight, hapticMedium } from '@/lib/haptics';
 import { useAppDialog } from '@/src/_components/AppDialogProvider';
 import { safeRouterBack } from '@/lib/safeRouterBack';
+import { useQueryClient } from '@tanstack/react-query';
 
 
 const DEFAULT_AVATAR = DEFAULT_AVATAR_URL;
@@ -35,6 +36,7 @@ export default function FriendsScreen() {
   const params = useLocalSearchParams();
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const { showSuccess } = useAppDialog();
+  const queryClient = useQueryClient();
 
   useEffect(() => {
     const loadUserId = async () => {
@@ -82,56 +84,107 @@ export default function FriendsScreen() {
     return initials || '?';
   };
 
-  useEffect(() => {
-    fetchAllData();
-  }, [userId, currentUserId]);
+  useFocusEffect(
+    useCallback(() => {
+      // First load is not silent (shows loader), subsequent loads are silent
+      fetchAllData(followers.length > 0 || following.length > 0);
+    }, [userId, currentUserId, followers.length, following.length])
+  );
 
-  const fetchAllData = async () => {
+  const fetchAllData = async (silent = false) => {
     if (!userId) return;
-    setLoading(true);
+    if (!silent) setLoading(true);
 
     try {
-      // Fetch followers
-      const followersRes = await fetch(`${API_URL}/follow/users/${userId}/followers?currentUserId=${currentUserId}`);
-      const followersData = await followersRes.json();
-      if (followersData.success) {
-        setFollowers(followersData.data || []);
+      const followersUrl = `${API_URL}/follow/users/${userId}/followers?currentUserId=${currentUserId || ''}`;
+      const followingUrl = `${API_URL}/follow/users/${userId}/following?currentUserId=${currentUserId || ''}`;
+      const friendsUrl = `${API_URL}/follow/users/${userId}/friends`;
+      const userUrl = `${API_URL}/users/${userId}`;
+
+      // Fetch all required data in parallel to significantly reduce loading time (Instagram-style optimization)
+      const [followersRes, followingRes, friendsRes, userRes] = await Promise.all([
+        fetch(followersUrl).then(r => r.json()).catch(err => ({ success: false, data: [] })),
+        fetch(followingUrl).then(r => r.json()).catch(err => ({ success: false, data: [] })),
+        fetch(friendsUrl).then(r => r.json()).catch(err => ({ success: false, data: [] })),
+        fetch(userUrl).then(r => r.json()).catch(err => ({ success: false, data: null }))
+      ]);
+
+      if (followersRes.success) {
+        setFollowers(followersRes.data || []);
       }
-
-      // Fetch following
-      const followingRes = await fetch(`${API_URL}/follow/users/${userId}/following?currentUserId=${currentUserId}`);
-      const followingData = await followingRes.json();
-      if (followingData.success) {
-        setFollowing(followingData.data || []);
+      if (followingRes.success) {
+        setFollowing(followingRes.data || []);
       }
-
-      // Fetch friends (mutual follows)
-      const friendsRes = await fetch(`${API_URL}/follow/users/${userId}/friends`);
-      const friendsData = await friendsRes.json();
-      if (friendsData.success) {
-        setFriends(friendsData.data || []);
+      if (friendsRes.success) {
+        setFriends(friendsRes.data || []);
       }
-
-      // Removed blocked users fetch from here
-
-      // Get profile name
-      const userRes = await fetch(`${API_URL}/users/${userId}`);
-      const userData = await userRes.json();
-      if (userData.success) {
-        setProfileName(userData.data?.displayName || userData.data?.name || 'User');
+      if (userRes.success && userRes.data) {
+        setProfileName(userRes.data.displayName || userRes.data.name || 'User');
       }
-
     } catch (error) {
       console.error('Error fetching data:', error);
+    } finally {
+      if (!silent) setLoading(false);
     }
-
-    setLoading(false);
   };
 
   const handleFollowToggle = async (targetUserId: string, isCurrentlyFollowing: boolean) => {
     if (!currentUserId || targetUserId === currentUserId) return;
 
     hapticMedium();
+    // Optimistic update: flip isFollowing immediately in list
+    const optimisticUpdate = (list: UserItem[]) =>
+      list.map(u => u.uid === targetUserId ? { ...u, isFollowing: !isCurrentlyFollowing } : u);
+
+    setFollowers(optimisticUpdate(followers));
+    setFollowing(optimisticUpdate(following));
+    setFriends(prev => {
+      if (isCurrentlyFollowing) {
+        return prev.filter(u => u.uid !== targetUserId);
+      } else {
+        const targetInFollowers = followers.find(f => f.uid === targetUserId);
+        if (targetInFollowers) {
+          return [...prev, { ...targetInFollowers, isFollowing: true, isFollowingYou: true }];
+        }
+        return prev;
+      }
+    });
+
+    // Also optimistically update the viewed profile's React Query cache
+    // so going back to the profile screen shows the correct follower/following count
+    if (currentUserId) {
+      // Update target user's profile cache (their followers count changes)
+      queryClient.setQueryData(
+        ['profile', targetUserId, currentUserId],
+        (old: any) => {
+          if (!old) return old;
+          return {
+            ...old,
+            isFollowing: !isCurrentlyFollowing,
+            followersCount: isCurrentlyFollowing
+              ? Math.max(0, (old.followersCount ?? 0) - 1)
+              : (old.followersCount ?? 0) + 1,
+          };
+        }
+      );
+
+      // If we are viewing our own friends list, update our own profile cache (our following count changes)
+      if (isOwnProfile) {
+        queryClient.setQueryData(
+          ['profile', currentUserId, currentUserId],
+          (old: any) => {
+            if (!old) return old;
+            return {
+              ...old,
+              followingCount: isCurrentlyFollowing
+                ? Math.max(0, (old.followingCount ?? 0) - 1)
+                : (old.followingCount ?? 0) + 1,
+            };
+          }
+        );
+      }
+    }
+
     setFollowLoadingIds(prev => new Set(prev).add(targetUserId));
 
     try {
@@ -140,29 +193,13 @@ export default function FriendsScreen() {
       } else {
         await followUser(currentUserId, targetUserId);
       }
-
-      // Update local state
-      const updateUserList = (list: UserItem[]) =>
-        list.map(u => u.uid === targetUserId ? { ...u, isFollowing: !isCurrentlyFollowing } : u);
-
-      setFollowers(updateUserList(followers));
-      setFollowing(updateUserList(following));
-      setFriends(prev => {
-        if (isCurrentlyFollowing) {
-          // Removing from friends
-          return prev.filter(u => u.uid !== targetUserId);
-        } else {
-          // Check if should add to friends (mutual follow)
-          const targetInFollowers = followers.find(f => f.uid === targetUserId);
-          if (targetInFollowers) {
-            return [...prev, { ...targetInFollowers, isFollowing: true, isFollowingYou: true }];
-          }
-          return prev;
-        }
-      });
-
     } catch (error) {
       console.error('Error toggling follow:', error);
+      // Revert optimistic updates on failure
+      setFollowers(optimisticUpdate(followers)); // flip back
+      setFollowing(optimisticUpdate(following));
+      queryClient.invalidateQueries({ queryKey: ['profile', targetUserId] });
+      queryClient.invalidateQueries({ queryKey: ['profile', userId] });
       Alert.alert('Error', 'Failed to update follow status');
     }
 
@@ -229,6 +266,19 @@ export default function FriendsScreen() {
               setFollowers(prev => prev.filter(u => u.uid !== targetUserId));
               // Update friends list
               setFriends(prev => prev.filter(u => u.uid !== targetUserId));
+              
+              // Update own profile cache followers count
+              queryClient.setQueryData(
+                ['profile', currentUserId, currentUserId],
+                (old: any) => {
+                  if (!old) return old;
+                  return {
+                    ...old,
+                    followersCount: Math.max(0, (old.followersCount ?? 0) - 1),
+                  };
+                }
+              );
+
               showSuccess('Follower removed');
             } catch (e) {
               Alert.alert('Error', 'Failed to remove follower');
@@ -316,16 +366,12 @@ export default function FriendsScreen() {
             onPress={() => handleFollowToggle(item.uid, !!item.isFollowing)}
             disabled={isFollowLoading}
           >
-            {isFollowLoading ? (
-              <ActivityIndicator size="small" color={item.isFollowing ? '#000' : '#fff'} />
-            ) : (
-              <Text style={[
-                styles.followBtnText,
-                item.isFollowing && styles.followingBtnText
-              ]}>
-                {item.isFollowing ? 'Following' : 'Follow'}
-              </Text>
-            )}
+            <Text style={[
+              styles.followBtnText,
+              item.isFollowing && styles.followingBtnText
+            ]}>
+              {item.isFollowing ? 'Following' : 'Follow'}
+            </Text>
           </TouchableOpacity>
         )}
 
@@ -413,7 +459,7 @@ export default function FriendsScreen() {
           }}
         >
           <Text style={[styles.tabText, activeTab === 'following' && styles.activeTabText]}>
-            {following.length} Following
+            {isOwnProfile ? following.filter(u => u.isFollowing !== false).length : following.length} Following
           </Text>
         </TouchableOpacity>
 
@@ -449,6 +495,7 @@ export default function FriendsScreen() {
       ) : (
         <FlashList
           data={filteredData}
+          extraData={[followers, following, followLoadingIds, activeTab]}
           keyExtractor={(item) => item.uid}
           renderItem={renderUserItem}
           contentContainerStyle={styles.listContent}

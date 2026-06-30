@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Alert } from 'react-native';
+import { useQueryClient } from '@tanstack/react-query';
 import { followUser, sendFollowRequest, unfollowUser } from '@/lib/firebaseHelpers/follow';
 import { apiService } from '@/src/_services/apiService';
 import { hapticMedium, hapticLight } from '@/lib/haptics';
@@ -42,6 +43,21 @@ export const useProfileActions = ({
   router,
 }: UseProfileActionsProps) => {
   const [followLoading, setFollowLoading] = useState(false);
+  const queryClient = useQueryClient();
+
+  /**
+   * Optimistically update the React Query cache for the viewed user's profile.
+   * This makes follow/unfollow feel instant (no waiting for a network refetch).
+   */
+  const optimisticProfileUpdate = (updater: (old: any) => any) => {
+    queryClient.setQueryData(
+      ['profile', viewedUserId, currentUserId],
+      (old: any) => {
+        if (!old) return old;
+        return updater(old);
+      }
+    );
+  };
 
   const handleFollowToggle = async () => {
     if (!currentUserId || !viewedUserId || followLoading || isOwnProfile) return;
@@ -49,36 +65,85 @@ export const useProfileActions = ({
     setFollowLoading(true);
     try {
       if (isPrivate && !isFollowing) {
+        // --- Private account: send follow request ---
         const res = await sendFollowRequest(currentUserId, viewedUserId);
         if (res.success) {
+          // Optimistically mark as pending
+          optimisticProfileUpdate((old) => ({
+            ...old,
+            followRequestPending: true,
+          }));
           setFollowRequestPending(true);
           Alert.alert('Request Sent', 'Your follow request has been sent to this private account.');
         }
       } else {
         if (isFollowing) {
-          const res = await unfollowUser(currentUserId, viewedUserId);
+          // --- Unfollow: optimistic update FIRST ---
+          optimisticProfileUpdate((old) => ({
+            ...old,
+            isFollowing: false,
+            isApprovedFollower: false,
+            followersCount: Math.max(0, (old.followersCount ?? 0) - 1),
+          }));
           setApprovedFollower(false);
-          if (res.success) {
-            setIsFollowing(false);
-            // Fetch updated profile with aggregated counts
-            const profileRes = await apiService.get(`/users/${viewedUserId}/aggregated`, { 
-              requesterUserId: currentUserId 
+          setIsFollowing(false);
+
+          try {
+            await unfollowUser(currentUserId, viewedUserId);
+            // Background sync: update cache with real server data
+            const profileRes = await apiService.get(`/users/${viewedUserId}/aggregated`, {
+              requesterUserId: currentUserId,
             });
             if (profileRes.success && profileRes.data) {
+              queryClient.setQueryData(
+                ['profile', viewedUserId, currentUserId],
+                profileRes.data
+              );
               setProfile(profileRes.data);
             }
+          } catch (err) {
+            // Revert on failure
+            optimisticProfileUpdate((old) => ({
+              ...old,
+              isFollowing: true,
+              isApprovedFollower: true,
+              followersCount: (old.followersCount ?? 0) + 1,
+            }));
+            setIsFollowing(true);
+            setApprovedFollower(true);
+            throw err;
           }
         } else {
-          const res = await followUser(currentUserId, viewedUserId);
-          if (res.success) {
-            setIsFollowing(true);
-            // Fetch updated profile with aggregated counts
-            const profileRes = await apiService.get(`/users/${viewedUserId}/aggregated`, { 
-              requesterUserId: currentUserId 
+          // --- Follow: optimistic update FIRST ---
+          optimisticProfileUpdate((old) => ({
+            ...old,
+            isFollowing: true,
+            followersCount: (old.followersCount ?? 0) + 1,
+          }));
+          setIsFollowing(true);
+
+          try {
+            await followUser(currentUserId, viewedUserId);
+            // Background sync: update cache with real server data
+            const profileRes = await apiService.get(`/users/${viewedUserId}/aggregated`, {
+              requesterUserId: currentUserId,
             });
             if (profileRes.success && profileRes.data) {
+              queryClient.setQueryData(
+                ['profile', viewedUserId, currentUserId],
+                profileRes.data
+              );
               setProfile(profileRes.data);
             }
+          } catch (err) {
+            // Revert on failure
+            optimisticProfileUpdate((old) => ({
+              ...old,
+              isFollowing: false,
+              followersCount: Math.max(0, (old.followersCount ?? 0) - 1),
+            }));
+            setIsFollowing(false);
+            throw err;
           }
         }
       }
@@ -112,6 +177,7 @@ export const useProfileActions = ({
   const handleLikePost = async (postId: string) => {
     if (!currentUserId || !postId) return;
     const isLiked = likedPosts[postId];
+    // Optimistic update
     setLikedPosts((prev: any) => ({ ...prev, [postId]: !isLiked }));
     
     try {

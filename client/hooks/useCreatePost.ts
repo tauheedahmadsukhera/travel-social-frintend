@@ -65,6 +65,7 @@ export const isVideoUri = (uri: string, galleryAssets?: GalleryAsset[]) => {
     lower.endsWith('.3gp') ||
     lower.endsWith('.mkv') ||
     lower.includes('video') ||
+    lower.includes('imagepicker') ||
     lower.includes('ExponentExperienceData')
   );
 };
@@ -320,6 +321,18 @@ export const useCreatePost = (params: any = {}) => {
 
       if (!result.canceled && result.assets && result.assets.length > 0) {
         const firstAsset = result.assets[0];
+        
+        // Append newly captured asset to galleryAssets state so isVideoUri resolves it cleanly
+        const newAsset: GalleryAsset = {
+          id: firstAsset.uri,
+          uri: firstAsset.uri,
+          mediaType: firstAsset.type === 'video' ? 'video' : 'photo',
+          width: firstAsset.width,
+          height: firstAsset.height,
+          duration: firstAsset.duration || undefined
+        };
+        setGalleryAssets(prev => [newAsset, ...prev]);
+
         setSelectedImages([firstAsset.uri]);
         if (firstAsset.width && firstAsset.height) {
           setCameraAssetDimensions({
@@ -419,7 +432,7 @@ export const useCreatePost = (params: any = {}) => {
         }
         router.replace('/(tabs)/home');
       } else {
-        throw new Error('Failed to create post');
+        throw new Error(res?.error || 'Failed to create post');
       }
     } catch (e: any) {
       console.error('[handleShare] ❌ Error:', e);

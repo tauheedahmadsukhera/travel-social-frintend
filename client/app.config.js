@@ -16,7 +16,7 @@ export default {
     "scheme": "trave-social",
     "userInterfaceStyle": "light",
     "android": {
-      "versionCode": 122,
+      "versionCode": 124,
       "adaptiveIcon": {
         "backgroundColor": "#FFFFFF",
         "foregroundImage": "./assets/images/icon.png",
@@ -37,17 +37,17 @@ export default {
       ],
       "config": {
         "googleMaps": {
-          "apiKey": process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY || "AIzaSyCQ1Fe55xOwt9fFfAiGIDVoEt01i2hL-zs"
+          "apiKey": process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY || "AIzaSyDKZ-vpdhQYe2gBak9utt0UOjMCy1BMsXQ"
         }
       }
     },
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.tauhee56.travesocial",
-      "buildNumber": "3",
+      "buildNumber": "6",
       "googleServicesFile": "./GoogleService-Info.plist",
       "config": {
-        "googleMapsApiKey": process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY || "AIzaSyCQ1Fe55xOwt9fFfAiGIDVoEt01i2hL-zs"
+        "googleMapsApiKey": process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY || "AIzaSyDKZ-vpdhQYe2gBak9utt0UOjMCy1BMsXQ"
       },
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
@@ -160,9 +160,9 @@ export default {
       "analyticsEnabled": true,
       "dailyCounterSampleRate": 0.05,
       "eas": {
-        "projectId": "3ab87f13-3f1d-487a-8ff7-0374f04f7aa3"
+        "projectId": "acd24cff-c209-4589-86fa-508a00859191"
       }
     },
-    "owner": "tauhee56"
+    "owner": "tauheeddev56"
   }
 }

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Modal,
   View,
@@ -20,8 +20,89 @@ import { ResizeMode, Video } from 'expo-av';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
 import * as ImageManipulator from 'expo-image-manipulator';
+import * as MediaLibrary from 'expo-media-library';
 import { createStory } from '@/lib/firebaseHelpers';
 import { feedEventEmitter } from '@/lib/feedEventEmitter';
+
+const AutoplayVideoPreview: React.FC<{ uri: string; style: any }> = ({ uri, style }) => {
+  const videoRef = React.useRef<Video>(null);
+  const [resolvedUri, setResolvedUri] = useState<string | null>(null);
+  const [isLoaded, setIsLoaded] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    async function resolve() {
+      if (uri.startsWith('ph://') || uri.startsWith('assets-library://') || uri.startsWith('content://')) {
+        try {
+          const assetId = uri.startsWith('ph://')
+            ? uri.replace('ph://', '').split('/')[0]
+            : uri.startsWith('content://')
+            ? uri.split('/').pop() || uri
+            : uri;
+          const assetInfo = await MediaLibrary.getAssetInfoAsync(assetId, { copyToLocalContainer: true } as any);
+          if (active && assetInfo?.localUri) {
+            setResolvedUri(assetInfo.localUri);
+            return;
+          }
+        } catch (e) {
+          console.warn('[AutoplayVideoPreview] Failed to resolve URI:', e);
+        }
+      }
+      if (active) {
+        setResolvedUri(uri);
+      }
+    }
+    resolve();
+    return () => {
+      active = false;
+    };
+  }, [uri]);
+
+  // Force play when loaded or resolved uri changes
+  useEffect(() => {
+    if (isLoaded && videoRef.current) {
+      videoRef.current.playAsync().catch(() => {});
+    }
+  }, [isLoaded, resolvedUri]);
+
+  return (
+    <View style={style}>
+      {!isLoaded && (
+        <View style={[StyleSheet.absoluteFillObject, { backgroundColor: '#000', justifyContent: 'center', alignItems: 'center', borderRadius: 12 }]}>
+          {uri.startsWith('ph://') || uri.startsWith('assets-library://') ? (
+            <Image
+              source={{ uri }}
+              style={{ width: '100%', height: '100%', borderRadius: 12 }}
+              resizeMode="cover"
+            />
+          ) : (
+            <ActivityIndicator size="small" color="#FF8D00" />
+          )}
+        </View>
+      )}
+      {resolvedUri && (
+        <Video
+          ref={videoRef}
+          source={{ uri: resolvedUri }}
+          style={[StyleSheet.absoluteFillObject, { opacity: isLoaded ? 1 : 0, borderRadius: 12 }]}
+          resizeMode={ResizeMode.COVER}
+          useNativeControls={false}
+          status={{
+            shouldPlay: true,
+            isMuted: true,
+            isLooping: true,
+          }}
+          onLoad={() => setIsLoaded(true)}
+          onPlaybackStatusUpdate={(status) => {
+            if (status.isLoaded && status.positionMillis >= 2000) {
+              videoRef.current?.setStatusAsync({ positionMillis: 0, shouldPlay: true }).catch(() => {});
+            }
+          }}
+        />
+      )}
+    </View>
+  );
+};
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const isSmallDevice = SCREEN_HEIGHT < 700;
@@ -94,13 +175,7 @@ export const UploadStoryModal: React.FC<UploadStoryModalProps> = ({
               {selectedMedia ? (
                 <View style={styles.mediaPreviewContainer}>
                   {selectedMedia.type === 'video' ? (
-                    <Video
-                      source={{ uri: selectedMedia.uri }}
-                      style={styles.modalImage}
-                      resizeMode={ResizeMode.COVER}
-                      useNativeControls
-                      shouldPlay={false}
-                    />
+                    <AutoplayVideoPreview uri={selectedMedia.uri} style={styles.modalImage} />
                   ) : (
                     <Image
                       source={{ uri: selectedMedia.uri }}

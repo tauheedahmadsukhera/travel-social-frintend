@@ -37,16 +37,16 @@ export default function SettingsScreen() {
             hapticLight();
             Alert.alert(
               'Send Feedback',
-              'Email your feedback or report an issue to support@travesocial.com',
+              'Email your feedback or report an issue to metrium.trips@gmail.com',
               [
                 { text: 'Cancel', style: 'cancel' },
                 {
                   text: 'Email', onPress: () => {
                     // Open mail client
-                    Linking.openURL('mailto:support@travesocial.com?subject=App Feedback').catch(() => {
+                    Linking.openURL('mailto:metrium.trips@gmail.com?subject=App Feedback').catch(() => {
                       Alert.alert(
                         'Error',
-                        'Unable to open mail client. Please send email manually to support@travesocial.com'
+                        'Unable to open mail client. Please send email manually to metrium.trips@gmail.com'
                       );
                     });
                   }
@@ -80,7 +80,7 @@ export default function SettingsScreen() {
           <Text style={styles.aboutTitle}>About Trips</Text>
           <Text style={styles.aboutText}>Version 1.0.0</Text>
           <Text style={styles.aboutText}>© 2025 tauhee56. All rights reserved.</Text>
-          <Text style={styles.aboutText}>For help or feedback, email support@travesocial.com</Text>
+          <Text style={styles.aboutText}>For help or feedback, email metrium.trips@gmail.com</Text>
         </View>
 
         {/* Legal Section */}

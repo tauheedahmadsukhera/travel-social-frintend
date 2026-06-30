@@ -159,7 +159,7 @@ export const EULAModal: React.FC<EULAModalProps> = ({
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>12. Contact</Text>
               <Text style={styles.sectionText}>
-                For questions regarding these Terms, contact:{'\n\n'}support@trips.app
+                For questions regarding these Terms, contact:{'\n\n'}metrium.trips@gmail.com
               </Text>
             </View>
           </ScrollView>

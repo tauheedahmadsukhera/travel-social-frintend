@@ -175,7 +175,7 @@ export default function PostScreen() {
           },
         });
       } else {
-        Alert.alert('Error', 'Failed to create post');
+        Alert.alert('Error', result?.error || 'Failed to create post');
       }
     } catch (error: any) {
       Alert.alert('Error', error.message || 'Failed to create post');

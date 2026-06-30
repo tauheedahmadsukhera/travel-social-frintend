@@ -99,7 +99,7 @@ export default function TermsOfServiceScreen() {
 
         <Text style={styles.sectionTitle}>12. Contact</Text>
         <Text style={styles.paragraph}>
-          For questions regarding these Terms, contact: support@trips.app
+          For questions regarding these Terms, contact: metrium.trips@gmail.com
         </Text>
 
         <Text style={styles.paragraph}>

@@ -59,13 +59,44 @@ export async function signInWithGoogle() {
     // For mobile (iOS/Android)
     if (GoogleSignin) {
       try {
-        // Expo Go is signed with Expo's keystore, not com.tauhee56.travesocial + your debug SHA-1 → DEVELOPER_ERROR forever.
+        // Expo Go on Android — use web-based OAuth (no SHA-1 needed)
         if (Platform.OS === 'android' && Constants.appOwnership === 'expo') {
-          return {
-            success: false,
-            error:
-              'Google Sign-In does not work in Expo Go on Android. Use a dev build (npx expo run:android or your EAS dev client APK), or use email login.',
-          };
+          const { makeRedirectUri } = await import('expo-auth-session');
+          const { GoogleAuthProvider, signInWithCredential } = await import('firebase/auth');
+          const WebBrowserModule = await import('expo-web-browser');
+
+          WebBrowserModule.maybeCompleteAuthSession();
+
+          const webClientId = '709095117662-2l84b3ua08t9icu8tpqtpchrmtdciep0.apps.googleusercontent.com';
+
+          const redirectUri = makeRedirectUri();
+
+          // Open Google OAuth in browser
+          const authUrl =
+            `https://accounts.google.com/o/oauth2/v2/auth` +
+            `?client_id=${webClientId}` +
+            `&redirect_uri=${encodeURIComponent(redirectUri)}` +
+            `&response_type=token` +
+            `&scope=profile%20email`;
+
+          const result = await WebBrowserModule.openAuthSessionAsync(authUrl, redirectUri);
+
+          if (result.type !== 'success' || !result.url) {
+            return { success: false, error: 'Google Sign-In cancelled' };
+          }
+
+          // Extract access_token from URL fragment
+          const params = new URLSearchParams(result.url.split('#')[1] || result.url.split('?')[1] || '');
+          const accessToken = params.get('access_token');
+
+          if (!accessToken) {
+            return { success: false, error: 'No access token received from Google' };
+          }
+
+          const authInstance = await requireAuth();
+          const credential = GoogleAuthProvider.credential(null, accessToken);
+          const firebaseResult = await signInWithCredential(authInstance, credential);
+          return { success: true, user: firebaseResult.user };
         }
 
         const webClientId = GOOGLE_SIGN_IN_CONFIG.webClientId?.trim();
@@ -499,12 +530,12 @@ export async function signInWithSnapchat() {
 
     console.log('🔑 Snapchat credentials loaded:', SNAPCHAT_CLIENT_ID_VAL ? '✓' : '✗');
 
-    if (!SNAPCHAT_CLIENT_ID_VAL) {
+    if (!SNAPCHAT_CLIENT_ID_VAL || SNAPCHAT_CLIENT_ID_VAL === 'undefined') {
       throw new Error('Snapchat credentials not configured');
     }
 
-    // Build Snapchat OAuth URL
-    const snapAuthUrl = `${discovery.authorizationEndpoint}?client_id=${SNAPCHAT_CLIENT_ID_VAL}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&scope=user.display_name%20user.bitmoji.avatar&prompt=consent`;
+    // Build Snapchat OAuth URL (no prompt=consent for faster return visits)
+    const snapAuthUrl = `${discovery.authorizationEndpoint}?client_id=${SNAPCHAT_CLIENT_ID_VAL}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&scope=user.display_name%20user.bitmoji.avatar`;
 
     // Open browser for authentication
     const snapResult = await WebBrowser.openAuthSessionAsync(snapAuthUrl, redirectUri);
@@ -516,30 +547,16 @@ export async function signInWithSnapchat() {
         throw new Error('No authorization code received');
       }
 
-      // Exchange code for access token via Cloud Function (secure)
-      console.log('🔐 Exchanging Snapchat code via Cloud Function...');
-      const cloudFunctionUrl = 'https://us-central1-travel-app-3da72.cloudfunctions.net/snapchatAuth';
-
-      const tokenAbort = new AbortController();
-      const tokenTimeout = setTimeout(() => tokenAbort.abort(), 15000);
-
-      const tokenResponse = await fetch(cloudFunctionUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          code: code,
-          redirectUri: redirectUri,
-        }),
-        signal: tokenAbort.signal,
+      // Exchange code via Express backend (always warm, no cold start)
+      console.log('🔐 Exchanging Snapchat code via Backend API...');
+      const { apiService } = await import('@/src/_services/apiService');
+      const tokenData = await apiService.post('/auth/snapchat', {
+        code: code,
+        redirectUri: redirectUri,
       });
 
-      clearTimeout(tokenTimeout);
-      const tokenData = await tokenResponse.json();
-
-      if (!tokenData.success || !tokenData.externalId) {
-        throw new Error(tokenData.error || 'Failed to get Snapchat user data');
+      if (!tokenData || !tokenData.success || !tokenData.externalId) {
+        throw new Error(tokenData?.error || 'Failed to get Snapchat user data');
       }
 
       console.log('✅ Snapchat user data received:', tokenData.displayName);

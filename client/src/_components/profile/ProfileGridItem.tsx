@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { TouchableOpacity, StyleSheet, Dimensions } from 'react-native';
 import { Image as ExpoImage } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
@@ -35,7 +35,29 @@ const ProfileGridItem = React.memo(({
   const isVideo = item.mediaType === 'video' || firstMediaType === 'video' || isVideoUrl(primaryMediaUrl);
   const mediaUrl = explicitThumbnailUrl || (isVideo ? getVideoThumbnailUrl(primaryMediaUrl) : primaryMediaUrl) || '';
   
-  const normalizedUrl = normalizeMediaUrl(mediaUrl) || DEFAULT_IMAGE_URL;
+  const [localThumbnail, setLocalThumbnail] = useState<string | null>(null);
+
+  useEffect(() => {
+    let isMounted = true;
+    if (isVideo && !explicitThumbnailUrl && primaryMediaUrl) {
+      (async () => {
+        try {
+          const { getThumbnailAsync } = await import('expo-video-thumbnails');
+          const { uri } = await getThumbnailAsync(primaryMediaUrl, { time: 1000 });
+          if (isMounted) {
+            setLocalThumbnail(uri);
+          }
+        } catch (e) {
+          console.warn('[ProfileGridItem] Failed to generate video thumbnail:', e);
+        }
+      })();
+    }
+    return () => {
+      isMounted = false;
+    };
+  }, [isVideo, explicitThumbnailUrl, primaryMediaUrl]);
+
+  const normalizedUrl = normalizeMediaUrl(localThumbnail || mediaUrl) || DEFAULT_IMAGE_URL;
 
   return (
     <TouchableOpacity

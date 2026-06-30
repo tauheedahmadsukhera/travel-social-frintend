@@ -74,11 +74,16 @@ export function useProfileData({ viewedUserId, currentUserId, enabled }: UseProf
       return profileRes.data;
     },
     enabled: enabled && !!viewedUserId,
-    staleTime: 1000 * 60 * 5, // 5 minutes cache
+    staleTime: 1000 * 30,       // 30 seconds — keep follow/follower state fresh
+    gcTime: 1000 * 60 * 30,
+    retry: 2,
+    retryDelay: (attempt: number) => Math.min(1000 * 2 ** attempt, 10000),
   });
 
   const profileData = profileQuery.data || cachedData?.profile;
-  const canViewPrivateProfile = !!profileData?.hasAccess;
+  const isOwnProfile = viewedUserId === currentUserId;
+  // For own profile, always allow access. For others, check hasAccess from server.
+  const canViewPrivateProfile = isOwnProfile || !!profileData?.hasAccess;
 
   // 2. Fetch User Posts
   const postsQuery = useQuery({
@@ -89,7 +94,8 @@ export function useProfileData({ viewedUserId, currentUserId, enabled }: UseProf
       return res?.success && Array.isArray(res.data) ? res.data : [];
     },
     enabled: enabled && !!viewedUserId && canViewPrivateProfile,
-    staleTime: 1000 * 60 * 2,
+    staleTime: 1000 * 30, // 30 seconds (down from 5 minutes)
+    gcTime: 1000 * 60 * 30,
   });
 
   // 3. Fetch User Sections (Collections)
@@ -101,7 +107,8 @@ export function useProfileData({ viewedUserId, currentUserId, enabled }: UseProf
       return res?.success && Array.isArray(res.data) ? res.data : [];
     },
     enabled: enabled && !!viewedUserId && canViewPrivateProfile,
-    staleTime: 1000 * 60 * 5,
+    staleTime: 1000 * 60 * 10,
+    gcTime: 1000 * 60 * 30,
   });
 
   // 4. Fetch User Stories
@@ -118,11 +125,11 @@ export function useProfileData({ viewedUserId, currentUserId, enabled }: UseProf
       }
     },
     enabled: enabled && !!viewedUserId && canViewPrivateProfile,
-    staleTime: 1000 * 60 * 1, // Stories change frequently
+    staleTime: 1000 * 60 * 2, // Stories change fairly frequently
+    gcTime: 1000 * 60 * 15,
   });
 
   // 5. Fetch Saved Posts (if viewing own profile)
-  const isOwnProfile = viewedUserId === currentUserId;
   const savedPostsQuery = useQuery({
     queryKey: ['profileSavedPosts', viewedUserId],
     queryFn: async () => {
@@ -175,7 +182,8 @@ export function useProfileData({ viewedUserId, currentUserId, enabled }: UseProf
       }
     },
     enabled: enabled && !!viewedUserId && canViewPrivateProfile,
-    staleTime: 1000 * 60 * 5,
+    staleTime: 1000 * 60 * 10,
+    gcTime: 1000 * 60 * 30,
   });
 
   // Cache fresh data to AsyncStorage on updates
@@ -201,6 +209,38 @@ export function useProfileData({ viewedUserId, currentUserId, enabled }: UseProf
       console.warn('[useProfileData] Caching failed:', e);
     });
   }, [viewedUserId, cacheKey, profileQuery.data, postsData, sectionsData, storiesData, savedPostsData, taggedPostsData, highlightsData]);
+
+  // Listen for feed events to invalidate the cache instantly when a post is created, updated, or deleted
+  useEffect(() => {
+    if (!viewedUserId) return;
+
+    try {
+      const { feedEventEmitter } = require('@/lib/feedEventEmitter');
+
+      const unsub = feedEventEmitter.onFeedUpdate((event: any) => {
+        if (event.type === 'POST_CREATED') {
+          queryClient.invalidateQueries({ queryKey: ['profilePosts', viewedUserId] });
+          queryClient.invalidateQueries({ queryKey: ['profile', viewedUserId, currentUserId] });
+        } else if (event.type === 'POST_DELETED' && event.postId) {
+          queryClient.invalidateQueries({ queryKey: ['profilePosts', viewedUserId] });
+          queryClient.invalidateQueries({ queryKey: ['profile', viewedUserId, currentUserId] });
+        } else if (event.type === 'POST_UPDATED' && event.postId) {
+          queryClient.invalidateQueries({ queryKey: ['profilePosts', viewedUserId] });
+        }
+      });
+
+      const sub = feedEventEmitter.addListener('feedUpdated', () => {
+        queryClient.invalidateQueries({ queryKey: ['profilePosts', viewedUserId] });
+      });
+
+      return () => {
+        unsub();
+        sub.remove();
+      };
+    } catch (e) {
+      console.warn('[useProfileData] Failed to bind feedEventEmitter:', e);
+    }
+  }, [viewedUserId, currentUserId, queryClient]);
 
   const showSpinner = profileQuery.isLoading && isSeedingCache && !cachedData?.profile;
 

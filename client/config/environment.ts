@@ -73,6 +73,9 @@ function getEnvVar(key: string, defaultValue?: string): string {
       normalized === 'set_in_env' ||
       normalized === 'set_in_eas_env' ||
       normalized === 'set_google_maps_api_key_in_build_env' ||
+      normalized === 'undefined' ||
+      normalized === 'null' ||
+      normalized === 'false' ||
       normalized.startsWith('set_') ||
       normalized.includes('placeholder') ||
       normalized.includes('your-') ||
