@@ -8,7 +8,7 @@
     "scheme": "trave-social",
     "userInterfaceStyle": "light",
     "android": {
-      "versionCode": 126,
+      "versionCode": 127,
       "adaptiveIcon": {
         "backgroundColor": "#FFFFFF",
         "foregroundImage": "./assets/images/icon.png",

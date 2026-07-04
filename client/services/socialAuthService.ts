@@ -353,18 +353,11 @@ export async function signInWithTikTok() {
     // TikTok OAuth endpoints
     const discovery = {
       authorizationEndpoint: 'https://www.tiktok.com/v2/auth/authorize/',
-      tokenEndpoint: 'https://open.tiktokapis.com/v2/oauth/token/',
+      tokenEndpoint: 'https://open.tiktokapis.com/v2/oauth/token',
     };
 
-    // Redirect URI - must match TikTok Developer Console
-    const isExpoGo = Constants.appOwnership === 'expo';
-    const redirectUri = makeRedirectUri({
-      scheme: 'trave-social',
-      path: 'oauth/redirect',
-      preferLocalhost: false,
-      isTripleSlashed: false, // Changed to false for better compatibility
-      ...(isExpoGo ? { useProxy: true } : {}),
-    });
+    // Redirect URI - must match TikTok Developer Console and must be HTTPS
+    const redirectUri = 'https://travel-social-backend.onrender.com/api/auth/tiktok/callback';
 
     // Generate random state for CSRF protection (required by TikTok)
     const stateBytes = await ExpoCrypto.getRandomBytesAsync(16);
@@ -380,10 +373,10 @@ export async function signInWithTikTok() {
 
     console.log('TikTok Auth URL:', authUrl);
 
-    // Open browser for authentication with longer timeout
+    // Open browser for authentication, listening for the custom app link redirect
     const result = await WebBrowser.openAuthSessionAsync(
       authUrl,
-      redirectUri,
+      'trave-social://oauth/redirect',
       {
         showInRecents: true,
         createTask: true // Android only - open in new task
