@@ -10,13 +10,13 @@ export default {
   "expo": {
     "name": "Trips",
     "slug": "trave-social",
-    "version": "1.1.1",
+    "version": "1.1.2",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "trave-social",
     "userInterfaceStyle": "light",
     "android": {
-      "versionCode": 124,
+      "versionCode": 126,
       "adaptiveIcon": {
         "backgroundColor": "#FFFFFF",
         "foregroundImage": "./assets/images/icon.png",
