@@ -582,6 +582,16 @@ export default function DM() {
           statusText={isOtherTyping ? 'typing...' : (otherUserPresence?.status === 'online' ? 'Online' : '')}
           onBack={() => safeRouterBack()}
           onInfo={() => setShowOptionsModal(true)}
+          onTitlePress={() => {
+            if (isGroupConversation) {
+              setShowOptionsModal(true);
+            } else if (otherUserId) {
+              router.push({
+                pathname: '/user-profile',
+                params: { uid: otherUserId }
+              } as any);
+            }
+          }}
         />
         <View style={{ flex: 1 }}>
           {renderContent()}

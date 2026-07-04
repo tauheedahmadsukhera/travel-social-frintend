@@ -735,27 +735,32 @@ function Inbox() {
     const conversationId = actionItem?.conversationId || actionItem?.id || actionItem?._id;
     if (!conversationId || !userId) return;
 
-    closeActions();
-    try {
-      setConversations((prev: any[] | null) => {
-        if (!Array.isArray(prev)) return prev;
-        return prev.filter((c: any) => {
-          const participants = Array.isArray(c?.participants) ? c.participants.map(String) : [];
-          const otherId = participants.find((p: string) => p !== String(userId));
-          const cid = c?.conversationId || c?.id || c?._id;
-          if (actionOtherUserId && otherId && String(otherId) === String(actionOtherUserId)) return false;
-          return String(cid) !== String(conversationId);
-        });
-      });
+    // Start API request immediately
+    const deletePromise = deleteConversation(String(conversationId), String(userId));
 
-      const result = await deleteConversation(String(conversationId), String(userId));
-      if (!result?.success) {
+    // Optimistically remove from list
+    setConversations((prev: any[] | null) => {
+      if (!Array.isArray(prev)) return prev;
+      return prev.filter((c: any) => {
+        const participants = Array.isArray(c?.participants) ? c.participants.map(String) : [];
+        const otherId = participants.find((p: string) => p !== String(userId));
+        const cid = c?.conversationId || c?.id || c?._id;
+        if (actionOtherUserId && otherId && String(otherId) === String(actionOtherUserId)) return false;
+        return String(cid) !== String(conversationId);
+      });
+    });
+
+    try {
+      const result = await deletePromise;
+      if (result?.success) {
+        await forceRefresh();
+      } else {
         await refreshInbox();
       }
     } catch {
       await refreshInbox();
     }
-  }, [actionItem, actionOtherUserId, closeActions, refreshInbox, userId]);
+  }, [actionItem, actionOtherUserId, refreshInbox, forceRefresh, userId]);
 
   useEffect(() => {
     // Only set loading if actually loading
@@ -1040,7 +1045,7 @@ function Inbox() {
               router.push({
                 pathname: '/dm',
                 params: {
-                  conversationId: it._id || it.id,
+                  conversationId: it.conversationId || it.id || it._id,
                   otherUserId: it.otherUserId || it.id,
                   user: it.displayName || 'User',
                   isGroup: it.isGroup ? '1' : '0'

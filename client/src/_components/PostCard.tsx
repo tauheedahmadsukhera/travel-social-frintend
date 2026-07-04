@@ -50,7 +50,7 @@ const PostCard: React.FC<PostCardProps> = ({
     if (post?.isLiked !== undefined) return post.isLiked;
 
     // 2. Fallback to local calculation (Standard MongoDB _id only)
-    const myId = String(currentUser?._id || currentUser?.id || currentUser?.uid || currentUser?.firebaseUid || '');
+    const myId = String(currentUser?._id || currentUser?.id || currentUser?.uid || currentUser?.firebaseUid || (typeof currentUser === 'string' ? currentUser : '') || user?._id || user?.id || user?.uid || '');
     if (myId && Array.isArray(post?.likes)) {
       return post.likes.some((id: any) => {
         const lid = String(id?._id || id?.id || id?.uid || id?.firebaseUid || id || '');
@@ -69,6 +69,7 @@ const PostCard: React.FC<PostCardProps> = ({
   const [showShare, setShowShare] = useState(false);
   const [showFullScreen, setShowFullScreen] = useState<number | null>(null);
   const [showPostMenu, setShowPostMenu] = useState(false);
+  const [showTagsOverlay, setShowTagsOverlay] = useState(false);
   const [localReactions, setLocalReactions] = useState<any[]>(post?.reactions || []);
   const [localCommentCount, setLocalCommentCount] = useState<number>(
     post?.commentCount !== undefined ? post.commentCount : (post?.commentsCount || 0)
@@ -83,7 +84,7 @@ const PostCard: React.FC<PostCardProps> = ({
     }
 
     // 2. Fallback to local calculation (Standard MongoDB _id only)
-    const myId = String(currentUser?._id || currentUser?.id || currentUser?.uid || currentUser?.firebaseUid || '');
+    const myId = String(currentUser?._id || currentUser?.id || currentUser?.uid || currentUser?.firebaseUid || (typeof currentUser === 'string' ? currentUser : '') || user?._id || user?.id || user?.uid || '');
     if (myId && Array.isArray(post?.likes)) {
       const liked = post.likes.some((id: any) => {
         const lid = String(id?._id || id?.id || id?.uid || id?.firebaseUid || id || '');
@@ -91,7 +92,7 @@ const PostCard: React.FC<PostCardProps> = ({
       });
       setIsLiked(liked);
     }
-  }, [currentUser?._id, currentUser?.id, post?.likes, post?.isLiked]);
+  }, [currentUser, user, post?.likes, post?.isLiked]);
   const videoRef = useRef<any>(null);
 
 
@@ -307,21 +308,94 @@ const PostCard: React.FC<PostCardProps> = ({
         showMenu={showMenu}
       />
 
-      <PostMedia 
-        media={mediaData}
-        activeIndex={activeIndex}
-        onScroll={onScroll}
-        onMediaPress={(index) => {
-          setShowFullScreen(index);
-        }}
-        onDoubleTap={() => {
-          if (!isLiked) handleLike();
-          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        }}
-        isMuted={isMuted}
-        toggleMute={() => setIsMuted(!isMuted)}
-        videoRef={videoRef}
-      />
+      <View style={{ position: 'relative' }}>
+        <PostMedia 
+          media={mediaData}
+          activeIndex={activeIndex}
+          onScroll={onScroll}
+          onMediaPress={(index) => {
+            if (post?.taggedUsers && post.taggedUsers.length > 0) {
+              setShowTagsOverlay(!showTagsOverlay);
+            } else {
+              setShowFullScreen(index);
+            }
+          }}
+          onDoubleTap={() => {
+            if (!isLiked) handleLike();
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          }}
+          isMuted={isMuted}
+          toggleMute={() => setIsMuted(!isMuted)}
+          videoRef={videoRef}
+        />
+
+        {/* Small silhouette person icon overlay at bottom-left, exactly like Instagram */}
+        {post?.taggedUsers && post.taggedUsers.length > 0 && (
+          <TouchableOpacity
+            onPress={() => setShowTagsOverlay(!showTagsOverlay)}
+            activeOpacity={0.8}
+            style={{
+              position: 'absolute',
+              bottom: 12,
+              left: 12,
+              backgroundColor: 'rgba(0, 0, 0, 0.65)',
+              width: 32,
+              height: 32,
+              borderRadius: 16,
+              justifyContent: 'center',
+              alignItems: 'center',
+              zIndex: 50,
+            }}
+          >
+            <Ionicons name="person-outline" size={16} color="#fff" />
+          </TouchableOpacity>
+        )}
+
+        {/* Small floating tag bubbles overlayed on center-bottom of image */}
+        {showTagsOverlay && post?.taggedUsers && post.taggedUsers.length > 0 && (
+          <View style={{
+            position: 'absolute',
+            bottom: 50,
+            left: 16,
+            right: 16,
+            flexDirection: 'row',
+            flexWrap: 'wrap',
+            gap: 8,
+            zIndex: 40,
+          }}>
+            {post.taggedUsers.map((taggedUser: any, idx: number) => {
+              const uId = taggedUser._id || taggedUser.id || taggedUser.uid;
+              return (
+                <TouchableOpacity
+                  key={idx}
+                  activeOpacity={0.9}
+                  onPress={() => {
+                    if (uId) {
+                      setShowTagsOverlay(false);
+                      router.push(`/user-profile?uid=${uId}` as any);
+                    }
+                  }}
+                  style={{
+                    backgroundColor: 'rgba(0, 0, 0, 0.85)',
+                    paddingHorizontal: 12,
+                    paddingVertical: 7,
+                    borderRadius: 6,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    borderWidth: 0.5,
+                    borderColor: 'rgba(255, 255, 255, 0.15)',
+                  }}
+                >
+                  <Ionicons name="person" size={10} color="#fff" style={{ marginRight: 4 }} />
+                  <Text style={{ color: '#fff', fontSize: 12, fontWeight: '600' }}>
+                    @{taggedUser.username || taggedUser.displayName || 'user'}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        )}
+      </View>
 
 
       <View style={{ backgroundColor: '#fff' }}>
@@ -335,7 +409,7 @@ const PostCard: React.FC<PostCardProps> = ({
           likeCount={likeCount}
           commentCount={localCommentCount}
           reactions={localReactions}
-          currentUserId={currentUser?._id || currentUser?.id || currentUser?.uid || user?._id || user?.id || user?.uid}
+          currentUserId={currentUser?._id || currentUser?.id || currentUser?.uid || (typeof currentUser === 'string' ? currentUser : '') || user?._id || user?.id || user?.uid}
         />
 
         <PostCaption 
@@ -390,13 +464,24 @@ const PostCard: React.FC<PostCardProps> = ({
                 style={{ flexDirection: 'row', alignItems: 'center', padding: 18 }}
                 onPress={() => {
                   setShowPostMenu(false);
-                  Alert.alert("Delete", "Are you sure?", [
-                    { text: "Cancel" },
-                    { text: "Delete", style: "destructive", onPress: async () => {
-                       await apiService.delete(`/posts/${post._id}`);
-                       feedEventEmitter.emitFeedUpdate({ type: 'POST_DELETED', postId: post._id });
-                    }}
-                  ]);
+                  setTimeout(() => {
+                    Alert.alert("Delete", "Are you sure?", [
+                      { text: "Cancel" },
+                      { text: "Delete", style: "destructive", onPress: async () => {
+                         try {
+                           const res = await apiService.delete(`/posts/${post._id}`);
+                           if (res && res.success) {
+                             feedEventEmitter.emitFeedUpdate({ type: 'POST_DELETED', postId: post._id });
+                             Alert.alert("Success", "Post deleted successfully.");
+                           } else {
+                             Alert.alert("Error", res?.error || "Failed to delete post.");
+                           }
+                         } catch (err: any) {
+                           Alert.alert("Error", err.response?.data?.error || err.message || "Failed to delete post.");
+                         }
+                      }}
+                    ]);
+                  }, 300);
                 }}
               >
                 <Feather name="trash-2" size={22} color="#ff4d4d" />
@@ -409,7 +494,9 @@ const PostCard: React.FC<PostCardProps> = ({
                 style={{ flexDirection: 'row', alignItems: 'center', padding: 18 }}
                 onPress={() => {
                   setShowPostMenu(false);
-                  setShowShare(true);
+                  setTimeout(() => {
+                    setShowShare(true);
+                  }, 650); // Increased from 300ms to 650ms to ensure full options modal dismissal transition
                 }}
               >
                 <Feather name="share-2" size={22} color="#333" />
@@ -420,16 +507,18 @@ const PostCard: React.FC<PostCardProps> = ({
                 style={{ flexDirection: 'row', alignItems: 'center', padding: 18 }}
                 onPress={() => {
                   setShowPostMenu(false);
-                  Alert.alert(
-                    "Report Post",
-                    "Why are you reporting this post?",
-                    [
-                      { text: "Spam", onPress: () => submitPostReport('spam') },
-                      { text: "Inappropriate", onPress: () => submitPostReport('inappropriate') },
-                      { text: "Harassment", onPress: () => submitPostReport('harassment') },
-                      { text: "Cancel", style: "cancel" }
-                    ]
-                  );
+                  setTimeout(() => {
+                    Alert.alert(
+                      "Report Post",
+                      "Why are you reporting this post?",
+                      [
+                        { text: "Spam", onPress: () => submitPostReport('spam') },
+                        { text: "Inappropriate", onPress: () => submitPostReport('inappropriate') },
+                        { text: "Harassment", onPress: () => submitPostReport('harassment') },
+                        { text: "Cancel", style: "cancel" }
+                      ]
+                    );
+                  }, 300);
                 }}
               >
                 <Feather name="flag" size={22} color="#ff4d4d" />
@@ -440,30 +529,32 @@ const PostCard: React.FC<PostCardProps> = ({
                 style={{ flexDirection: 'row', alignItems: 'center', padding: 18 }}
                 onPress={() => {
                   setShowPostMenu(false);
-                  Alert.alert(
-                    "Block User",
-                    `Are you sure you want to block ${postUserName}? You won't see their posts anymore.`,
-                    [
-                      { text: "Cancel", style: "cancel" },
-                      { 
-                        text: "Block", 
-                        style: "destructive", 
-                        onPress: async () => {
-                          try {
-                            const myId = currentUser?._id || currentUser?.id || currentUser?.uid;
-                            const targetId = post?.userId?._id || post?.userId;
-                            if (myId && targetId) {
-                              await apiService.blockUser(String(myId), String(targetId));
-                              Alert.alert("Blocked", "You will no longer see posts from this user.");
-                              feedEventEmitter.emitFeedUpdate({ type: 'USER_BLOCKED', userId: targetId });
+                  setTimeout(() => {
+                    Alert.alert(
+                      "Block User",
+                      `Are you sure you want to block ${postUserName}? You won't see their posts anymore.`,
+                      [
+                        { text: "Cancel", style: "cancel" },
+                        { 
+                          text: "Block", 
+                          style: "destructive", 
+                          onPress: async () => {
+                            try {
+                              const myId = currentUser?._id || currentUser?.id || currentUser?.uid || (typeof currentUser === 'string' ? currentUser : '') || user?._id || user?.id || user?.uid;
+                              const targetId = post?.userId?._id || post?.userId;
+                              if (myId && targetId) {
+                                await apiService.blockUser(String(myId), String(targetId));
+                                Alert.alert("Blocked", "You will no longer see posts from this user.");
+                                feedEventEmitter.emitFeedUpdate({ type: 'USER_BLOCKED', userId: targetId });
+                              }
+                            } catch (err) {
+                              Alert.alert("Error", "Failed to block user.");
                             }
-                          } catch (err) {
-                            Alert.alert("Error", "Failed to block user.");
-                          }
-                        } 
-                      }
-                    ]
-                  );
+                          } 
+                        }
+                      ]
+                    );
+                  }, 300);
                 }}
               >
                 <Feather name="slash" size={22} color="#ff4d4d" />
@@ -563,27 +654,9 @@ const PostCard: React.FC<PostCardProps> = ({
           visible={showShare}
           onClose={() => setShowShare(false)}
           onSend={async (userIds) => {
-            try {
-              const activeUserId = currentUser?._id || currentUser?.id || currentUser?.uid || currentUser?.firebaseUid;
-              if (!activeUserId) return;
-              
-              for (const recipientId of userIds) {
-                // Determine conversation ID (consistent with backend logic)
-                const participants = [String(activeUserId), String(recipientId)].sort();
-                const convoId = `${participants[0]}_${participants[1]}`;
-                
-                await sendPostMessage(convoId, String(activeUserId), post, {
-                  recipientId: String(recipientId)
-                });
-              }
-              // Removed success alert as requested
-
-            } catch (err) {
-              console.error('[PostCard] Share error:', err);
-              Alert.alert('Error', 'Failed to share post');
-            }
+            setShowShare(false);
           }}
-          currentUserId={currentUser?._id || currentUser?.id || currentUser?.uid}
+          currentUserId={currentUser?._id || currentUser?.id || currentUser?.uid || (typeof currentUser === 'string' ? currentUser : '') || user?._id || user?.id || user?.uid}
           sharePayload={post}
           modalVariant="home"
           onAddToStory={() => {

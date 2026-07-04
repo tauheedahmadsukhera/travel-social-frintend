@@ -10,6 +10,7 @@ type DMHeaderProps = {
   statusText?: string;
   onBack: () => void;
   onInfo: () => void;
+  onTitlePress?: () => void;
   onCall?: () => void;
   onVideoCall?: () => void;
 };
@@ -21,6 +22,7 @@ const DMHeader: React.FC<DMHeaderProps> = ({
   statusText,
   onBack,
   onInfo,
+  onTitlePress,
   onCall,
   onVideoCall,
 }) => {
@@ -30,7 +32,7 @@ const DMHeader: React.FC<DMHeaderProps> = ({
         <Feather name="chevron-left" size={28} color="#000" />
       </TouchableOpacity>
 
-      <TouchableOpacity style={styles.headerTitle} onPress={onInfo} activeOpacity={0.7}>
+      <TouchableOpacity style={styles.headerTitle} onPress={onTitlePress || onInfo} activeOpacity={0.7}>
         <Image source={{ uri: avatarUri || DEFAULT_AVATAR_URL }} style={styles.headerAvatar} />
         <View style={styles.headerNameContainer}>
           <Text style={styles.headerName} numberOfLines={1}>

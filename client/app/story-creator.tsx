@@ -499,6 +499,7 @@ export default function StoryCreatorScreen() {
 
             let uploadUri = selectedUri;
             const mediaType = selectedAsset?.mediaType || 'photo';
+            let textBaked = false;
             if (mediaType === 'photo') {
                 if (textOverlays.length > 0 && captureRef !== null) {
                     try {
@@ -509,7 +510,10 @@ export default function StoryCreatorScreen() {
                             quality: 0.92,
                             result: 'tmpfile',
                         });
-                        if (capturedUri) uploadUri = capturedUri;
+                        if (capturedUri) {
+                            uploadUri = capturedUri;
+                            textBaked = true;
+                        }
                     } catch (e) {
                         console.warn('[StoryCreator] Failed to capture preview with text overlays:', e);
                     }
@@ -530,7 +534,12 @@ export default function StoryCreatorScreen() {
             const finalPostMetadata = (() => {
                 const meta: Record<string, unknown> = {};
                 if (sharedPostMetadata) Object.assign(meta, sharedPostMetadata);
-                if (textOverlays.length > 0) meta.textOverlays = textOverlays;
+                if (textOverlays.length > 0) {
+                    meta.textOverlays = textOverlays;
+                    if (textBaked) {
+                        meta.textBaked = true;
+                    }
+                }
                 return Object.keys(meta).length > 0 ? meta : undefined;
             })();
 

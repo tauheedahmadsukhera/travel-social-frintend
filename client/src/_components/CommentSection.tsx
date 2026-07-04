@@ -28,6 +28,7 @@ import {
 
 import { apiService } from '@/src/_services/apiService';
 import { feedEventEmitter } from "../../lib/feedEventEmitter";
+import { getAuthenticatedUserId } from '../../lib/currentUser';
 import CommentAvatar from "./CommentAvatar";
 import { useUser } from "./UserContext";
 import { CommentItem } from "./CommentItem";
@@ -87,9 +88,36 @@ export const CommentSection: React.FC<CommentSectionProps> = ({
   const [editValue, setEditValue] = useState("");
 
   const userFromContext = useUser();
-  const currentUser = userProp || userFromContext;
-  const currentUserId = currentUser?.uid || currentUser?._id;
-  const resolvedCurrentAvatar = currentAvatar || DEFAULT_AVATAR_URL;
+  const [resolvedUserId, setResolvedUserId] = useState<string>('');
+  const [localCurrentUser, setLocalCurrentUser] = useState<any>(null);
+
+  useEffect(() => {
+    const resolveUser = async () => {
+      try {
+        const uidFromAuth = await getAuthenticatedUserId();
+        const resolvedId = uidFromAuth || (typeof userProp === 'string' ? userProp : (userProp?.uid || userProp?._id || userFromContext?.uid || userFromContext?._id || ''));
+        setResolvedUserId(resolvedId);
+
+        if (resolvedId) {
+          if (userProp && typeof userProp === 'object' && (userProp.username || userProp.displayName)) {
+            setLocalCurrentUser(userProp);
+          } else {
+            const response = await apiService.getUser(resolvedId);
+            if (response?.success && response?.data) {
+              setLocalCurrentUser(response.data);
+            }
+          }
+        }
+      } catch (e) {
+        console.warn('[CommentSection] resolveUser failed:', e);
+      }
+    };
+    resolveUser();
+  }, [userProp, userFromContext]);
+
+  const currentUser = localCurrentUser || (userProp && typeof userProp === 'object' ? userProp : null) || userFromContext;
+  const currentUserId = resolvedUserId || currentUser?.uid || currentUser?._id || '';
+  const resolvedCurrentAvatar = currentAvatar || currentUser?.avatar || currentUser?.photoURL || DEFAULT_AVATAR_URL;
 
   const quickEmojis = ['❤️', '🙌', '🔥', '👏', '😢', '😍', '😮', '😂'];
   const allEmojis = [...quickEmojis, '👍', '🙏', '💯', '✨', '🎉', '🤩', '🤔', '🥳', '😎', '💔', '😭', '😡', '💀', '👀', '🚀', '🌈'];
@@ -156,23 +184,53 @@ export const CommentSection: React.FC<CommentSectionProps> = ({
 
     const trimmedText = newComment.trim();
     const optimisticId = `optimistic-${Date.now()}`;
+    
+    // Fallback: derive name from email prefix if displayName/name/username are placeholder or missing
+    const rawEmail = currentUser?.email || '';
+    const emailName = rawEmail && rawEmail.includes('@') ? rawEmail.split('@')[0] : '';
+    const resolvedUserName = currentUser?.username || currentUser?.displayName || currentUser?.name || emailName || 'user';
+
+    // Calculate optimistic new comment count
+    const currentCount = comments.reduce((acc, c) => acc + 1 + (c.replies?.length || 0), 0);
+    const optimisticCount = currentCount + 1;
 
     try {
       if (isStory) {
-        await apiService.post(`/stories/${postId}/comments`, {
+        // Optimistically insert story comment immediately
+        const optimisticComment: Comment = {
+          id: optimisticId,
           text: trimmedText,
-          userName: currentUser?.displayName || 'User'
-        });
+          userId: currentUserId,
+          userName: resolvedUserName,
+          userAvatar: resolvedCurrentAvatar,
+          createdAt: new Date().toISOString(),
+          likes: [],
+          likesCount: 0,
+          replies: [],
+          reactions: {},
+        };
+        setComments(prev => [optimisticComment, ...prev]);
         setNewComment('');
         setReplyTo(null);
-        await loadData();
+
+        // Emit optimistic count update
+        feedEventEmitter.emit('commentCountUpdated', { postId, count: optimisticCount });
+
+        await apiService.post(`/stories/${postId}/comments`, {
+          text: trimmedText,
+          userName: resolvedUserName,
+          userAvatar: resolvedCurrentAvatar,
+          userId: currentUserId
+        });
+        // Sync real data silently
+        loadData().catch(() => {});
       } else if (replyTo) {
         // Optimistically insert reply immediately
         const optimisticReply: Comment = {
           id: optimisticId,
           text: trimmedText,
           userId: currentUserId,
-          userName: currentUser?.displayName || 'User',
+          userName: resolvedUserName,
           userAvatar: resolvedCurrentAvatar,
           createdAt: new Date().toISOString(),
           likes: [],
@@ -191,10 +249,13 @@ export const CommentSection: React.FC<CommentSectionProps> = ({
         setNewComment('');
         setReplyTo(null);
 
+        // Emit optimistic count update
+        feedEventEmitter.emit('commentCountUpdated', { postId, count: optimisticCount });
+
         // Send to server and reconcile in background
         await addCommentReply(postId, replyTo.id, {
           userId: currentUserId,
-          userName: currentUser?.displayName || 'User',
+          userName: resolvedUserName,
           userAvatar: resolvedCurrentAvatar,
           text: trimmedText,
         });
@@ -206,7 +267,7 @@ export const CommentSection: React.FC<CommentSectionProps> = ({
           id: optimisticId,
           text: trimmedText,
           userId: currentUserId,
-          userName: currentUser?.displayName || 'User',
+          userName: resolvedUserName,
           userAvatar: resolvedCurrentAvatar,
           createdAt: new Date().toISOString(),
           likes: [],
@@ -218,7 +279,10 @@ export const CommentSection: React.FC<CommentSectionProps> = ({
         setNewComment('');
         setReplyTo(null);
 
-        await addComment(postId, currentUserId, currentUser?.displayName || 'User', resolvedCurrentAvatar, trimmedText);
+        // Emit optimistic count update
+        feedEventEmitter.emit('commentCountUpdated', { postId, count: optimisticCount });
+
+        await addComment(postId, currentUserId, resolvedUserName, resolvedCurrentAvatar, trimmedText);
         feedEventEmitter.emit('commentAdded', { postId });
         // Sync real data silently
         loadData().catch(() => {});
@@ -226,10 +290,16 @@ export const CommentSection: React.FC<CommentSectionProps> = ({
     } catch (e) {
       console.error(e);
       // Rollback optimistic update on error
-      setComments(prev => prev.filter(c => {
-        if (c.id === optimisticId) return false;
-        return { ...c, replies: (c.replies || []).filter(r => r.id !== optimisticId) };
-      }));
+      setComments(prev => 
+        prev
+          .filter(c => c.id !== optimisticId)
+          .map(c => ({
+            ...c,
+            replies: (c.replies || []).filter(r => r.id !== optimisticId)
+          }))
+      );
+      // Rollback optimistic count
+      feedEventEmitter.emit('commentCountUpdated', { postId, count: currentCount });
     } finally {
       setIsSubmitting(false);
     }

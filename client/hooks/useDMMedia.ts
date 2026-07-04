@@ -39,7 +39,13 @@ export function useDMMedia() {
       allowsEditing: false,
       quality: 0.7,
     });
-    return res.canceled ? null : res.assets[0];
+    if (res.canceled) return null;
+    const asset = res.assets[0];
+    if (asset.fileSize && asset.fileSize > 10 * 1024 * 1024) {
+      Alert.alert('File Too Large', 'Please select an image or video smaller than 10MB.');
+      return null;
+    }
+    return asset;
   }, []);
 
   const handleLaunchCamera = useCallback(async () => {
@@ -48,7 +54,13 @@ export function useDMMedia() {
       allowsEditing: false,
       quality: 0.7,
     });
-    return res.canceled ? null : res.assets[0];
+    if (res.canceled) return null;
+    const asset = res.assets[0];
+    if (asset.fileSize && asset.fileSize > 10 * 1024 * 1024) {
+      Alert.alert('File Too Large', 'Please select an image or video smaller than 10MB.');
+      return null;
+    }
+    return asset;
   }, []);
 
   const startRecording = useCallback(async () => {

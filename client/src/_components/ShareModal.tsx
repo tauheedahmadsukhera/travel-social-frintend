@@ -56,6 +56,63 @@ export default function ShareModal({
   const [users, setUsers] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [selectedUsers, setSelectedUsers] = useState<string[]>([]);
+  const [sendingMessage, setSendingMessage] = useState(false);
+
+  const handleSendPress = async () => {
+    if (!currentUserId || selectedUsers.length === 0 || sendingMessage) return;
+    setSendingMessage(true);
+    try {
+      const isStory = !!sharePayload?.isStory || sharePayload?.shareType === 'story';
+      const shareType = isStory ? 'story' : 'post';
+      const rawData = sharePayload?.data ?? sharePayload;
+      
+      const { getOrCreateConversation } = await import('../../lib/firebaseHelpers/conversation');
+      const { sendPostMessage, sendStoryMessage } = await import('../../lib/firebaseHelpers/messages');
+
+      let successCount = 0;
+
+      for (const targetId of selectedUsers) {
+        const targetIsGroup = typeof targetId === 'string' && targetId.startsWith('grp_');
+        let convoId = '';
+        
+        if (targetIsGroup) {
+          convoId = targetId;
+        } else {
+          const res = await getOrCreateConversation(currentUserId, targetId);
+          if (res?.success && res.conversationId) {
+            convoId = String(res.conversationId);
+          }
+        }
+
+        if (convoId) {
+          if (shareType === 'story') {
+            await sendStoryMessage(convoId, currentUserId, rawData, { recipientId: targetIsGroup ? undefined : targetId });
+          } else {
+            await sendPostMessage(convoId, currentUserId, rawData, { recipientId: targetIsGroup ? undefined : targetId });
+          }
+          successCount++;
+        }
+      }
+
+      if (successCount > 0) {
+        const label = isStory ? 'Story' : 'Post';
+        Alert.alert('Shared', `${label} shared successfully to ${successCount} chat${successCount > 1 ? 's' : ''}.`);
+      } else {
+        Alert.alert('Error', 'Failed to share content.');
+      }
+    } catch (err) {
+      console.error('[ShareModal] handleSendPress error:', err);
+      Alert.alert('Error', 'An error occurred while sharing.');
+    } finally {
+      setSendingMessage(false);
+      onClose();
+      try {
+        onSend(selectedUsers);
+      } catch (err) {
+        // ignore parent callback failures
+      }
+    }
+  };
 
   const handleQuickAction = async (actionType: string) => {
     const postId = sharePayload?._id || sharePayload?.id || '';
@@ -174,7 +231,15 @@ export default function ShareModal({
         const unresolvedIds: string[] = [];
         
         res.data.forEach((convo: any) => {
-          if (convo.isGroup) return; // Keep it simple for now, or add group support
+          if (convo.isGroup) {
+            profiles.push({
+              id: String(convo.conversationId || convo._id || convo.id),
+              username: convo.groupName || 'Group Chat',
+              avatar: convo.groupAvatar || DEFAULT_AVATAR,
+              isGroup: true,
+            });
+            return;
+          }
           const participants = convo.participants || [];
           const otherId = convo?.otherUserId || participants.find((id: any) => String(id) !== String(currentUserId));
           if (otherId && !seenIds.has(String(otherId))) {
@@ -299,6 +364,9 @@ export default function ShareModal({
           )}
         </View>
         <Text style={styles.username} numberOfLines={1}>{item.username}</Text>
+        {item.isGroup && (
+          <Text style={{ fontSize: 10, color: '#8e8e8e', marginTop: 2, textAlign: 'center' }}>Group</Text>
+        )}
       </TouchableOpacity>
     );
   };
@@ -331,7 +399,7 @@ export default function ShareModal({
                 activeOpacity={0.8}
                 onPress={() => {
                   onClose();
-                  const shareType = String(sharePayload?.shareType || '').trim();
+                  const shareType = String(sharePayload?.shareType || (sharePayload?.isStory ? 'story' : 'post')).trim();
                   const shareData = sharePayload?.data ?? sharePayload ?? null;
                   const params: any = {};
                   if (shareType) params.shareType = shareType;
@@ -430,10 +498,11 @@ export default function ShareModal({
 
                 {selectedUsers.length > 0 && (
                   <TouchableOpacity 
-                    style={styles.sendBtn} 
-                    onPress={() => { onSend(selectedUsers); onClose(); }}
+                    style={[styles.sendBtn, sendingMessage && { backgroundColor: '#cccccc' }]} 
+                    onPress={handleSendPress}
+                    disabled={sendingMessage}
                   >
-                    <Text style={styles.sendBtnText}>Send</Text>
+                    <Text style={styles.sendBtnText}>{sendingMessage ? 'Sending...' : 'Send'}</Text>
                   </TouchableOpacity>
                 )}
               </View>
@@ -470,7 +539,7 @@ export default function ShareModal({
               activeOpacity={0.8}
               onPress={() => {
                 onClose();
-                const shareType = String(sharePayload?.shareType || '').trim();
+                const shareType = String(sharePayload?.shareType || (sharePayload?.isStory ? 'story' : 'post')).trim();
                 const shareData = sharePayload?.data ?? sharePayload ?? null;
                 const params: any = {};
                 if (shareType) params.shareType = shareType;
@@ -569,10 +638,11 @@ export default function ShareModal({
 
               {selectedUsers.length > 0 && (
                 <TouchableOpacity 
-                  style={styles.sendBtn} 
-                  onPress={() => { onSend(selectedUsers); onClose(); }}
+                  style={[styles.sendBtn, sendingMessage && { backgroundColor: '#cccccc' }]} 
+                  onPress={handleSendPress}
+                  disabled={sendingMessage}
                 >
-                  <Text style={styles.sendBtnText}>Send</Text>
+                  <Text style={styles.sendBtnText}>{sendingMessage ? 'Sending...' : 'Send'}</Text>
                 </TouchableOpacity>
               )}
             </View>

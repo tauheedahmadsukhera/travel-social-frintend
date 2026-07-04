@@ -174,7 +174,7 @@ interface ImageItemProps {
 
 const ImageItem: React.FC<ImageItemProps> = ({ url, containerHeight, onPress, priority = "normal", thumbnailUrl }) => {
   const mediaUri = getMediaUrl(url);
-  const thumbUri = thumbnailUrl ? getMediaUrl(thumbnailUrl) : undefined;
+  const thumbUri = thumbnailUrl && thumbnailUrl !== url ? getMediaUrl(thumbnailUrl) : undefined;
   return (
     <TouchableOpacity
       activeOpacity={0.95}
@@ -189,7 +189,7 @@ const ImageItem: React.FC<ImageItemProps> = ({ url, containerHeight, onPress, pr
         cachePolicy="memory-disk"
         priority={priority}
         recyclingKey={url}
-        transition={150}
+        transition={0}
       />
     </TouchableOpacity>
   );

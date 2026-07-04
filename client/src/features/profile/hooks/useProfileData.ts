@@ -135,7 +135,7 @@ export function useProfileData({ viewedUserId, currentUserId, enabled }: UseProf
     queryFn: async () => {
       if (!viewedUserId) return [];
       try {
-        const res = await apiService.get(`/users/${viewedUserId}/saved-posts`);
+        const res = await apiService.get(`/users/${viewedUserId}/saved`);
         return res?.success && Array.isArray(res.data) ? res.data : [];
       } catch (error: any) {
         if (error.response?.status === 404) return [];
@@ -221,16 +221,24 @@ export function useProfileData({ viewedUserId, currentUserId, enabled }: UseProf
         if (event.type === 'POST_CREATED') {
           queryClient.invalidateQueries({ queryKey: ['profilePosts', viewedUserId] });
           queryClient.invalidateQueries({ queryKey: ['profile', viewedUserId, currentUserId] });
+          queryClient.invalidateQueries({ queryKey: ['profileSavedPosts', viewedUserId] });
+          queryClient.invalidateQueries({ queryKey: ['profileSections', viewedUserId] });
         } else if (event.type === 'POST_DELETED' && event.postId) {
           queryClient.invalidateQueries({ queryKey: ['profilePosts', viewedUserId] });
           queryClient.invalidateQueries({ queryKey: ['profile', viewedUserId, currentUserId] });
+          queryClient.invalidateQueries({ queryKey: ['profileSavedPosts', viewedUserId] });
+          queryClient.invalidateQueries({ queryKey: ['profileSections', viewedUserId] });
         } else if (event.type === 'POST_UPDATED' && event.postId) {
           queryClient.invalidateQueries({ queryKey: ['profilePosts', viewedUserId] });
+          queryClient.invalidateQueries({ queryKey: ['profileSavedPosts', viewedUserId] });
+          queryClient.invalidateQueries({ queryKey: ['profileSections', viewedUserId] });
         }
       });
 
       const sub = feedEventEmitter.addListener('feedUpdated', () => {
         queryClient.invalidateQueries({ queryKey: ['profilePosts', viewedUserId] });
+        queryClient.invalidateQueries({ queryKey: ['profileSavedPosts', viewedUserId] });
+        queryClient.invalidateQueries({ queryKey: ['profileSections', viewedUserId] });
       });
 
       return () => {
@@ -242,7 +250,7 @@ export function useProfileData({ viewedUserId, currentUserId, enabled }: UseProf
     }
   }, [viewedUserId, currentUserId, queryClient]);
 
-  const showSpinner = profileQuery.isLoading && isSeedingCache && !cachedData?.profile;
+  const showSpinner = isSeedingCache || (profileQuery.isLoading && !profileData);
 
   return {
     profile: profileData,

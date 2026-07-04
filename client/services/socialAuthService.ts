@@ -138,7 +138,9 @@ export async function signInWithGoogle() {
         }
 
         // Get user info - v16+ returns { data: { idToken, user } } or { type: 'cancelled' }
+        console.log('[DEBUG-AUTH] [1/5] Opening Google accounts selector...');
         const response = await GoogleSignin.signIn();
+        console.log('[DEBUG-AUTH] [2/5] Google Sign-In UI closed. Response type:', response.type);
 
         // Check if sign in was cancelled
         if (response.type === 'cancelled') {
@@ -151,7 +153,7 @@ export async function signInWithGoogle() {
         // v16+ uses response.data.idToken, older versions use response.idToken
         const idToken = response.data?.idToken || (response as any).idToken;
 
-        console.log('✅ Google Sign-In Success');
+        console.log('[DEBUG-AUTH] [3/5] Google accounts resolved successfully. ID Token present:', !!idToken);
 
         if (!idToken) {
           throw new Error('No ID token received from Google Sign-In');
@@ -162,8 +164,11 @@ export async function signInWithGoogle() {
         const googleCredential = GoogleAuthProvider.credential(idToken);
 
         // Sign in with Firebase
+        console.log('[DEBUG-AUTH] [4/5] Executing client-side signInWithCredential (Firebase Auth server query)...');
+        const clientAuthStart = Date.now();
         const authInstance = await requireAuth();
         const result = await signInWithCredential(authInstance, googleCredential);
+        console.log(`[DEBUG-AUTH] [5/5] Client-side Firebase Auth finished in ${Date.now() - clientAuthStart}ms.`);
 
         return {
           success: true,
@@ -352,11 +357,13 @@ export async function signInWithTikTok() {
     };
 
     // Redirect URI - must match TikTok Developer Console
+    const isExpoGo = Constants.appOwnership === 'expo';
     const redirectUri = makeRedirectUri({
       scheme: 'trave-social',
       path: 'oauth/redirect',
       preferLocalhost: false,
       isTripleSlashed: false, // Changed to false for better compatibility
+      ...(isExpoGo ? { useProxy: true } : {}),
     });
 
     // Generate random state for CSRF protection (required by TikTok)
@@ -659,16 +666,19 @@ export async function handleSocialAuthResult(result: any, router: any) {
     };
 
     try {
+      console.log('[DEBUG-AUTH] [6/9] handleSocialAuthResult started.');
       // Import dependencies dynamically
       const { apiService } = await import('@/src/_services/apiService');
       const storage = (await import('@/lib/storage')).default;
 
       // Sync with backend using the same endpoint as email/password login
-      console.log('🔄 Syncing social user with backend...');
+      console.log('[DEBUG-AUTH] [7/9] Syncing social user with backend. Calling getIdToken...');
 
       // Get ID token for backend verification
       const idToken = await user.getIdToken?.() || '';
 
+      console.log('[DEBUG-AUTH] [8/9] Sending POST request to /auth/login-firebase...');
+      const backendSyncStart = Date.now();
       const response = await apiService.post('/auth/login-firebase', {
         idToken,
         firebaseUid: user.uid,
@@ -677,6 +687,7 @@ export async function handleSocialAuthResult(result: any, router: any) {
         avatar: userAvatar,
         provider: user.providerData?.[0]?.providerId || 'social'
       });
+      console.log(`[DEBUG-AUTH] [9/9] Backend sync completed in ${Date.now() - backendSyncStart}ms. Success:`, response.success);
 
       if (response.success) {
         console.log('✅ Backend sync successful, storing tokens...');

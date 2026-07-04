@@ -163,7 +163,7 @@ export default function PassportScreen() {
 
   useEffect(() => {
     if (userId) loadPassportData();
-  }, [userId]);
+  }, [userId, isOnline]);
 
   const PASSPORT_CACHE_KEY = useMemo(() => `passport_v2_${String(userId || 'unknown')}`, [userId]);
 
@@ -204,6 +204,10 @@ export default function PassportScreen() {
   };
 
   const handleAddFromBanner = async () => {
+    if (!isOnline) {
+      Alert.alert('Offline Mode', 'Please connect to the internet to add stamps.');
+      return;
+    }
     if (!suggestion || isAdding || !userId) return;
 
     try {
@@ -232,6 +236,10 @@ export default function PassportScreen() {
   };
 
   const handleOpenLocationPicker = async () => {
+    if (!isOnline) {
+      Alert.alert('Offline Mode', 'Stamps can only be generated when connected to the internet.');
+      return;
+    }
     hapticLight();
     setShowLocationModal(true);
     setSearchQuery('');
@@ -321,6 +329,10 @@ export default function PassportScreen() {
   };
 
   const handleAddStamp = async () => {
+    if (!isOnline) {
+      Alert.alert('Offline Mode', 'Please connect to the internet to add stamps.');
+      return;
+    }
     if (!userId) return;
     const wantCity =
       includeCityStamp &&
@@ -590,7 +602,7 @@ export default function PassportScreen() {
       )}
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity style={styles.headerBtn} onPress={handleBack}>
+        <TouchableOpacity style={styles.headerBtn} onPress={handleBack} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
           <Feather name="arrow-left" size={20} color="#000" />
         </TouchableOpacity>
         
@@ -601,7 +613,7 @@ export default function PassportScreen() {
 
         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
 
-          <TouchableOpacity style={styles.headerBtn} onPress={openStampSearch}>
+          <TouchableOpacity style={styles.headerBtn} onPress={openStampSearch} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
             <Feather name="search" size={20} color="#000" />
           </TouchableOpacity>
         </View>

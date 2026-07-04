@@ -20,6 +20,8 @@ import VisibilityModal from '@/src/_components/CreatePost/VisibilityModal';
 import { DEFAULT_CATEGORIES } from '../lib/firebaseHelpers/index';
 import { hapticLight } from '../lib/haptics';
 
+const EMPTY_THUMBNAILS = {};
+
 export default function CreatePostScreen() {
   const params = useLocalSearchParams();
   const router = useRouter();
@@ -108,7 +110,7 @@ export default function CreatePostScreen() {
             <ScrollView style={{ flex: 1 }}>
               <MediaPreview
                 uris={selectedImages}
-                thumbnails={{}}
+                thumbnails={EMPTY_THUMBNAILS}
                 isVideo={(uri) => isVideoUri(uri, galleryAssets)}
                 height={350}
                 onRemove={(index) => {

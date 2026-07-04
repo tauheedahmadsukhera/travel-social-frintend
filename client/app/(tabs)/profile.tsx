@@ -626,8 +626,11 @@ export default function Profile({ userIdProp }: any) {
 
   // Listen for feed updates (refetch if something changed)
   useEffect(() => {
-    const unsub = feedEventEmitter.onFeedUpdate(() => {
+    const unsub = feedEventEmitter.onFeedUpdate((event) => {
       refetchAll();
+      if (event && event.type === 'POST_DELETED') {
+        setPostViewerVisible(false);
+      }
     });
     const sub = feedEventEmitter.addListener('feedUpdated', () => {
       refetchAll();
@@ -726,7 +729,7 @@ export default function Profile({ userIdProp }: any) {
         locationsCount={passportLocationsCount}
         postsCount={Number(profile?.postsCount ?? posts.length)}
         taggedCount={taggedPosts?.length ?? 0}
-        collectionsCount={sections?.length ?? 0}
+        collectionsCount={savedSectionPosts?.length ?? 0}
         onPressLocations={() => {
           if (!viewedUserId) return;
           router.push({

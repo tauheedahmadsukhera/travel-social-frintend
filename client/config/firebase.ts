@@ -18,8 +18,14 @@ const firebaseConfig = FIREBASE_CONFIG;
 
 // Initialize Firebase (prevent duplicate). Keep module load crash-safe.
 let app: any = null;
+let isFirstInit = false;
 try {
-  app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
+  if (getApps().length === 0) {
+    app = initializeApp(firebaseConfig);
+    isFirstInit = true;
+  } else {
+    app = getApps()[0];
+  }
 } catch (error: any) {
   console.error('Firebase app initialization failed:', error?.message || error);
 }
@@ -27,14 +33,14 @@ try {
 // ✅ AUTHENTICATION ONLY - Initialize Firebase Auth with React Native persistence
 let auth: Auth | null = null;
 try {
-  if (app && !getApps().length) {
+  if (app && isFirstInit) {
     const { getReactNativePersistence } = require('firebase/auth');
     auth = initializeAuth(app, {
       persistence: Platform.OS === 'web'
         ? undefined
         : getReactNativePersistence(AsyncStorage),
     });
-    console.log('✅ Firebase Auth initialized (AUTHENTICATION ONLY)');
+    console.log('✅ Firebase Auth initialized with React Native persistence');
   } else if (app) {
     auth = getAuth(app);
     console.log('✅ Using existing Firebase Auth instance');

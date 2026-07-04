@@ -166,7 +166,7 @@ export const AGORA_CONFIG = {
 // Social Config — ONLY client IDs (semi-public). Secrets must be server-side only.
 export const SNAPCHAT_CLIENT_ID = getEnvVar('EXPO_PUBLIC_SNAPCHAT_CLIENT_ID', 'fa1c26b3-f800-47f0-9497-70857642f682');
 // SECURITY: SNAPCHAT_CLIENT_SECRET removed — must be handled server-side only
-export const TIKTOK_CLIENT_KEY = getEnvVar('EXPO_PUBLIC_TIKTOK_CLIENT_KEY', 'awsmbaw0wj2exq5v');
+export const TIKTOK_CLIENT_KEY = getEnvVar('EXPO_PUBLIC_TIKTOK_CLIENT_KEY', 'sbaw2fl1aploaraj7w');
 // SECURITY: TIKTOK_CLIENT_SECRET removed — must be handled server-side only
 
 // App Configuration

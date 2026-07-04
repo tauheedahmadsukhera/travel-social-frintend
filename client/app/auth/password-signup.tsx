@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useState } from 'react';
-import { StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Alert, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { signUpUser } from '../../lib/firebaseHelpers';
 import { AuthBrandHeader } from '@/src/_components/auth/AuthBrandHeader';
@@ -42,8 +42,24 @@ export default function PasswordSignUpScreen() {
       const result = await signUpUser(email, password, name || undefined, username);
 
       if (result.success) {
-        // Navigate to main app
-        router.replace('/(tabs)' as any);
+        if ((result as any).needsVerification) {
+          Alert.alert(
+            'Verify Your Email ✉️',
+            'Verification email sent! Please check your inbox and verify your email before logging in.',
+            [
+              {
+                text: 'OK',
+                onPress: () => {
+                  router.replace('/auth/email-login');
+                }
+              }
+            ],
+            { cancelable: false }
+          );
+        } else {
+          // Fallback if email verification was skipped or disabled in dev
+          router.replace('/(tabs)/home');
+        }
       } else {
         const msg = result.error?.message || result.error || 'Registration failed. Please try again.';
         setError(typeof msg === 'string' ? msg : JSON.stringify(msg));

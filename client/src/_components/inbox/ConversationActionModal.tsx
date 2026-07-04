@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Modal, Pressable, Text, TouchableOpacity, View, StyleSheet } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 
@@ -21,10 +21,54 @@ export const ConversationActionModal: React.FC<ConversationActionModalProps> = (
   setConfirmDeleteVisible,
   handleDelete,
 }) => {
+  // Single-modal approach: use internal mode to switch content
+  const [mode, setMode] = useState<'actions' | 'confirm'>('actions');
+
+  // Derive visibility: show if either parent flag is true
+  const isVisible = actionsVisible || confirmDeleteVisible;
+
+  // Sync mode with parent state
+  useEffect(() => {
+    if (confirmDeleteVisible) {
+      setMode('confirm');
+    } else if (actionsVisible) {
+      setMode('actions');
+    }
+  }, [actionsVisible, confirmDeleteVisible]);
+
+  // Reset mode when modal closes
+  useEffect(() => {
+    if (!isVisible) {
+      // Small delay to let fade-out finish before resetting
+      const t = setTimeout(() => setMode('actions'), 200);
+      return () => clearTimeout(t);
+    }
+  }, [isVisible]);
+
+  const handleClose = () => {
+    setActionsVisible(false);
+    setConfirmDeleteVisible(false);
+  };
+
+  const handleDeleteTap = () => {
+    // Switch to confirm view within the same modal (no modal transition)
+    setActionsVisible(false);
+    setConfirmDeleteVisible(true);
+    setMode('confirm');
+  };
+
+  const handleConfirmDelete = () => {
+    // Close modal first, then trigger delete after animation
+    handleClose();
+    setTimeout(() => {
+      handleDelete();
+    }, 100);
+  };
+
   return (
-    <>
-      <Modal visible={actionsVisible} transparent animationType="fade" onRequestClose={closeActions}>
-        <Pressable style={styles.actionSheetBackdrop} onPress={closeActions}>
+    <Modal visible={isVisible} transparent animationType="fade" onRequestClose={handleClose}>
+      <Pressable style={styles.actionSheetBackdrop} onPress={handleClose}>
+        {mode === 'actions' ? (
           <Pressable style={styles.actionSheetContainer} onPress={() => {}}>
             <Text style={styles.actionSheetTitle} numberOfLines={1}>
               {actionTitle || 'Conversation'}
@@ -33,10 +77,7 @@ export const ConversationActionModal: React.FC<ConversationActionModalProps> = (
             <TouchableOpacity
               style={[styles.actionSheetButton, styles.actionSheetDeleteButton]}
               activeOpacity={0.8}
-              onPress={() => {
-                setActionsVisible(false);
-                setConfirmDeleteVisible(true);
-              }}
+              onPress={handleDeleteTap}
             >
               <Feather name="trash-2" size={18} color="#ff3b30" />
               <Text style={[styles.actionSheetButtonText, styles.actionSheetDeleteText]}>Delete</Text>
@@ -45,39 +86,30 @@ export const ConversationActionModal: React.FC<ConversationActionModalProps> = (
             <TouchableOpacity
               style={[styles.actionSheetButton, styles.actionSheetCancelButton]}
               activeOpacity={0.8}
-              onPress={closeActions}
+              onPress={handleClose}
             >
               <Text style={styles.actionSheetCancelText}>Cancel</Text>
             </TouchableOpacity>
           </Pressable>
-        </Pressable>
-      </Modal>
-
-      <Modal
-        visible={confirmDeleteVisible}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setConfirmDeleteVisible(false)}
-      >
-        <Pressable style={styles.actionSheetBackdrop} onPress={() => setConfirmDeleteVisible(false)}>
+        ) : (
           <Pressable style={styles.confirmContainer} onPress={() => {}}>
             <Text style={styles.confirmTitle}>Delete conversation?</Text>
             <Text style={styles.confirmSubtitle}>This will remove the conversation from your inbox.</Text>
             <View style={styles.confirmRow}>
               <TouchableOpacity
                 style={[styles.confirmBtn, styles.confirmCancelBtn]}
-                onPress={() => setConfirmDeleteVisible(false)}
+                onPress={handleClose}
               >
                 <Text style={styles.confirmCancelText}>Cancel</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={[styles.confirmBtn, styles.confirmDeleteBtn]} onPress={handleDelete}>
+              <TouchableOpacity style={[styles.confirmBtn, styles.confirmDeleteBtn]} onPress={handleConfirmDelete}>
                 <Text style={styles.confirmDeleteText}>Delete</Text>
               </TouchableOpacity>
             </View>
           </Pressable>
-        </Pressable>
-      </Modal>
-    </>
+        )}
+      </Pressable>
+    </Modal>
   );
 };
 
@@ -172,3 +204,4 @@ const styles = StyleSheet.create({
     color: '#fff',
   },
 });
+

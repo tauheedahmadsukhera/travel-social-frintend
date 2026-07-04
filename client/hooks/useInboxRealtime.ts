@@ -3,12 +3,14 @@ import { AppState, AppStateStatus } from 'react-native';
 import AsyncStorage from '@/lib/storage';
 import { apiService } from '@/src/_services/apiService';
 import { getSocket, initializeSocket } from '@/src/_services/socketService';
+import { useNetworkStatus } from './useOffline';
 
 export function useInboxRealtime(userId: string | null) {
   const [conversations, setConversations] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [ready, setReady] = useState(false);
+  const { isOnline } = useNetworkStatus();
 
   const cacheKey = userId ? `inboxConversationsCache_v2_${userId}` : null;
 
@@ -55,6 +57,13 @@ export function useInboxRealtime(userId: string | null) {
     })();
     return () => { mounted = false; };
   }, [cacheKey]);
+
+  // Refetch when network transitions from offline to online
+  useEffect(() => {
+    if (isOnline && userId && ready) {
+      fetchConversations();
+    }
+  }, [isOnline, userId, ready, fetchConversations]);
 
   // Main Socket Connection & Fetch Logic
   useEffect(() => {

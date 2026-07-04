@@ -62,6 +62,21 @@ function StoryTextOverlays({ postMetadata, mediaLoaded }: { postMetadata?: any; 
   // Don't render overlays until the background media is ready — mirrors Instagram behaviour
   if (!parsedOverlays.length || !mediaLoaded) return null;
 
+  // If the text is already baked into the image, don't render it again dynamically
+  let isBaked = false;
+  if (postMetadata) {
+    let parsedMeta = postMetadata;
+    if (typeof postMetadata === 'string') {
+      try {
+        parsedMeta = JSON.parse(postMetadata);
+      } catch {}
+    }
+    if (parsedMeta?.textBaked) {
+      isBaked = true;
+    }
+  }
+  if (isBaked) return null;
+
   return (
     <Animated.View
       style={{
@@ -1048,7 +1063,7 @@ export default function StoriesViewer({ stories, onClose, initialIndex = 0, isHi
         <ShareModal 
           visible={showShareModal}
           useViewOverlay={true}
-          currentUserId={currentUser?.uid || ''}
+          currentUserId={currentUser?.uid || (typeof currentUser === 'string' ? currentUser : '') || currentUser?._id || currentUser?.id || ''}
           onClose={() => { setShowShareModal(false); setIsPaused(false); }}
           modalVariant="home"
           sharePayload={{ ...currentStory, isStory: true }}

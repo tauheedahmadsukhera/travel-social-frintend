@@ -17,6 +17,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { apiService } from '@/src/_services/apiService';
 import { DEFAULT_AVATAR_URL } from '@/lib/api';
+import { normalizeAvatarUrl } from '@/lib/utils/media';
 
 
 interface CreateGroupModalProps {
@@ -235,8 +236,9 @@ export const CreateGroupModal: React.FC<CreateGroupModalProps> = ({
                   (m: any) => String(m?._id || m?.id || m?.firebaseUid || m?.uid || '') === id
                 );
                 const name = u?.displayName || u?.username || u?.name || 'User';
-                const avatar = u?.avatar || u?.photoURL || DEFAULT_AVATAR_URL;
-                const isDefaultAvatar = !avatar || avatar === DEFAULT_AVATAR_URL || avatar.includes('avatardefault.webp');
+                const rawAvatar = u?.avatar || u?.photoURL;
+                const avatar = normalizeAvatarUrl(rawAvatar);
+                const isDefaultAvatar = !rawAvatar || rawAvatar === DEFAULT_AVATAR_URL || String(rawAvatar).includes('avatardefault.webp');
                 return (
                   <TouchableOpacity style={styles.memberRow} onPress={() => toggleGroupMember(u)} activeOpacity={0.8}>
                     <View style={{ width: 34, height: 34, borderRadius: 17, overflow: 'hidden', marginRight: 10 }}>

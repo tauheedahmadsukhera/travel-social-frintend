@@ -587,6 +587,159 @@
       .av-top-right { top: 160px; right: -10px; }
       .av-bottom-right { bottom: 170px; right: -15px; }
     }
+
+    /* ─── LEGAL MODAL ────────────────────────────── */
+    .legal-modal {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.4);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.3s ease;
+      padding: 24px;
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+    }
+
+    .legal-modal.active {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .legal-modal-content {
+      background: #fff;
+      border-radius: 20px;
+      width: 100%;
+      max-width: 720px;
+      max-height: 80vh;
+      display: flex;
+      flex-direction: column;
+      box-shadow: 0 30px 80px rgba(0,0,0,0.18);
+      transform: translateY(20px);
+      transition: transform 0.3s ease;
+      overflow: hidden;
+      text-align: left;
+    }
+
+    .legal-modal.active .legal-modal-content {
+      transform: translateY(0);
+    }
+
+    .legal-modal-header {
+      padding: 20px 24px;
+      border-bottom: 1px solid #efefef;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .legal-modal-title {
+      font-size: 20px;
+      font-weight: 700;
+      color: #000;
+    }
+
+    .legal-modal-close {
+      background: none;
+      border: none;
+      font-size: 24px;
+      font-weight: 400;
+      cursor: pointer;
+      color: #888;
+      transition: color 0.2s;
+    }
+
+    .legal-modal-close:hover {
+      color: #000;
+    }
+
+    .legal-modal-body {
+      padding: 24px;
+      overflow-y: auto;
+      font-size: 15px;
+      line-height: 1.6;
+      color: #333;
+    }
+
+    .legal-modal-body h2 {
+      font-size: 18px;
+      font-weight: 700;
+      color: #000;
+      margin-top: 24px;
+      margin-bottom: 12px;
+    }
+
+    .legal-modal-body h3 {
+      font-size: 16px;
+      font-weight: 600;
+      color: #222;
+      margin-top: 16px;
+      margin-bottom: 8px;
+    }
+
+    .legal-modal-body p {
+      margin-bottom: 16px;
+      white-space: pre-line;
+    }
+
+    .legal-modal-body ul {
+      margin-bottom: 16px;
+      padding-left: 20px;
+    }
+
+    .legal-modal-body li {
+      margin-bottom: 8px;
+    }
+
+    .legal-last-updated {
+      font-size: 13px;
+      color: #888;
+      font-style: italic;
+      margin-bottom: 20px;
+    }
+
+    /* ─── FOOTER ─────────────────────────────────── */
+    .footer {
+      background: #fff;
+      padding: 32px 24px;
+      border-top: 1px solid #f0f0f0;
+      text-align: center;
+      font-size: 13px;
+      color: #888;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 12px;
+      margin-top: auto;
+    }
+
+    .footer-links {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .footer-link {
+      color: #555;
+      text-decoration: none;
+      font-weight: 500;
+      transition: color 0.2s;
+    }
+
+    .footer-link:hover {
+      color: #000;
+    }
+
+    .footer-dot {
+      color: #ccc;
+    }
   </style>
 </head>
 <body>
@@ -594,9 +747,9 @@
   <!-- NAVBAR -->
   <header class="navbar">
     <div class="navbar-content">
-      <img class="navbar-logo" src="assets/logo-trips-mark.png" alt="Trips Logo" />
-      <a href="#" class="navbar-link">Noticias</a>
-      <a href="#" class="navbar-link">Noticias</a>
+      <img class="navbar-logo" src="assets/logo-trips.svg" alt="Trips Logo" />
+      <a href="#" onclick="openLegalModal('terms')" class="navbar-link">Terms of Service</a>
+      <a href="#" onclick="openLegalModal('privacy')" class="navbar-link">Privacy Policy</a>
     </div>
   </header>
 
@@ -695,8 +848,7 @@
           <div class="app-header">
             <div class="app-header-left">
               <span class="app-back-btn">←</span>
-              <img class="app-logo-img" src="assets/logo-trips-mark.png" alt="Trips Logo" />
-              <span class="app-title">Trips</span>
+              <img class="app-logo-img" src="assets/logo-trips.svg" alt="Trips Logo" />
             </div>
             <div class="app-header-right">
               <!-- Chat -->
@@ -788,6 +940,186 @@
       </div>
     </div>
   </main>
+
+  <!-- FOOTER -->
+  <footer class="footer">
+    <p>&copy; 2026 Trips. All rights reserved.</p>
+    <div class="footer-links">
+      <a href="#" onclick="openLegalModal('terms')" class="footer-link">Terms of Service</a>
+      <span class="footer-dot">&middot;</span>
+      <a href="#" onclick="openLegalModal('privacy')" class="footer-link">Privacy Policy</a>
+    </div>
+  </footer>
+
+  <!-- LEGAL MODAL -->
+  <div id="legalModal" class="legal-modal">
+    <div class="legal-modal-content">
+      <div class="legal-modal-header">
+        <span id="modalTitle" class="legal-modal-title">Legal Document</span>
+        <button onclick="closeLegalModal()" class="legal-modal-close">&times;</button>
+      </div>
+      <div id="modalBody" class="legal-modal-body">
+        <!-- Content will be injected dynamically -->
+      </div>
+    </div>
+  </div>
+
+  <script>
+    function openLegalModal(type) {
+      if (window.event) window.event.preventDefault();
+      const modal = document.getElementById('legalModal');
+      const title = document.getElementById('modalTitle');
+      const body = document.getElementById('modalBody');
+
+      if (type === 'terms') {
+        title.innerText = 'Terms of Service';
+        body.innerHTML = `
+          <div class="legal-last-updated">Effective date: April 30, 2026</div>
+          
+          <h2>1. Eligibility</h2>
+          <p>You must comply with all applicable laws when using Trips. Users under the age required by local law must have permission from a parent or guardian where applicable.</p>
+          
+          <h2>2. User Content</h2>
+          <p>Trips allows users to create, upload, stream, share, and interact with user-generated content, including videos, images, messages, and profile information.
+          You are solely responsible for the content you post and the interactions you engage in through the platform.</p>
+          
+          <h2>3. Prohibited Content and Conduct</h2>
+          <p>Users may not post, stream, upload, share, or promote content that:</p>
+          <ul>
+            <li>Is illegal, abusive, threatening, defamatory, hateful, discriminatory, or sexually exploitative</li>
+            <li>Contains harassment, bullying, stalking, or intimidation</li>
+            <li>Promotes violence, terrorism, or self-harm</li>
+            <li>Involves nudity or explicit sexual content where prohibited</li>
+            <li>Violates intellectual property or privacy rights</li>
+            <li>Contains spam, scams, fraud, or misleading information</li>
+            <li>Attempts to exploit or harm minors</li>
+            <li>Circumvents moderation or safety systems</li>
+          </ul>
+          <p>Users may not harass, impersonate, threaten, or abuse other users.</p>
+          
+          <h2>4. Moderation and Enforcement</h2>
+          <p>Trips reserves the right to monitor, review, remove, restrict, or disable any content or account at our discretion where necessary to maintain platform safety, enforce these Terms, or comply with legal obligations.
+          Violations may result in content removal, temporary suspension, permanent account termination, or reporting to relevant authorities.</p>
+          
+          <h2>5. Reporting and Blocking</h2>
+          <p style="font-weight: 600; color: #e0245e;">Trips has a zero-tolerance policy for objectionable content or abusive users.</p>
+          <p>Trips provides mechanisms for users to:</p>
+          <ul>
+            <li>Report objectionable or abusive content</li>
+            <li>Report users who violate these Terms</li>
+            <li>Block users to prevent further interaction</li>
+          </ul>
+          <p>We review reports and take action where appropriate.</p>
+          
+          <h2>6. Safety Filtering</h2>
+          <p>Trips uses moderation tools, automated systems, user reporting, and manual review processes to help detect and reduce objectionable content and abusive behavior.
+          However, we cannot guarantee that all harmful content will be identified or removed immediately.</p>
+          
+          <h2>7. Account Termination</h2>
+          <p>We may suspend or terminate access to the Services at any time for violations of these Terms, harmful conduct, fraudulent activity, or behavior that creates legal or safety risks.</p>
+          
+          <h2>8. Intellectual Property</h2>
+          <p>All platform content, branding, software, and materials provided by Trips are owned by Trips or its licensors and may not be copied, modified, distributed, or exploited without permission.
+          Users retain ownership of content they create but grant Trips a worldwide, non-exclusive license to host, display, reproduce, and distribute such content solely for operating and improving the Services.</p>
+          
+          <h2>9. Disclaimer</h2>
+          <p>Trips is provided on an “as is” and “as available” basis without warranties of any kind.
+          We do not guarantee uninterrupted availability, security, or error-free operation of the Services.</p>
+          
+          <h2>10. Limitation of Liability</h2>
+          <p>To the maximum extent permitted by law, Trips shall not be liable for indirect, incidental, consequential, or punitive damages arising from use of the platform, user content, or interactions between users.</p>
+          
+          <h2>11. Changes to These Terms</h2>
+          <p>We may update these Terms from time to time. Continued use of the Services after changes become effective constitutes acceptance of the updated Terms.</p>
+          
+          <h2>12. Contact</h2>
+          <p>For questions regarding these Terms, contact: metrium.trips@gmail.com</p>
+        `;
+      } else if (type === 'privacy') {
+        title.innerText = 'Privacy Policy';
+        body.innerHTML = `
+          <div class="legal-last-updated">Last Updated: December 21, 2025</div>
+          
+          <h2>1. Introduction</h2>
+          <p>Welcome to Trips. We respect your privacy and are committed to protecting your personal data. This privacy policy explains how we collect, use, and safeguard your information.</p>
+          
+          <h2>2. Information We Collect</h2>
+          <h3>2.1 Information You Provide</h3>
+          <ul>
+            <li>Account Information: Name, email, phone number, username</li>
+            <li>Profile Information: Bio, profile picture, location, website</li>
+            <li>Content: Posts, photos, comments, messages, stories</li>
+            <li>Location Data: GPS coordinates (with your permission)</li>
+          </ul>
+          
+          <h3>2.2 Automatically Collected</h3>
+          <ul>
+            <li>Device Information: Device type, OS, identifiers</li>
+            <li>Usage Data: Features used, time spent, interactions</li>
+            <li>Log Data: IP address, browser type, access times</li>
+          </ul>
+          
+          <h2>3. How We Use Your Information</h2>
+          <ul>
+            <li>Provide and maintain our services</li>
+            <li>Create and manage your account</li>
+            <li>Enable social features (posts, messages, live streaming)</li>
+            <li>Show your location on maps (with permission)</li>
+            <li>Send notifications</li>
+            <li>Improve our app</li>
+            <li>Prevent fraud and ensure security</li>
+          </ul>
+          
+          <h2>4. How We Share Your Information</h2>
+          <p><strong>Public Information:</strong> Your profile, posts, and comments are public.</p>
+          <p><strong>With Other Users:</strong> Direct messages are private.</p>
+          <p><strong>Service Providers:</strong> Firebase, Agora, Google Maps.</p>
+          <p><strong>We Do NOT Sell Your Data.</strong></p>
+          
+          <h2>5. Data Storage and Security</h2>
+          <ul>
+            <li>Storage: Firebase (Google Cloud) servers</li>
+            <li>Security: Industry-standard encryption (HTTPS, TLS)</li>
+            <li>Retention: As long as your account is active</li>
+            <li>Deletion: You can delete your account anytime</li>
+          </ul>
+          
+          <h2>6. Your Rights</h2>
+          <ul>
+            <li>Access: Request a copy of your data</li>
+            <li>Correction: Update incorrect information</li>
+            <li>Deletion: Delete your account and data</li>
+            <li>Portability: Export your data</li>
+            <li>Objection: Opt out of certain processing</li>
+            <li>Withdraw Consent: Stop sharing optional data</li>
+          </ul>
+          
+          <h2>7. Children's Privacy</h2>
+          <p>Our app is not intended for children under 13. We do not knowingly collect data from children under 13.</p>
+          
+          <h2>8. Contact Us</h2>
+          <p>Email: support@trave-social.app</p>
+        `;
+      }
+
+      modal.classList.add('active');
+      document.body.style.overflow = 'hidden';
+    }
+
+    function closeLegalModal() {
+      const modal = document.getElementById('legalModal');
+      modal.classList.remove('active');
+      document.body.style.overflow = '';
+    }
+
+    // Close modal when clicking outside content
+    window.onclick = function(event) {
+      const modal = document.getElementById('legalModal');
+      if (event.target === modal) {
+        closeLegalModal();
+      }
+    }
+  </script>
 
 </body>
 </html>

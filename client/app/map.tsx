@@ -492,6 +492,53 @@ export default function MapScreen() {
       }, {} as typeof groups);
   }, [filteredPosts, isValidLatLon]);
 
+  const clusteredMarkers = useMemo(() => {
+    const list = Object.entries(limitedLocationGroups).map(([key, val]) => {
+      const post = val[0];
+      return {
+        key,
+        posts: val,
+        latitude: post.lat!,
+        longitude: post.lon!,
+      };
+    });
+
+    const delta = mapRegion?.latitudeDelta || 0.09;
+    // Dynamic clustering threshold based on zoom level
+    const clusterRadius = delta * 0.12; // group items within 12% of vertical screen span
+
+    const clusters: Array<{
+      id: string;
+      latitude: number;
+      longitude: number;
+      posts: PostType[];
+      count: number;
+    }> = [];
+
+    list.forEach((item) => {
+      let matchedCluster = clusters.find((c) => {
+        const latDiff = Math.abs(c.latitude - item.latitude);
+        const lonDiff = Math.abs(c.longitude - item.longitude);
+        return latDiff < clusterRadius && lonDiff < clusterRadius;
+      });
+
+      if (matchedCluster) {
+        matchedCluster.posts.push(...item.posts);
+        matchedCluster.count += item.posts.length;
+      } else {
+        clusters.push({
+          id: item.key,
+          latitude: item.latitude,
+          longitude: item.longitude,
+          posts: [...item.posts],
+          count: item.posts.length,
+        });
+      }
+    });
+
+    return clusters;
+  }, [limitedLocationGroups, mapRegion?.latitudeDelta]);
+
   const validRegion = isValidRegion(mapRegion);
 
   // Markers moved to separate components
@@ -506,6 +553,7 @@ export default function MapScreen() {
             style={styles.mapView}
             googleRenderer={Platform.OS === 'android' ? 'LATEST' : undefined}
             provider={Platform.OS === 'ios' ? 'google' : undefined}
+            onRegionChangeComplete={(r: any) => setMapRegion(r)}
             initialRegion={mapRegion && isValidLatLon(mapRegion.latitude, mapRegion.longitude)
               ? mapRegion
               : DEFAULT_REGION
@@ -515,29 +563,40 @@ export default function MapScreen() {
               : DEFAULT_REGION
             }
           >
-            {Object.entries(limitedLocationGroups).map(([key, postsAtLocation]) => {
+            {clusteredMarkers.map((cluster) => {
               try {
-                const safePostsAtLocation = Array.isArray(postsAtLocation) ? postsAtLocation : [];
-                if (safePostsAtLocation.length === 0) return null;
-                const post = safePostsAtLocation[0];
-                if (
-                  post &&
-                  isValidLatLon(post.lat, post.lon) &&
-                  typeof post.imageUrl === 'string' && post.imageUrl &&
-                  isFinite(Number(post.lat)) && isFinite(Number(post.lon))
-                ) {
+                if (cluster.count === 1) {
+                  const post = cluster.posts[0];
+                  if (
+                    post &&
+                    isValidLatLon(post.lat, post.lon) &&
+                    typeof post.imageUrl === 'string' && post.imageUrl &&
+                    isFinite(Number(post.lat)) && isFinite(Number(post.lon))
+                  ) {
+                    return (
+                      <PostMarker 
+                        key={`post-${cluster.id}`} 
+                        post={post as any} 
+                        postsAtLocation={cluster.posts as any} 
+                        onSelect={setSelectedPosts}
+                      />
+                    );
+                  }
+                } else if (cluster.count > 1 && Marker) {
                   return (
-                    <PostMarker 
-                      key={`post-${key}`} 
-                      post={post as any} 
-                      postsAtLocation={safePostsAtLocation as any} 
-                      onSelect={setSelectedPosts}
-                    />
+                    <Marker
+                      key={`cluster-${cluster.id}`}
+                      coordinate={{ latitude: cluster.latitude, longitude: cluster.longitude }}
+                      onPress={() => setSelectedPosts(cluster.posts)}
+                    >
+                      <View style={styles.clusterMarker}>
+                        <Text style={styles.clusterText}>{cluster.count}</Text>
+                      </View>
+                    </Marker>
                   );
                 }
               } catch (err) {
-                console.error('Error rendering marker:', err, key, postsAtLocation);
-                return null;
+                console.error('Error rendering marker cluster:', err, cluster);
               }
               return null;
             })}
@@ -1000,5 +1059,25 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
+  },
+  clusterMarker: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#FF8D00',
+    borderWidth: 2,
+    borderColor: '#ffffff',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
+  },
+  clusterText: {
+    color: '#ffffff',
+    fontSize: 14,
+    fontWeight: 'bold',
   },
 });

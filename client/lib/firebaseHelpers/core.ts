@@ -19,6 +19,8 @@ import {
   signOut,
   User,
   updateProfile,
+  sendEmailVerification,
+  deleteUser,
 } from 'firebase/auth';
 import { Platform } from 'react-native';
 import { FIREBASE_CONFIG } from '../../config/environment';
@@ -92,6 +94,32 @@ export async function signInWithEmailPassword(
     const userCredential = await signInWithEmailAndPassword(firebaseAuth, email, password);
     const firebaseUser = userCredential.user;
 
+    // Enforce email verification
+    if (!firebaseUser.emailVerified) {
+      try {
+        await sendEmailVerification(firebaseUser);
+        console.log('[signInWithEmailPassword] ✉️ Resent verification email.');
+      } catch (err: any) {
+        console.error('[signInWithEmailPassword] ❌ Failed to resend verification email:', err.message);
+      }
+      try {
+        await signOut(firebaseAuth);
+      } catch (e) {}
+
+      // Clear tokens just in case
+      await AsyncStorage.removeItem('token');
+      await AsyncStorage.removeItem('userId');
+      await AsyncStorage.removeItem('userEmail');
+      await AsyncStorage.removeItem('userAvatar');
+      await AsyncStorage.removeItem('uid');
+      await AsyncStorage.removeItem('firebaseUid');
+
+      return {
+        success: false,
+        error: 'Your email is not verified. A verification link has been sent to your email. Please verify it before logging in.'
+      };
+    }
+
     // Step 2: Sync with backend (save to MongoDB)
     const idToken = await firebaseUser.getIdToken();
     const response = await apiService.post('/auth/login-firebase', {
@@ -164,13 +192,15 @@ export async function registerWithEmailPassword(
   displayName?: string,
   username?: string
 ): Promise<{ success: boolean; user?: any; error?: any }> {
+  let firebaseUser: User | null = null;
+  const firebaseAuth = getRequiredAuth();
+
   try {
     console.log('[registerWithEmailPassword] Firebase register:', email);
-    const firebaseAuth = getRequiredAuth();
 
     // Step 1: Firebase registration
     const userCredential = await createUserWithEmailAndPassword(firebaseAuth, email, password);
-    const firebaseUser = userCredential.user;
+    firebaseUser = userCredential.user;
 
     // Update profile
     if (displayName) {
@@ -179,17 +209,9 @@ export async function registerWithEmailPassword(
 
     // Step 2: Sync with backend (save to MongoDB)
     const idToken = await firebaseUser.getIdToken();
-    let response = await apiService.post('/auth/register-firebase', {
-      idToken,
-      firebaseUid: firebaseUser.uid,
-      email: firebaseUser.email,
-      displayName: displayName || email.split('@')[0],
-      avatar: firebaseUser.photoURL,
-      username: username || undefined
-    });
-
-    if (!response.success) {
-      response = await apiService.post('/auth/login-firebase', {
+    let response;
+    try {
+      response = await apiService.post('/auth/register-firebase', {
         idToken,
         firebaseUid: firebaseUser.uid,
         email: firebaseUser.email,
@@ -197,31 +219,74 @@ export async function registerWithEmailPassword(
         avatar: firebaseUser.photoURL,
         username: username || undefined
       });
+    } catch (err: any) {
+      console.error('[registerWithEmailPassword] register-firebase request failed:', err.response?.data || err.message);
+      const serverError = err.response?.data;
+      let errMsg = 'Registration sync failed';
+      if (serverError?.details && Array.isArray(serverError.details) && serverError.details.length > 0) {
+        errMsg = serverError.details.map((d: any) => d.message).join(', ');
+      } else if (serverError?.message) {
+        errMsg = serverError.message;
+      } else if (serverError?.error) {
+        errMsg = serverError.error;
+      } else {
+        errMsg = err.message;
+      }
+      response = { success: false, error: errMsg };
+    }
+
+    if (!response.success) {
+      try {
+        const loginResponse = await apiService.post('/auth/login-firebase', {
+          idToken,
+          firebaseUid: firebaseUser.uid,
+          email: firebaseUser.email,
+          displayName: displayName || email.split('@')[0],
+          avatar: firebaseUser.photoURL,
+          username: username || undefined
+        });
+        if (loginResponse.success) {
+          response = loginResponse;
+        }
+      } catch (err: any) {
+        console.error('[registerWithEmailPassword] login-firebase backup failed:', err.message);
+      }
     }
 
     if (response.success) {
-      // Step 3: Store token and UNIFIED userId (MongoDB _id)
-      const canonicalUserId = String(response.user?.id ?? response.user?._id ?? firebaseUser.uid);
-      
-      // iOS Fix: Store all avatar variants from backend response
-      const avatarToStore = response.user?.avatar || response.user?.photoURL || response.user?.profilePicture || firebaseUser.photoURL || '';
-      
-      await AsyncStorage.multiSet([
-        ['token', response.token],
-        ['userId', canonicalUserId],
-        ['userEmail', firebaseUser.email || ''],
-        ['userAvatar', avatarToStore],
-      ]);
+      // Send verification email immediately
+      try {
+        await sendEmailVerification(firebaseUser);
+        console.log('[registerWithEmailPassword] ✉️ Verification email sent.');
+      } catch (err: any) {
+        console.error('[registerWithEmailPassword] ❌ Failed to send verification email:', err.message);
+      }
 
-      // Compatibility: Also keep 'uid' but mark for future removal
-      await AsyncStorage.setItem('uid', canonicalUserId);
-      await AsyncStorage.setItem('firebaseUid', String(response.user?.firebaseUid || firebaseUser.uid));
+      // Explicitly sign the user out so they can't access the app yet
+      try {
+        await signOut(firebaseAuth);
+      } catch (e) {}
 
-      console.log('[registerWithEmailPassword] ✅ Unified Identity stored:', canonicalUserId);
-      return { success: true, user: firebaseUser };
+      // Clear any session tokens
+      await AsyncStorage.removeItem('token');
+      await AsyncStorage.removeItem('userId');
+      await AsyncStorage.removeItem('userEmail');
+      await AsyncStorage.removeItem('userAvatar');
+      await AsyncStorage.removeItem('uid');
+      await AsyncStorage.removeItem('firebaseUid');
+
+      return { success: true, user: firebaseUser, needsVerification: true } as any;
     } else {
       console.error('[registerWithEmailPassword] ❌ MongoDB sync failed:', response.error);
-      // Still return success since Firebase auth worked
+      // Clean up/Delete the Firebase Auth user so the email can be used again
+      if (firebaseUser) {
+        try {
+          await deleteUser(firebaseUser);
+          console.log('[registerWithEmailPassword] 🗑️ Cleaned up/Deleted Firebase Auth user because MongoDB sync failed');
+        } catch (err: any) {
+          console.error('[registerWithEmailPassword] ❌ Failed to clean up Firebase Auth user:', err.message);
+        }
+      }
       await AsyncStorage.removeItem('token');
       await AsyncStorage.removeItem('userId');
       await AsyncStorage.removeItem('userEmail');
@@ -230,6 +295,14 @@ export async function registerWithEmailPassword(
     }
   } catch (error: any) {
     console.error('[registerWithEmailPassword] Firebase register error:', error.message);
+    if (firebaseUser) {
+      try {
+        await deleteUser(firebaseUser);
+        console.log('[registerWithEmailPassword] 🗑️ Cleaned up/Deleted Firebase Auth user in catch block');
+      } catch (err: any) {
+        console.error('[registerWithEmailPassword] ❌ Failed to clean up Firebase Auth user in catch:', err.message);
+      }
+    }
     await AsyncStorage.removeItem('token');
     await AsyncStorage.removeItem('userId');
     await AsyncStorage.removeItem('userEmail');
@@ -339,7 +412,7 @@ export async function signUpUser(email: string, password: string, displayName?: 
 
     if (result.success) {
       console.log('[signUpUser] ✅ Registration successful');
-      return { success: true, user: result.user };
+      return { success: true, user: result.user, needsVerification: (result as any).needsVerification };
     } else {
       console.error('[signUpUser] ❌ Registration failed:', result.error);
       return { success: false, error: result.error };

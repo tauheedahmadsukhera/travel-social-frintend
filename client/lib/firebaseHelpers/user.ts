@@ -1,4 +1,5 @@
 import { DEFAULT_AVATAR_URL } from '@/lib/api';
+import { normalizeAvatarUrl } from '../utils/media';
 /**
  * Check if a user is an approved follower
  */
@@ -147,7 +148,7 @@ export async function searchUsers(queryText: string, resultLimit: number = 20) {
           firebaseUid: u?.firebaseUid || (typeof u?.uid === 'string' && u.uid.length > 0 ? u.uid : undefined),
           displayName: u?.displayName || u?.name || u?.username || u?.email?.split?.('@')?.[0] || 'User',
           username: u?.username || '',
-          photoURL: u?.photoURL || u?.avatar || null,
+          photoURL: normalizeAvatarUrl(u?.photoURL || u?.avatar),
         };
       });
     }

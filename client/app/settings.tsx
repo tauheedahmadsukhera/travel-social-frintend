@@ -9,30 +9,33 @@ import { permanentlyDeleteAccount } from '@/lib/gdprCompliance';
 import { resolveCanonicalUserId } from '@/lib/currentUser';
 import { auth } from '@/config/firebase';
 import AsyncStorage from '@/lib/storage';
+import { useThemeColors } from '@/lib/theme';
 
 export default function SettingsScreen() {
   const router = useRouter();
+  const colors = useThemeColors();
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
       {/* Header */}
-      <View style={styles.header}>
+      <View style={[styles.header, { borderBottomColor: colors.border }]}>
         <TouchableOpacity
           onPress={() => {
             hapticLight();
             safeRouterBack();
           }}
           style={styles.backBtn}
+          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
         >
-          <Feather name="arrow-left" size={24} color="#000" />
+          <Feather name="arrow-left" size={24} color={colors.text} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Settings</Text>
+        <Text style={[styles.headerTitle, { color: colors.text }]}>Settings</Text>
         <View style={{ width: 24 }} />
       </View>
 
-      <ScrollView contentContainerStyle={{ paddingBottom: 40 }}>
+      <ScrollView contentContainerStyle={{ paddingBottom: 40 }} style={{ backgroundColor: colors.background }}>
         <TouchableOpacity
-          style={styles.feedbackBtn}
+          style={[styles.feedbackBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}
           onPress={() => {
             hapticLight();
             Alert.alert(
@@ -61,7 +64,7 @@ export default function SettingsScreen() {
 
         {/* Blocked Users Section */}
         <TouchableOpacity
-          style={[styles.settingsItem, { backgroundColor: '#fff5f5', borderColor: '#ffcfcf' }]}
+          style={[styles.settingsItem, { backgroundColor: colors.surface, borderColor: colors.border }]}
           onPress={() => {
             hapticLight();
             router.push('/blocked-users' as any);
@@ -69,52 +72,52 @@ export default function SettingsScreen() {
         >
           <Feather name="slash" size={20} color="#e74c3c" style={{ marginRight: 12 }} />
           <View style={{ flex: 1 }}>
-            <Text style={styles.settingsTitle}>Blocked Users</Text>
-            <Text style={styles.settingsSubtitle}>Manage users you have blocked</Text>
+            <Text style={[styles.settingsTitle, { color: colors.text }]}>Blocked Users</Text>
+            <Text style={[styles.settingsSubtitle, { color: colors.textSecondary }]}>Manage users you have blocked</Text>
           </View>
-          <Feather name="chevron-right" size={18} color="#ccc" />
+          <Feather name="chevron-right" size={18} color={colors.textSecondary} />
         </TouchableOpacity>
 
         {/* App Version & About Section */}
-        <View style={styles.aboutBox}>
-          <Text style={styles.aboutTitle}>About Trips</Text>
-          <Text style={styles.aboutText}>Version 1.0.0</Text>
-          <Text style={styles.aboutText}>© 2025 tauhee56. All rights reserved.</Text>
-          <Text style={styles.aboutText}>For help or feedback, email metrium.trips@gmail.com</Text>
+        <View style={[styles.aboutBox, { backgroundColor: colors.surface }]}>
+          <Text style={[styles.aboutTitle, { color: colors.text }]}>About Trips</Text>
+          <Text style={[styles.aboutText, { color: colors.textSecondary }]}>Version 1.0.0</Text>
+          <Text style={[styles.aboutText, { color: colors.textSecondary }]}>© 2025 tauhee56. All rights reserved.</Text>
+          <Text style={[styles.aboutText, { color: colors.textSecondary }]}>For help or feedback, email metrium.trips@gmail.com</Text>
         </View>
 
         {/* Legal Section */}
-        <View style={styles.legalBox}>
-          <Text style={styles.legalTitle}>Legal</Text>
+        <View style={[styles.legalBox, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <Text style={[styles.legalTitle, { color: colors.text }]}>Legal</Text>
           <TouchableOpacity
-            style={styles.legalItem}
+            style={[styles.legalItem, { borderTopColor: colors.border }]}
             onPress={() => {
               hapticLight();
               router.push('/legal/privacy' as any);
             }}
           >
             <Feather name="shield" size={18} color="#667eea" style={{ marginRight: 10 }} />
-            <Text style={styles.legalText}>Privacy Policy</Text>
-            <Feather name="chevron-right" size={18} color="#ccc" style={{ marginLeft: 'auto' }} />
+            <Text style={[styles.legalText, { color: colors.text }]}>Privacy Policy</Text>
+            <Feather name="chevron-right" size={18} color={colors.textSecondary} style={{ marginLeft: 'auto' }} />
           </TouchableOpacity>
           <TouchableOpacity
-            style={styles.legalItem}
+            style={[styles.legalItem, { borderTopColor: colors.border }]}
             onPress={() => {
               hapticLight();
               router.push('/legal/terms' as any);
             }}
           >
             <Feather name="file-text" size={18} color="#667eea" style={{ marginRight: 10 }} />
-            <Text style={styles.legalText}>Terms of Service</Text>
-            <Feather name="chevron-right" size={18} color="#ccc" style={{ marginLeft: 'auto' }} />
+            <Text style={[styles.legalText, { color: colors.text }]}>Terms of Service</Text>
+            <Feather name="chevron-right" size={18} color={colors.textSecondary} style={{ marginLeft: 'auto' }} />
           </TouchableOpacity>
         </View>
 
         {/* Danger Zone */}
-        <View style={[styles.legalBox, { marginTop: 20, borderColor: '#ffcfcf' }]}>
+        <View style={[styles.legalBox, { marginTop: 20, borderColor: '#ffcfcf', backgroundColor: colors.surface }]}>
           <Text style={[styles.legalTitle, { color: '#e74c3c' }]}>Danger Zone</Text>
           <TouchableOpacity
-            style={styles.legalItem}
+            style={[styles.legalItem, { borderTopColor: colors.border }]}
             onPress={() => {
               hapticLight();
               Alert.alert(

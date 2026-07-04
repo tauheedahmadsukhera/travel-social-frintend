@@ -78,22 +78,11 @@ const PostActions: React.FC<PostActionsProps> = ({
                 <View 
                   key={index} 
                   style={{
-                    backgroundColor: '#fff',
-                    borderRadius: 10,
-                    width: 20,
-                    height: 20,
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    marginLeft: index > 0 ? -6 : 0,
+                    marginLeft: index > 0 ? -2 : 0,
                     zIndex: 3 - index,
-                    shadowColor: '#000',
-                    shadowOffset: { width: 0, height: 1 },
-                    shadowOpacity: 0.1,
-                    shadowRadius: 1,
-                    elevation: 1,
                   }}
                 >
-                  <Text style={{ fontSize: 13, lineHeight: 15 }}>{emoji}</Text>
+                  <Text style={{ fontSize: 14, lineHeight: 17 }}>{emoji}</Text>
                 </View>
               ))}
             </View>
