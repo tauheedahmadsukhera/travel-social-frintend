@@ -351,20 +351,19 @@ const PostCard: React.FC<PostCardProps> = ({
           </TouchableOpacity>
         )}
 
-        {/* Small floating tag bubbles overlayed on center-bottom of image */}
+        {/* Staggered absolute-positioned Instagram-style tag overlays */}
         {showTagsOverlay && post?.taggedUsers && post.taggedUsers.length > 0 && (
-          <View style={{
-            position: 'absolute',
-            bottom: 50,
-            left: 16,
-            right: 16,
-            flexDirection: 'row',
-            flexWrap: 'wrap',
-            gap: 8,
-            zIndex: 40,
-          }}>
+          <View style={[StyleSheet.absoluteFill, { zIndex: 40 }]}>
             {post.taggedUsers.map((taggedUser: any, idx: number) => {
               const uId = taggedUser._id || taggedUser.id || taggedUser.uid;
+              const positions = [
+                { top: '30%', left: '20%' },
+                { top: '60%', left: '45%' },
+                { top: '40%', left: '55%' },
+                { top: '20%', left: '50%' },
+                { top: '50%', left: '15%' },
+              ];
+              const pos = positions[idx % positions.length];
               return (
                 <TouchableOpacity
                   key={idx}
@@ -376,19 +375,27 @@ const PostCard: React.FC<PostCardProps> = ({
                     }
                   }}
                   style={{
-                    backgroundColor: 'rgba(0, 0, 0, 0.85)',
+                    position: 'absolute',
+                    top: pos.top,
+                    left: pos.left,
+                    backgroundColor: 'rgba(0, 0, 0, 0.75)',
                     paddingHorizontal: 12,
-                    paddingVertical: 7,
-                    borderRadius: 6,
+                    paddingVertical: 6,
+                    borderRadius: 16,
                     flexDirection: 'row',
                     alignItems: 'center',
                     borderWidth: 0.5,
-                    borderColor: 'rgba(255, 255, 255, 0.15)',
+                    borderColor: 'rgba(255, 255, 255, 0.2)',
+                    shadowColor: '#000',
+                    shadowOffset: { width: 0, height: 2 },
+                    shadowOpacity: 0.3,
+                    shadowRadius: 3,
+                    elevation: 4,
                   }}
                 >
                   <Ionicons name="person" size={10} color="#fff" style={{ marginRight: 4 }} />
-                  <Text style={{ color: '#fff', fontSize: 12, fontWeight: '600' }}>
-                    @{taggedUser.username || taggedUser.displayName || 'user'}
+                  <Text style={{ color: '#fff', fontSize: 11, fontWeight: '600' }}>
+                    {taggedUser.username || taggedUser.displayName || 'user'}
                   </Text>
                 </TouchableOpacity>
               );

@@ -142,7 +142,7 @@ export function useProfileData({ viewedUserId, currentUserId, enabled }: UseProf
         throw error;
       }
     },
-    enabled: enabled && !!viewedUserId && isOwnProfile,
+    enabled: enabled && !!viewedUserId,
     staleTime: 1000 * 60 * 5,
   });
 
@@ -270,7 +270,7 @@ export function useProfileData({ viewedUserId, currentUserId, enabled }: UseProf
         storiesQuery.refetch(),
         taggedPostsQuery.refetch(),
         highlightsQuery.refetch(),
-        isOwnProfile ? savedPostsQuery.refetch() : Promise.resolve(),
+        savedPostsQuery.refetch(),
       ]);
     }
   };
