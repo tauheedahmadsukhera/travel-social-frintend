@@ -359,24 +359,37 @@ export async function signInWithTikTok() {
     // Redirect URI - must match TikTok Developer Console and must be HTTPS
     const redirectUri = 'https://travel-social-backend.onrender.com/api/auth/tiktok/callback';
 
+    // Generate dynamic app redirect callback scheme (resolves exp:// or trave-social:// depending on environment)
+    const appRedirectUri = makeRedirectUri({
+      scheme: 'trave-social',
+      path: 'oauth/redirect',
+    });
+
     // Generate random state for CSRF protection (required by TikTok)
     const stateBytes = await ExpoCrypto.getRandomBytesAsync(16);
-    const state = Array.from(new Uint8Array(stateBytes))
+    const rawCsrf = Array.from(new Uint8Array(stateBytes))
       .map(b => b.toString(16).padStart(2, '0'))
       .join('');
 
-    console.log('TikTok Redirect URI:', redirectUri);
-    console.log('TikTok State:', state);
+    // Package both CSRF token and dynamic app return URL in the state payload
+    const stateObj = {
+      csrf: rawCsrf,
+      returnUrl: appRedirectUri,
+    };
+    const state = JSON.stringify(stateObj);
+
+    console.log('TikTok Redirect URI (Web landing page):', redirectUri);
+    console.log('TikTok App Return URL (Deep Link target):', appRedirectUri);
 
     // Open TikTok authorization URL with required state parameter
-    const authUrl = `${discovery.authorizationEndpoint}?client_key=${TIKTOK_CLIENT_KEY_VAL}&scope=user.info.basic&response_type=code&redirect_uri=${encodeURIComponent(redirectUri)}&state=${state}`;
+    const authUrl = `${discovery.authorizationEndpoint}?client_key=${TIKTOK_CLIENT_KEY_VAL}&scope=user.info.basic&response_type=code&redirect_uri=${encodeURIComponent(redirectUri)}&state=${encodeURIComponent(state)}`;
 
     console.log('TikTok Auth URL:', authUrl);
 
-    // Open browser for authentication, listening for the custom app link redirect
+    // Open browser for authentication, listening for the dynamic callback target
     const result = await WebBrowser.openAuthSessionAsync(
       authUrl,
-      'trave-social://oauth/redirect',
+      appRedirectUri,
       {
         showInRecents: true,
         createTask: true // Android only - open in new task
