@@ -15,7 +15,14 @@ export async function fetchBlockedUserIds(uid: string): Promise<Set<string>> {
   try {
     const res = await apiService.get(`/users/${uid}/blocked`);
     if (res?.success && Array.isArray(res.data)) {
-      const ids = new Set<string>(res.data);
+      const ids = new Set<string>();
+      res.data.forEach((u: any) => {
+        // Add ALL id variants so filtering works regardless of which ID format posts use
+        if (u._id) ids.add(String(u._id));
+        if (u.uid) ids.add(String(u.uid));
+        if (u.firebaseUid) ids.add(String(u.firebaseUid));
+        if (u.id) ids.add(String(u.id));
+      });
       blockedCache.set(uid, { ids, ts: Date.now() });
       return ids;
     }

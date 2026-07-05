@@ -1,6 +1,6 @@
 import { Feather } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
-import React from 'react';
+import { useRouter, useFocusEffect } from 'expo-router';
+import React, { useState } from 'react';
 import { Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View, Linking } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { hapticLight } from '@/lib/haptics';
@@ -10,10 +10,35 @@ import { resolveCanonicalUserId } from '@/lib/currentUser';
 import { auth } from '@/config/firebase';
 import AsyncStorage from '@/lib/storage';
 import { useThemeColors } from '@/lib/theme';
+import { apiService } from '@/src/_services/apiService';
 
 export default function SettingsScreen() {
   const router = useRouter();
   const colors = useThemeColors();
+  const [blockedCount, setBlockedCount] = useState<number | null>(null);
+
+  useFocusEffect(
+    React.useCallback(() => {
+      let isMounted = true;
+      const fetchBlockedCount = async () => {
+        try {
+          const canonicalId = await resolveCanonicalUserId();
+          if (canonicalId) {
+            const res = await apiService.get(`/users/${canonicalId}/blocked`);
+            if (isMounted && res?.success && Array.isArray(res.data)) {
+              setBlockedCount(res.data.length);
+            }
+          }
+        } catch (e) {
+          console.warn('Failed to fetch blocked count in settings:', e);
+        }
+      };
+      fetchBlockedCount();
+      return () => {
+        isMounted = false;
+      };
+    }, [])
+  );
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
@@ -72,8 +97,8 @@ export default function SettingsScreen() {
         >
           <Feather name="slash" size={20} color="#e74c3c" style={{ marginRight: 12 }} />
           <View style={{ flex: 1 }}>
-            <Text style={[styles.settingsTitle, { color: colors.text }]}>Blocked Users</Text>
-            <Text style={[styles.settingsSubtitle, { color: colors.textSecondary }]}>Manage users you have blocked</Text>
+            <Text style={[styles.settingsTitle, { color: colors.text }]}>Blocked Users{blockedCount !== null && blockedCount > 0 ? ` (${blockedCount})` : ''}</Text>
+            <Text style={[styles.settingsSubtitle, { color: colors.textSecondary }]}>{blockedCount === 0 ? 'No blocked users' : 'Manage users you have blocked'}</Text>
           </View>
           <Feather name="chevron-right" size={18} color={colors.textSecondary} />
         </TouchableOpacity>

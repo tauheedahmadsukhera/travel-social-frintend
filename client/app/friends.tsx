@@ -9,6 +9,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { API_BASE_URL } from '../lib/api';
 import AsyncStorage from '@/lib/storage';
 import { followUser, unfollowUser } from '../lib/firebaseHelpers/follow';
+import { userService } from '../lib/userService';
 import { DEFAULT_AVATAR_URL } from '@/lib/api';
 import { hapticLight, hapticMedium } from '@/lib/haptics';
 import { useAppDialog } from '@/src/_components/AppDialogProvider';
@@ -224,14 +225,10 @@ export default function FriendsScreen() {
           onPress: async () => {
             hapticMedium();
             try {
-              // Call backend API to unblock
-              const response = await fetch(`${API_URL}/users/${currentUserId}/block/${targetUserId}`, {
-                method: 'DELETE'
-              });
+              // Call authenticated backend API to unblock
+              const success = await userService.unblockUser(currentUserId, targetUserId);
 
-              const data = await response.json();
-
-              if (data.success) {
+              if (success) {
                 setBlockedUsers(prev => prev.filter(u => u.uid !== targetUserId));
                 showSuccess('User unblocked');
               } else {
