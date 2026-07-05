@@ -88,6 +88,7 @@ export const InviteCollaboratorsScreen: React.FC<InviteCollaboratorsScreenProps>
       </View>
 
       <FlatList
+        keyboardShouldPersistTaps="handled"
         data={data}
         renderItem={renderItem}
         keyExtractor={(item) => item._id || item.firebaseUid}

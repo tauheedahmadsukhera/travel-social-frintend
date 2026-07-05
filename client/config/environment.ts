@@ -228,7 +228,7 @@ export const PAGINATION = {
 export const DEFAULT_ASSETS = {
   get avatar() {
     const base = getAPIBaseURL().replace(/\/api\/?$/, '');
-    return `${base}/assests/avatardefault.webp`;
+    return `${base}/assets/avatardefault.webp`;
   },
   placeholder: 'https://via.placeholder.com/600x600.png?text=No+Media',
 } as const;

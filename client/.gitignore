@@ -148,3 +148,12 @@ keystore-backup/
 # Large Assets
 assets/fake data/
 assets/fake profile/
+
+# Temp/debug artifacts
+.tmp-*
+scratch/
+legacy_config/
+
+# Build logs
+*_build_log*.txt
+*_log_*.txt

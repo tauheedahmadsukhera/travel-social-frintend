@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, FlatList, Image, TextInput, TouchableOpacity, StyleSheet, Modal, KeyboardAvoidingView, Platform, Dimensions } from 'react-native';
+import { View, Text, FlatList, Image, TextInput, TouchableOpacity, StyleSheet, Modal, KeyboardAvoidingView, Platform, Dimensions, ScrollView } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { DEFAULT_AVATAR_URL } from '@/lib/api';
 
@@ -44,6 +44,7 @@ const StoryCommentSection: React.FC<StoryCommentSectionProps> = ({
             <View style={styles.handle} />
             <Text style={styles.title}>Comments</Text>
             <FlatList
+              keyboardShouldPersistTaps="handled"
               data={comments}
               keyExtractor={(item) => item.id}
               renderItem={({ item }) => (
@@ -59,7 +60,12 @@ const StoryCommentSection: React.FC<StoryCommentSectionProps> = ({
               ListEmptyComponent={<Text style={styles.emptyText}>No comments yet</Text>}
               style={{ padding: 16 }}
             />
-            <View style={styles.inputArea}>
+            <ScrollView 
+              keyboardShouldPersistTaps="handled" 
+              scrollEnabled={false} 
+              contentContainerStyle={styles.inputArea}
+              style={{ flexGrow: 0 }}
+            >
               <TextInput
                 value={commentText}
                 onChangeText={setCommentText}
@@ -70,7 +76,7 @@ const StoryCommentSection: React.FC<StoryCommentSectionProps> = ({
               <TouchableOpacity onPress={onSendComment} disabled={!commentText.trim()}>
                 <Feather name="send" size={22} color={commentText.trim() ? "#007aff" : "#999"} />
               </TouchableOpacity>
-            </View>
+            </ScrollView>
           </View>
         </View>
       </KeyboardAvoidingView>

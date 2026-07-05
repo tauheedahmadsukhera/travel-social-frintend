@@ -1117,6 +1117,16 @@ export default function SavedScreen() {
               </>
             )}
           </View>
+          {/* White filler below the sheet to cover keyboard corners/bottom safe area */}
+          <View style={{
+              position: 'absolute',
+              left: 0,
+              right: 0,
+              bottom: -1000,
+              height: 1000,
+              backgroundColor: '#fff',
+              zIndex: -1,
+          }} />
         </KeyboardAvoidingView>
         ) : null}
       </Modal>

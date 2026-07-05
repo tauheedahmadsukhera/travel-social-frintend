@@ -31,7 +31,7 @@ export const VisibilitySettingsScreen: React.FC<VisibilitySettingsScreenProps> =
   return (
     <>
       <Header title="Visibility" onLeft={onGoBack} />
-      <ScrollView style={{ flex: 1 }}>
+      <ScrollView keyboardShouldPersistTaps="handled" style={{ flex: 1 }}>
         {options.map(opt => (
           <View key={opt.key}>
             <TouchableOpacity

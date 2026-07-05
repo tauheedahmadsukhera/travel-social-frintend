@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, TextInput, TouchableOpacity, Text, StyleSheet, Platform, KeyboardAvoidingView } from 'react-native';
+import { View, TextInput, TouchableOpacity, Text, StyleSheet, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Image as ExpoImage } from 'expo-image';
 
@@ -23,10 +23,13 @@ export const CommentInput: React.FC<CommentInputProps> = ({
   quickEmojis,
 }) => {
   return (
-    <View>
+    <View style={{ width: '100%' }}>
       <View style={styles.quickEmojiBar}>
         {quickEmojis.map(emoji => (
-          <TouchableOpacity key={emoji} onPress={() => setNewComment(prev => prev + emoji)}>
+          <TouchableOpacity 
+            key={emoji} 
+            onPress={() => setNewComment(prev => prev + emoji)}
+          >
             <Text style={{ fontSize: 24 }}>{emoji}</Text>
           </TouchableOpacity>
         ))}
@@ -41,7 +44,16 @@ export const CommentInput: React.FC<CommentInputProps> = ({
             onChangeText={setNewComment}
             multiline
           />
-          <TouchableOpacity onPress={onAddComment} disabled={isSubmitting}>
+          <TouchableOpacity 
+            onPress={() => {
+              console.log('💬 [CommentInput] onPress triggered! text:', newComment);
+              onAddComment();
+            }}
+            onPressIn={() => {
+              console.log('💬 [CommentInput] onPressIn triggered!');
+            }}
+            disabled={isSubmitting}
+          >
             <Text style={[styles.postBtn, (!newComment.trim() || isSubmitting) && { opacity: 0.5 }]}>Post</Text>
           </TouchableOpacity>
         </View>

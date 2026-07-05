@@ -569,6 +569,8 @@ export default function DM() {
         onEndReached={loadMore}
         onEndReachedThreshold={0.5}
         extraData={messages}
+        contentContainerStyle={{ paddingTop: 16, paddingBottom: 16 }}
+        keyboardShouldPersistTaps="handled"
       />
     );
   };

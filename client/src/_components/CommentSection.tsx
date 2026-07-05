@@ -14,6 +14,7 @@ import {
   TouchableOpacity,
   View,
   KeyboardAvoidingView,
+  Keyboard,
 } from "react-native";
 import { FlashList } from "@shopify/flash-list";
 import {
@@ -180,6 +181,7 @@ export const CommentSection: React.FC<CommentSectionProps> = ({
 
   const handleAddComment = async () => {
     if (!newComment.trim() || isSubmitting) return;
+    Keyboard.dismiss();
     setIsSubmitting(true);
 
     const trimmedText = newComment.trim();
@@ -492,6 +494,7 @@ export const CommentSection: React.FC<CommentSectionProps> = ({
       {activeTab === 'comment' ? (
         <View style={{ flex: 1, minHeight: 2 }}>
           <FlashList
+            keyboardShouldPersistTaps="handled"
             data={comments}
             keyExtractor={(item) => item.id}
             renderItem={({ item }) => (
@@ -529,6 +532,7 @@ export const CommentSection: React.FC<CommentSectionProps> = ({
       ) : (
         <View style={{ flex: 1, minHeight: 2 }}>
           <FlashList
+            keyboardShouldPersistTaps="handled"
             data={reactions}
             keyExtractor={(item, index) => `${item.userId}-${index}`}
             renderItem={({ item }) => (

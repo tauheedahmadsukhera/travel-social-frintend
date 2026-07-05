@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, TextInput, TouchableOpacity, StyleSheet, Text, Animated } from 'react-native';
+import { View, TextInput, TouchableOpacity, StyleSheet, Text, Animated, ScrollView } from 'react-native';
 import { Feather, Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 
@@ -41,7 +41,12 @@ const DMInput: React.FC<DMInputProps> = ({
   };
 
   return (
-    <View style={styles.container}>
+    <ScrollView 
+      keyboardShouldPersistTaps="handled" 
+      scrollEnabled={false} 
+      style={{ backgroundColor: '#fff', flexGrow: 0 }}
+      contentContainerStyle={styles.container}
+    >
       {replyingTo && (
         <View style={styles.replyBar}>
           <View style={styles.replyContent}>
@@ -109,7 +114,7 @@ const DMInput: React.FC<DMInputProps> = ({
           </TouchableOpacity>
         )}
       </View>
-    </View>
+    </ScrollView>
   );
 };
 
