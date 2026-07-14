@@ -309,20 +309,20 @@ export async function sendPostMessage(
 
     const payload = {
       senderId,
-      recipientId: options?.recipientId,
+      recipientId: options?.recipientId || undefined,
       mediaType: 'post',
       text: options?.text || '',
       sharedPost: {
-        postId: sharedPost.id || sharedPost._id,
-        imageUrl: uniqueMediaUrls[0] || fallbackImage,
-        mediaUrls: uniqueMediaUrls,
-        mediaCount,
-        text: sharedPost.text || sharedPost.caption,
-        caption: sharedPost.caption,
-        userId: sharedPost.userId,
-        userDisplayName: sharedPost.userDisplayName || sharedPost.displayName,
-        userName: sharedPost.userName || sharedPost.username,
-        userAvatar: sharedPost.userAvatar || sharedPost.avatar,
+        postId: String(sharedPost.id || sharedPost._id || ''),
+        imageUrl: uniqueMediaUrls[0] || fallbackImage || '',
+        mediaUrls: uniqueMediaUrls || [],
+        mediaCount: Number(mediaCount) || 0,
+        text: sharedPost.text || sharedPost.caption || '',
+        caption: sharedPost.caption || '',
+        userId: String(sharedPost.userId || ''),
+        userDisplayName: sharedPost.userDisplayName || sharedPost.displayName || '',
+        userName: sharedPost.userName || sharedPost.username || '',
+        userAvatar: sharedPost.userAvatar || sharedPost.avatar || '',
       }
     };
 
@@ -358,16 +358,16 @@ export async function sendStoryMessage(
 
     const payload = {
       senderId,
-      recipientId: options?.recipientId,
+      recipientId: options?.recipientId || undefined,
       mediaType: 'story',
       text: options?.text || '',
       sharedStory: {
-        storyId: resolvedStoryId,
-        mediaUrl: resolvedMediaUrl,
-        mediaType: sharedStory.mediaType || (sharedStory.videoUrl ? 'video' : 'image'),
-        userId: sharedStory.userId,
-        userName: sharedStory.userName || sharedStory.username,
-        userAvatar: sharedStory.userAvatar || sharedStory.avatar,
+        storyId: String(resolvedStoryId || ''),
+        mediaUrl: resolvedMediaUrl || '',
+        mediaType: sharedStory.mediaType || (sharedStory.videoUrl ? 'video' : 'image') || 'image',
+        userId: String(sharedStory.userId || ''),
+        userName: sharedStory.userName || sharedStory.username || '',
+        userAvatar: sharedStory.userAvatar || sharedStory.avatar || '',
       }
     };
 
