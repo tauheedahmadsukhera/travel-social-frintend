@@ -1,7 +1,7 @@
 import React, { useCallback } from 'react';
-import { AppState, Image, StyleSheet, Text, TouchableOpacity, View, Animated, Easing } from 'react-native';
+import { AppState, Image, StyleSheet, Text, TouchableOpacity, View, Animated, Easing, Modal } from 'react-native';
 import { Image as ExpoImage } from 'expo-image';
-import { Audio } from 'expo-av';
+import { Audio, Video, ResizeMode } from 'expo-av';
 import * as FileSystem from 'expo-file-system';
 import { Feather, Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -78,6 +78,7 @@ function MessageBubbleInner({
   failed,
 }: Props) {
   const [playing, setPlaying] = React.useState(false);
+  const [playVideoModalVisible, setPlayVideoModalVisible] = React.useState(false);
   const [isLoaded, setIsLoaded] = React.useState(false);
   const [playbackPosition, setPlaybackPosition] = React.useState(0);
   const [playbackDuration, setPlaybackDuration] = React.useState(0);
@@ -485,12 +486,12 @@ function MessageBubbleInner({
             )}
             
             {resolvedMediaType === 'video' && resolvedMediaUrl && (
-              <View style={styles.videoStub}>
+              <TouchableOpacity onPress={() => setPlayVideoModalVisible(true)} style={styles.videoStub}>
                 <Ionicons name="play" color="white" size={40} style={styles.centerPlay} />
                 <View style={styles.bottomPlayCircle}>
                   <Ionicons name="play" color="white" size={14} />
                 </View>
-              </View>
+              </TouchableOpacity>
             )}
   
             {resolvedMediaType === 'audio' && (audioUrl || resolvedMediaUrl || audioDuration) && (
@@ -701,6 +702,33 @@ function MessageBubbleInner({
             </TouchableOpacity>
           )}
         </View>
+
+        {resolvedMediaType === 'video' && resolvedMediaUrl && (
+          <Modal
+            visible={playVideoModalVisible}
+            transparent={false}
+            animationType="fade"
+            onRequestClose={() => setPlayVideoModalVisible(false)}
+          >
+            <View style={{ flex: 1, backgroundColor: '#000', justifyContent: 'center', alignItems: 'center' }}>
+              <TouchableOpacity 
+                style={{ position: 'absolute', top: 50, right: 20, zIndex: 10, padding: 10 }}
+                onPress={() => setPlayVideoModalVisible(false)}
+              >
+                <Ionicons name="close" size={30} color="#fff" />
+              </TouchableOpacity>
+              
+              <Video
+                source={{ uri: resolvedMediaUrl }}
+                style={{ width: '100%', height: '80%' }}
+                resizeMode={ResizeMode.CONTAIN}
+                shouldPlay={playVideoModalVisible}
+                useNativeControls
+                isLooping={false}
+              />
+            </View>
+          </Modal>
+        )}
       </View>
     </Animated.View>
   );

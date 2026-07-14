@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, TextInput, FlatList, TouchableOpacity, Image, ActivityIndicator, StyleSheet } from 'react-native';
+import { View, Text, TextInput, FlatList, TouchableOpacity, Image, ActivityIndicator, StyleSheet, KeyboardAvoidingView, Platform } from 'react-native';
 import { Feather, Ionicons } from '@expo/vector-icons';
 import { DEFAULT_AVATAR_URL } from '@/lib/api';
 
@@ -63,7 +63,10 @@ export const InviteCollaboratorsScreen: React.FC<InviteCollaboratorsScreenProps>
   );
 
   return (
-    <>
+    <KeyboardAvoidingView 
+      style={{ flex: 1 }} 
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+    >
       <Header
         title="Add People"
         leftLabel="Cancel"
@@ -101,7 +104,7 @@ export const InviteCollaboratorsScreen: React.FC<InviteCollaboratorsScreenProps>
           )
         }
       />
-    </>
+    </KeyboardAvoidingView>
   );
 };
 

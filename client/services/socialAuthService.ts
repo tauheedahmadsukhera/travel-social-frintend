@@ -468,13 +468,21 @@ export async function signInWithTikTok() {
         console.log('✅ Signed in existing TikTok user');
       } catch (signInError: any) {
         console.log('⚠️ TikTok sign-in failed, error code:', signInError.code);
-        if (signInError.code === 'auth/user-not-found') {
+        if (signInError.code === 'auth/user-not-found' || signInError.code === 'auth/invalid-credential') {
           // Create new account
-          console.log('🆕 Creating new TikTok user...');
-          const authInstance = await requireAuth();
-          const createResult = await createUserWithEmailAndPassword(authInstance, tiktokEmail, tiktokPassword);
-          firebaseUser = createResult.user;
-          console.log('✅ New TikTok user created');
+          try {
+            console.log('🆕 Creating new TikTok user...');
+            const authInstance = await requireAuth();
+            const createResult = await createUserWithEmailAndPassword(authInstance, tiktokEmail, tiktokPassword);
+            firebaseUser = createResult.user;
+            console.log('✅ New TikTok user created');
+          } catch (createError: any) {
+            if (createError.code === 'auth/email-already-in-use') {
+              console.error('❌ TikTok email already in use (wrong password)');
+              throw new Error('This account is already registered with a different password.');
+            }
+            throw createError;
+          }
 
           // No Firestore write - backend sync handled by handleSocialAuthResult
           console.log('✅ TikTok user auth ready');
@@ -597,11 +605,19 @@ export async function signInWithSnapchat() {
         console.log('✅ Signed in existing Snapchat user');
       } catch (signInError: any) {
         console.log('⚠️ Snapchat sign-in failed, error code:', signInError.code);
-        if (signInError.code === 'auth/user-not-found') {
-          console.log('🆕 Creating new Snapchat user...');
-          const createResult = await createUserWithEmailAndPassword(authInstance, snapchatEmail, snapchatPassword);
-          firebaseUser = createResult.user;
-          console.log('✅ New Snapchat user created');
+        if (signInError.code === 'auth/user-not-found' || signInError.code === 'auth/invalid-credential') {
+          try {
+            console.log('🆕 Creating new Snapchat user...');
+            const createResult = await createUserWithEmailAndPassword(authInstance, snapchatEmail, snapchatPassword);
+            firebaseUser = createResult.user;
+            console.log('✅ New Snapchat user created');
+          } catch (createError: any) {
+            if (createError.code === 'auth/email-already-in-use') {
+              console.error('❌ Snapchat email already in use (wrong password)');
+              throw new Error('This account is already registered with a different password.');
+            }
+            throw createError;
+          }
         } else if (signInError.code === 'auth/wrong-password') {
           console.error('❌ Snapchat password mismatch detected');
           throw new Error('Password mismatch with stored Snapchat credentials');

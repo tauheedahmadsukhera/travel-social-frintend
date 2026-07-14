@@ -1,9 +1,9 @@
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { ActivityIndicator, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
 // Native debounce — eliminates the full lodash bundle from this screen
 function debounce<T extends (...args: any[]) => any>(fn: T, delay: number): (...args: Parameters<T>) => void {
   let timer: ReturnType<typeof setTimeout>;
@@ -39,6 +39,12 @@ export default function SearchScreen() {
   useEffect(() => {
     resolveCanonicalUserId().then(setCurrentUserId).catch(() => {});
   }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      setQuery('');
+    }, [])
+  );
 
   const {
     trendingHashtags,

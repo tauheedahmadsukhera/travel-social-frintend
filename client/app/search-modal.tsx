@@ -287,10 +287,19 @@ export default function SearchModal() {
 
   useFocusEffect(
     useCallback(() => {
+      // Clear search text and results on focus
+      setQ('');
+      setSuggestions([]);
+      setUsers([]);
+      setHashtags([]);
+      setSelectedRegion(null);
+
       const task = InteractionManager.runAfterInteractions(() => {
         fetchRegions();
       });
-      return () => task.cancel();
+      return () => {
+        task.cancel();
+      };
     }, [fetchRegions])
   );
 

@@ -130,7 +130,7 @@ export async function searchUsers(queryText: string, resultLimit: number = 20) {
   try {
     const { apiService } = await import('@/src/_services/apiService');
     const res = await apiService.get('/users/search', { params: { q: queryText, limit: Math.min(50, resultLimit) } });
-    let results = res.data || [];
+    let results = Array.isArray(res) ? res : (res?.data || []);
 
     // Normalize IDs:
     // - App-wide `userId` (AsyncStorage) is usually Mongo `_id`

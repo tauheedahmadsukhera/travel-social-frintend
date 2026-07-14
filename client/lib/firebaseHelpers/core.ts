@@ -707,9 +707,28 @@ export async function uploadMedia(
     if (uri.startsWith('file://') || uri.startsWith('content://') || uri.startsWith('/') || !uri.includes('://')) {
       // Compress video if needed to stay within Cloudinary limits
       let finalUri = uri;
-        if (mediaType === 'video') {
-          finalUri = await compressVideoSafe(uri);
+      
+      // Copy to cache directory if it's a camera or picker path to ensure clean unencoded URI
+      if (uri.includes('ImagePicker') || uri.includes('Camera') || uri.includes('%')) {
+        try {
+          const FileSystem = require('expo-file-system');
+          const ext = mediaType === 'video' ? '.mp4' : '.jpg';
+          const newLocalUri = FileSystem.cacheDirectory + 'upload_' + Date.now() + ext;
+          const decodedSource = decodeURIComponent(uri);
+          await FileSystem.copyAsync({
+            from: decodedSource,
+            to: newLocalUri
+          });
+          finalUri = newLocalUri;
+          console.log('[uploadMedia] Copy to safe local URI successful:', finalUri);
+        } catch (copyErr) {
+          console.warn('[uploadMedia] Failed to copy file to safe cache, using original:', copyErr);
         }
+      }
+
+      if (mediaType === 'video') {
+        finalUri = await compressVideoSafe(finalUri);
+      }
       
       const multipartResult = await uploadWithMultipart(finalUri, mediaType, path);
       if (multipartResult?.success && multipartResult?.url) {
@@ -869,6 +888,21 @@ async function uploadStoryMedia(uri: string, userId: string, mediaType: 'image' 
         }
       } catch (err) {
         console.warn('[uploadStoryMedia] Failed to resolve iOS asset:', err);
+      }
+    } else if (uri.includes('ImagePicker') || uri.includes('Camera') || uri.includes('%')) {
+      try {
+        const FileSystem = require('expo-file-system');
+        const ext = mediaType === 'video' ? '.mp4' : '.jpg';
+        const newLocalUri = FileSystem.cacheDirectory + 'upload_story_' + Date.now() + ext;
+        const decodedSource = decodeURIComponent(uri);
+        await FileSystem.copyAsync({
+          from: decodedSource,
+          to: newLocalUri
+        });
+        finalUri = newLocalUri;
+        console.log('[uploadStoryMedia] Copy to safe local URI successful:', finalUri);
+      } catch (copyErr) {
+        console.warn('[uploadStoryMedia] Failed to copy file to safe cache, using original:', copyErr);
       }
     }
 

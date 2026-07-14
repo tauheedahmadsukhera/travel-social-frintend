@@ -90,6 +90,16 @@ export default function TabsLayout() {
   const [storyMedia, setStoryMedia] = useState<{ uri: string; type: string } | null>(null);
   const params = useLocalSearchParams();
   const openedStoryIdRef = useRef<string | null>(null);
+
+  // Automatically open Menu drawer if openMenu parameter is passed
+  useEffect(() => {
+    if (params?.openMenu === 'true') {
+      setMenuVisible(true);
+      // Clean up parameter
+      router.setParams({ openMenu: undefined } as any);
+    }
+  }, [params?.openMenu]);
+
   const isSearchScreen = pathname === '/search' || pathname.includes('/search');
   const isSavedScreen = pathname === '/saved' || pathname.includes('/saved');
   const isHomeScreen = pathname === '/home' || pathname === '/' || pathname.includes('home');

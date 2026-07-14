@@ -29,6 +29,7 @@ export default function EditProfile() {
   const params = useLocalSearchParams();
   const { showSuccess } = useAppDialog();
   const [userId, setUserId] = useState<string | null>(null);
+  const [loggingOut, setLoggingOut] = useState(false);
   const authLoading = useAuthLoading();
   
   // Get current user ID from AsyncStorage (token-based auth)
@@ -394,14 +395,21 @@ export default function EditProfile() {
         {/* Bottom Buttons */}
         <View style={styles.bottomBar}>
           <TouchableOpacity
-            style={styles.logoutBtn}
+            style={[styles.logoutBtn, loggingOut && { opacity: 0.5 }]}
+            disabled={loggingOut}
             onPress={async () => {
+              if (loggingOut) return;
+              setLoggingOut(true);
               hapticLight();
               Alert.alert(
                 'Log Out',
                 'Are you sure you want to log out?',
                 [
-                  { text: 'Cancel', style: 'cancel' },
+                  { 
+                    text: 'Cancel', 
+                    style: 'cancel',
+                    onPress: () => setLoggingOut(false)
+                  },
                   {
                     text: 'Log Out',
                     style: 'destructive',
@@ -424,12 +432,14 @@ export default function EditProfile() {
                             }
                           }, 100);
                         } else {
-                          console.error('âŒ [Logout] Failed:', result);
+                          console.error('❌ [Logout] Failed:', result);
                           Alert.alert('Error', 'Failed to log out');
+                          setLoggingOut(false);
                         }
                       } catch (err: any) {
-                        console.error('âŒ [Logout] Exception:', err);
+                        console.error('❌ [Logout] Exception:', err);
                         Alert.alert('Error', 'Failed to log out');
+                        setLoggingOut(false);
                       }
                     }
                   }

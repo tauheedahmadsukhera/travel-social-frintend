@@ -232,20 +232,25 @@ export default function SavedScreen() {
       }
 
       setAllSavedPosts(mergedSavedRaw.map((p: any) => {
-        const isVideo = p.mediaType === 'video' || isVideoUrl(p.mediaUrl || p.imageUrl);
-        let thumb = p.thumbnailUrl;
+        const firstMedia = Array.isArray(p.media) && p.media.length > 0 ? p.media[0] : null;
+        const mediaUrlResolved = p.mediaUrl || p.imageUrl || firstMedia?.url || firstMedia?.uri || '';
+        const mediaTypeResolved = p.mediaType || firstMedia?.type || firstMedia?.mediaType || '';
+
+        const isVideo = mediaTypeResolved === 'video' || isVideoUrl(mediaUrlResolved);
+        let thumb = p.thumbnailUrl || firstMedia?.thumbnailUrl || firstMedia?.thumbnail;
         if (!thumb && isVideo) {
-          thumb = getVideoThumbnailUrl(p.mediaUrl || p.imageUrl || '');
+          thumb = getVideoThumbnailUrl(mediaUrlResolved);
         }
         if (!thumb && !isVideo) {
-          thumb = p.mediaUrl || p.imageUrl || (Array.isArray(p.mediaUrls) ? p.mediaUrls[0] : '');
+          thumb = mediaUrlResolved;
         }
 
         return {
           ...p,
           id: p._id || p.id,
-          imageUrl: p.mediaUrl || p.imageUrl || (Array.isArray(p.mediaUrls) ? p.mediaUrls[0] : '') || '',
-          gridThumb: thumb || p.mediaUrl || p.imageUrl || (Array.isArray(p.mediaUrls) ? p.mediaUrls[0] : ''),
+          mediaType: mediaTypeResolved,
+          imageUrl: mediaUrlResolved,
+          gridThumb: thumb || mediaUrlResolved,
         };
       }));
 
@@ -685,10 +690,10 @@ export default function SavedScreen() {
 
   // ── Thumb helper ──────────────────────────────────────────────────────────
 
-  const getCollThumb = (col: Collection) =>
-    col.coverImage
-    || allSavedPosts.find(p => col.postIds?.includes(p.id))?.imageUrl
-    || '';
+  const getCollThumb = (col: Collection) => {
+    const matched = allSavedPosts.find(p => col.postIds?.includes(p.id));
+    return col.coverImage || matched?.gridThumb || matched?.imageUrl || '';
+  };
 
   // ─── Renders ──────────────────────────────────────────────────────────────
 

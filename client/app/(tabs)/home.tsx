@@ -69,7 +69,7 @@ const styles = StyleSheet.create({
     borderColor: '#F0F0F0',
   },
   searchText: { color: '#222', fontSize: 15, fontWeight: '400' },
-  headerSection: { paddingBottom: 12, paddingTop: 0, backgroundColor: '#fff', marginBottom: 0 },
+  headerSection: { paddingBottom: 12, paddingTop: 12, backgroundColor: '#fff', marginBottom: 0 },
   chip: { alignItems: 'center', marginRight: 12 },
   chipIconWrap: { width: 64, height: 64, borderRadius: 14, backgroundColor: '#f5f5f5', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
   chipIconWrapActive: { borderColor: '#FF8D00', borderWidth: 2.5 },
@@ -280,19 +280,6 @@ export default function Home() {
   const listHeader = useMemo(() => (
     <View>
       <View style={styles.headerSection}>
-        <TouchableOpacity
-          style={[styles.searchBar, MIRROR_HOME && { flexDirection: 'row-reverse', justifyContent: 'flex-start' }]}
-          onPress={() => {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-            router.push('/search-modal');
-          }}
-        >
-          <Feather name="search" size={18} color="#222" />
-          <Text style={[styles.searchText, MIRROR_HOME && { marginLeft: 0, marginRight: 8 }]}>
-            {(!filter && !params.location) ? 'Search' : (params.location || filter)}
-          </Text>
-        </TouchableOpacity>
-
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}

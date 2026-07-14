@@ -187,15 +187,14 @@ export default function EditSectionsModal({
         setSearching(true);
         try {
           const res = await apiService.get(`/users/search?q=${encodeURIComponent(collaboratorInput)}&requesterUserId=${currentUserId}`);
-          if (res?.success && Array.isArray(res.data)) {
-            const normalized = res.data.map((u: any) => ({
-              ...u,
-              uid: u._id || u.firebaseUid,
-              name: u.displayName || u.name || 'User',
-              avatar: u.avatar || u.photoURL || u.profilePicture || ''
-            }));
-            setSearchResults(normalized);
-          }
+          const list = Array.isArray(res) ? res : (res?.data || []);
+          const normalized = list.map((u: any) => ({
+            ...u,
+            uid: u._id || u.firebaseUid,
+            name: u.displayName || u.name || 'User',
+            avatar: u.avatar || u.photoURL || u.profilePicture || ''
+          }));
+          setSearchResults(normalized);
         } catch (e) { console.error('search error', e); }
         finally { setSearching(false); }
       } else {

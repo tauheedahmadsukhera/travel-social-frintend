@@ -157,6 +157,34 @@ export default function SaveToCollectionModal({
         }
     }, [currentUid]);
 
+    // Search users for collection collaboration
+    useEffect(() => {
+        const delayDebounceFn = setTimeout(async () => {
+            if (followerSearch.trim().length > 1 && currentUid) {
+                setSearching(true);
+                try {
+                    const res = await apiService.get(`/users/search?q=${encodeURIComponent(followerSearch)}&requesterUserId=${currentUid}`);
+                    const list = Array.isArray(res) ? res : (res?.data || []);
+                    const normalized = list.map((u: any) => ({
+                        ...u,
+                        uid: u._id || u.firebaseUid,
+                        name: u.displayName || u.name || 'User',
+                        avatar: u.avatar || u.photoURL || u.profilePicture || ''
+                    }));
+                    setSearchResults(normalized);
+                } catch (e) {
+                    console.error('search users error', e);
+                } finally {
+                    setSearching(false);
+                }
+            } else {
+                setSearchResults([]);
+            }
+        }, 500);
+
+        return () => clearTimeout(delayDebounceFn);
+    }, [followerSearch, currentUid]);
+
     const handleGlobalToggle = async () => {
         if (!currentUid || isUpdating) return;
         const nextState = !isGloballySaved;
@@ -216,7 +244,7 @@ export default function SaveToCollectionModal({
                         {
                             transform: [
                                 { translateY: sheetTranslateY },
-                                { translateY: keyboardOffsetAnim },
+                                { translateY: (screen === 'invite' || screen === 'visibility') ? 0 : keyboardOffsetAnim },
                             ],
                             paddingBottom: screen === 'new' ? (insets.bottom || 8) : (insets.bottom || 20),
                             minHeight: screen === 'new' ? undefined : SCREEN_H * 0.75,

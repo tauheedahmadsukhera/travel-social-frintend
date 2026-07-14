@@ -11,7 +11,10 @@ export default function TermsOfServiceScreen() {
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => safeRouterBack()} style={styles.backButton}>
+        <TouchableOpacity 
+          onPress={() => router.replace({ pathname: '/(tabs)/profile', params: { openMenu: 'true' } } as any)} 
+          style={styles.backButton}
+        >
           <Ionicons name="arrow-back" size={24} color="#000" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Terms of Service</Text>
