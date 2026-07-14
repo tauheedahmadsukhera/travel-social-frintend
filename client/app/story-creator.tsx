@@ -1085,6 +1085,31 @@ export default function StoryCreatorScreen() {
                                 />
                             </View>
 
+                            {/* Color Picker */}
+                            <View style={{ height: 44, marginVertical: 8 }}>
+                                <ScrollView
+                                    horizontal
+                                    showsHorizontalScrollIndicator={false}
+                                    contentContainerStyle={styles.colorRow}
+                                    keyboardShouldPersistTaps="always"
+                                >
+                                    {TEXT_COLORS.map((c) => {
+                                        const active = editingColor === c;
+                                        return (
+                                            <TouchableOpacity
+                                                key={c}
+                                                onPress={() => setEditingColor(c)}
+                                                style={[
+                                                    styles.colorDot,
+                                                    { backgroundColor: c },
+                                                    active && styles.colorDotSelected,
+                                                ]}
+                                            />
+                                        );
+                                    })}
+                                </ScrollView>
+                            </View>
+
                             {/* Font style row */}
                             <View style={styles.fontStyleRow}>
                                 {(Object.keys(FONT_STYLES) as FontStyleKey[]).map((key) => {
@@ -1113,29 +1138,6 @@ export default function StoryCreatorScreen() {
                                     );
                                 })}
                             </View>
-
-                            {/* Color Picker */}
-                            <ScrollView
-                                horizontal
-                                showsHorizontalScrollIndicator={false}
-                                contentContainerStyle={styles.colorRow}
-                                keyboardShouldPersistTaps="always"
-                            >
-                                {TEXT_COLORS.map((c) => {
-                                    const active = editingColor === c;
-                                    return (
-                                        <TouchableOpacity
-                                            key={c}
-                                            onPress={() => setEditingColor(c)}
-                                            style={[
-                                                styles.colorDot,
-                                                { backgroundColor: c },
-                                                active && styles.colorDotSelected,
-                                            ]}
-                                        />
-                                    );
-                                })}
-                            </ScrollView>
                         </View>
                     </TouchableWithoutFeedback>
                 </KeyboardAvoidingView>
@@ -1455,7 +1457,7 @@ const styles = StyleSheet.create({
     },
 
     // ── Text Editor Modal ──
-    textEditorBg: { flex: 1, backgroundColor: 'rgba(0,0,0,0.94)' },
+    textEditorBg: { flex: 1, backgroundColor: 'rgba(0,0,0,0.78)' },
     textEditorHeader: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -1479,19 +1481,20 @@ const styles = StyleSheet.create({
     editorHeaderRight: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 12,
     },
     editorDeleteBtn: {
         width: 36,
         height: 36,
         alignItems: 'center',
         justifyContent: 'center',
+        marginRight: 8,
     },
     doneBtn: {
         paddingHorizontal: 18,
         paddingVertical: 8,
         backgroundColor: '#FF8D00',
         borderRadius: 20,
+        marginLeft: 8,
     },
     doneBtnText: { color: '#fff', fontWeight: '700', fontSize: 15 },
     textEditorPreview: {
@@ -1502,7 +1505,7 @@ const styles = StyleSheet.create({
     },
     textEditorOverlay: {
         ...StyleSheet.absoluteFillObject,
-        backgroundColor: 'rgba(0,0,0,0.3)',
+        backgroundColor: 'rgba(0,0,0,0.15)',
     },
     textInput: {
         fontSize: 28,
@@ -1517,22 +1520,24 @@ const styles = StyleSheet.create({
     fontStyleRow: {
         flexDirection: 'row',
         justifyContent: 'center',
-        paddingVertical: 16,
-        gap: 12,
+        paddingVertical: 12,
+        paddingBottom: Platform.OS === 'ios' ? 24 : 16,
     },
     fontStyleBtn: {
         paddingHorizontal: 16,
         paddingVertical: 8,
         borderRadius: 20,
-        borderWidth: 1,
+        borderWidth: 1.5,
         borderColor: 'rgba(255,255,255,0.25)',
+        backgroundColor: 'rgba(255,255,255,0.08)',
+        marginHorizontal: 6,
     },
     fontStyleBtnActive: {
         backgroundColor: '#fff',
         borderColor: '#fff',
     },
     fontStyleLabel: {
-        color: 'rgba(255,255,255,0.7)',
+        color: 'rgba(255,255,255,0.85)',
         fontSize: 14,
         fontWeight: '600',
     },
@@ -1545,16 +1550,14 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         paddingHorizontal: 16,
-        paddingVertical: 10,
-        gap: 12,
-        paddingBottom: 24,
     },
     colorDot: {
-        width: 32,
-        height: 32,
-        borderRadius: 16,
+        width: 30,
+        height: 30,
+        borderRadius: 15,
         borderWidth: 2,
-        borderColor: 'transparent',
+        borderColor: 'rgba(255,255,255,0.4)',
+        marginHorizontal: 6,
     },
     colorDotSelected: {
         borderWidth: 3,

@@ -71,7 +71,8 @@ function StoryTextOverlays({ postMetadata, mediaLoaded }: { postMetadata?: any; 
         parsedMeta = JSON.parse(postMetadata);
       } catch {}
     }
-    if (parsedMeta?.textBaked) {
+    const bakedVal = parsedMeta?.textBaked ?? parsedMeta?.metadata?.textBaked ?? parsedMeta?.story?.postMetadata?.textBaked;
+    if (bakedVal === true || String(bakedVal).toLowerCase() === 'true' || bakedVal === 1) {
       isBaked = true;
     }
   }
