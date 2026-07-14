@@ -108,11 +108,11 @@ export default function UsernameLoginScreen() {
                 onPress={handleAppleSignIn}
                 style={styles.socialButton}
               />
-              <SocialButton
+              {/* <SocialButton
                 provider="tiktok"
                 onPress={signInWithTikTok}
                 style={styles.socialButton}
-              />
+              /> */}
               <SocialButton
                 provider="snapchat"
                 onPress={signInWithSnapchat}

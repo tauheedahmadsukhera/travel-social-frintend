@@ -297,11 +297,11 @@ export default function PhoneLoginScreen() {
                 onPress={() => {/* Handle Apple login */ }}
                 style={styles.socialButton}
               />
-              <SocialButton
+              {/* <SocialButton
                 provider="tiktok"
                 onPress={() => {/* Handle TikTok login */ }}
                 style={styles.socialButton}
-              />
+              /> */}
               <SocialButton
                 provider="snapchat"
                 onPress={() => {/* Handle Snap login */ }}

@@ -105,7 +105,7 @@ export default function LoginOptionsScreen() {
           <View style={styles.socialSection}>
             <SocialButton provider="google" onPress={() => handleSocialLogin('google')} style={styles.socialButton} />
             <SocialButton provider="apple" onPress={() => handleSocialLogin('apple')} style={styles.socialButton} />
-            <SocialButton provider="tiktok" onPress={() => handleSocialLogin('tiktok')} style={styles.socialButton} />
+            {/* <SocialButton provider="tiktok" onPress={() => handleSocialLogin('tiktok')} style={styles.socialButton} /> */}
             <SocialButton provider="snapchat" onPress={() => handleSocialLogin('snapchat')} style={styles.socialButton} />
           </View>
         </View>

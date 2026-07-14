@@ -260,12 +260,12 @@ export default function PhoneSignUpScreen() {
             variant="outline"
             style={styles.socialButton}
           />
-          <CustomButton
+          {/* <CustomButton
             title="Continue with TikTok"
             onPress={() => { }}
             variant="secondary"
             style={styles.socialButton}
-          />
+          /> */}
           <CustomButton
             title="Continue with Snap"
             onPress={() => { }}

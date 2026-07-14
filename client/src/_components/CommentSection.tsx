@@ -181,7 +181,6 @@ export const CommentSection: React.FC<CommentSectionProps> = ({
 
   const handleAddComment = async () => {
     if (!newComment.trim() || isSubmitting) return;
-    Keyboard.dismiss();
     setIsSubmitting(true);
 
     const trimmedText = newComment.trim();
@@ -214,6 +213,7 @@ export const CommentSection: React.FC<CommentSectionProps> = ({
         setComments(prev => [optimisticComment, ...prev]);
         setNewComment('');
         setReplyTo(null);
+        Keyboard.dismiss();
 
         // Emit optimistic count update
         feedEventEmitter.emit('commentCountUpdated', { postId, count: optimisticCount });
@@ -250,6 +250,7 @@ export const CommentSection: React.FC<CommentSectionProps> = ({
         );
         setNewComment('');
         setReplyTo(null);
+        Keyboard.dismiss();
 
         // Emit optimistic count update
         feedEventEmitter.emit('commentCountUpdated', { postId, count: optimisticCount });
@@ -280,6 +281,7 @@ export const CommentSection: React.FC<CommentSectionProps> = ({
         setComments(prev => [optimisticComment, ...prev]);
         setNewComment('');
         setReplyTo(null);
+        Keyboard.dismiss();
 
         // Emit optimistic count update
         feedEventEmitter.emit('commentCountUpdated', { postId, count: optimisticCount });
@@ -378,15 +380,24 @@ export const CommentSection: React.FC<CommentSectionProps> = ({
     Alert.alert("Delete", "Are you sure?", [
       { text: "Cancel" },
       { text: "Delete", style: 'destructive', onPress: async () => {
-        if (isReply && parentId) {
-          await deleteCommentReply(postId, parentId, comment.id, currentUserId, postOwnerId);
-        } else {
-          await deleteComment(postId, comment.id, currentUserId, postOwnerId);
+        try {
+          if (isStory) {
+            // Story comments live in MongoDB Story.comments[] — use story REST endpoint
+            const res = await apiService.delete(`/stories/${postId}/comments/${comment.id}`);
+            if (!res?.success) throw new Error(res?.error || 'Delete failed');
+          } else if (isReply && parentId) {
+            await deleteCommentReply(postId, parentId, comment.id, currentUserId, postOwnerId);
+          } else {
+            await deleteComment(postId, comment.id, currentUserId, postOwnerId);
+          }
+          setShowOptions(false);
+          setSelectedComment(null);
+          await loadData();
+          feedEventEmitter.emit("commentDeleted", { postId });
+        } catch (e: any) {
+          console.error('[handleDelete] error:', e);
+          Alert.alert('Error', e?.message || 'Failed to delete comment');
         }
-        setShowOptions(false);
-        setSelectedComment(null);
-        await loadData();
-        feedEventEmitter.emit("commentDeleted", { postId });
       }}
     ]);
   };
@@ -394,7 +405,13 @@ export const CommentSection: React.FC<CommentSectionProps> = ({
   const handleSaveEdit = async () => {
     if (!editValue.trim() || !selectedComment) return;
     try {
-      if (selectedComment.isReply && selectedComment.parentId) {
+      if (isStory) {
+        // Story comments live in MongoDB Story.comments[] — use story REST endpoint
+        const res = await apiService.patch(`/stories/${postId}/comments/${selectedComment.id}`, {
+          text: editValue.trim()
+        });
+        if (!res?.success) throw new Error(res?.error || 'Edit failed');
+      } else if (selectedComment.isReply && selectedComment.parentId) {
         await editCommentReply(postId, selectedComment.parentId, selectedComment.id, currentUserId, editValue.trim());
       } else {
         await editComment(postId, selectedComment.id, currentUserId, editValue.trim());
@@ -402,8 +419,9 @@ export const CommentSection: React.FC<CommentSectionProps> = ({
       setIsEditing(false);
       setSelectedComment(null);
       await loadData();
-    } catch (e) {
-      console.error(e);
+    } catch (e: any) {
+      console.error('[handleSaveEdit] error:', e);
+      Alert.alert('Error', e?.message || 'Failed to edit comment');
     }
   };
 
@@ -494,7 +512,7 @@ export const CommentSection: React.FC<CommentSectionProps> = ({
       {activeTab === 'comment' ? (
         <View style={{ flex: 1, minHeight: 2 }}>
           <FlashList
-            keyboardShouldPersistTaps="handled"
+            keyboardShouldPersistTaps="always"
             data={comments}
             keyExtractor={(item) => item.id}
             renderItem={({ item }) => (

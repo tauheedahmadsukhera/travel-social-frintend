@@ -111,11 +111,11 @@ export default function SignUpOptionsScreen() {
               onPress={handleAppleSignIn}
               style={styles.socialButton}
             />
-            <SocialButton
+            {/* <SocialButton
               provider="tiktok"
               onPress={handleTikTokSignIn}
               style={styles.socialButton}
-            />
+            /> */}
             <SocialButton
               provider="snapchat"
               onPress={handleSnapchatSignIn}

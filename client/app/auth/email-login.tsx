@@ -190,11 +190,11 @@ export default function EmailLoginScreen() {
                 onPress={() => handleSocialLogin('apple')}
                 style={styles.socialButton}
               />
-              <SocialButton
+              {/* <SocialButton
                 provider="tiktok"
                 onPress={() => handleSocialLogin('tiktok')}
                 style={styles.socialButton}
-              />
+              /> */}
               <SocialButton
                 provider="snapchat"
                 onPress={() => handleSocialLogin('snapchat')}

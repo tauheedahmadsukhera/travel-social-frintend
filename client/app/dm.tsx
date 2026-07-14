@@ -621,7 +621,30 @@ export default function DM() {
         modalVariant="chat"
         sharePayload={sharePostItem}
         onClose={() => setShowShareModal(false)}
-        onSend={async () => { setShowShareModal(false); }}
+        onSend={async (userIds) => {
+          setShowShareModal(false);
+          // Optimistic UI: add shared post message immediately to the current DM
+          if (sharePostItem && conversationId && currentUserId) {
+            const kind = String(sharePostItem?.shareType || 'post').toLowerCase();
+            const data = sharePostItem?.data ?? sharePostItem;
+            const tempId = createTempId('temp_share');
+            const sentAtMs = Date.now();
+            const tempMsg = normalizeMessage({
+              id: tempId,
+              senderId: currentUserId,
+              mediaType: kind,
+              createdAt: new Date(sentAtMs).toISOString(),
+              __ts: sentAtMs,
+              sent: false,
+              tempOrigin: true,
+              ...(kind === 'post' ? { sharedPost: data } : { sharedStory: data }),
+            });
+            setMessages(prev => [tempMsg, ...prev]);
+            setTimeout(() => {
+              flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
+            }, 100);
+          }
+        }}
       />
 
       <EmojiPicker 

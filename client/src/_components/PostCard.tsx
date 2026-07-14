@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { View, Dimensions, StyleSheet, InteractionManager, Alert, Modal, Pressable, KeyboardAvoidingView, Platform, Text, Animated, PanResponder, TouchableOpacity } from "react-native";
+import { View, Dimensions, StyleSheet, InteractionManager, Alert, Modal, Pressable, Platform, Text, Animated, PanResponder, TouchableOpacity, Keyboard, ScrollView } from "react-native";
 import { Ionicons, Feather } from "@expo/vector-icons";
 import { useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
@@ -97,6 +97,29 @@ const PostCard: React.FC<PostCardProps> = ({
 
 
   const translateY = useRef(new Animated.Value(0)).current;
+  // Use Animated.Value so keyboard movement causes ZERO React re-renders
+  // Zero re-renders = touches always reach the Post button cleanly
+  const keyboardAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+    const showSub = Keyboard.addListener(showEvent, (e) => {
+      Animated.timing(keyboardAnim, {
+        toValue: e.endCoordinates.height,
+        duration: e.duration ?? 250,
+        useNativeDriver: false,
+      }).start();
+    });
+    const hideSub = Keyboard.addListener(hideEvent, (e) => {
+      Animated.timing(keyboardAnim, {
+        toValue: 0,
+        duration: (e as any).duration ?? 200,
+        useNativeDriver: false,
+      }).start();
+    });
+    return () => { showSub.remove(); hideSub.remove(); };
+  }, []);
 
   const panResponder = useRef(
     PanResponder.create({
@@ -583,44 +606,56 @@ const PostCard: React.FC<PostCardProps> = ({
         visible={!!showComments}
         animationType="slide"
         transparent={true}
-        onRequestClose={() => setShowComments(false)}
+        statusBarTranslucent={true}
+        onRequestClose={() => { Keyboard.dismiss(); setShowComments(false); }}
       >
-        <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-          style={{ flex: 1 }}
+        {/* Backdrop covers full screen */}
+        <Pressable
+          style={StyleSheet.absoluteFill}
+          onPress={() => { Keyboard.dismiss(); setShowComments(false); }}
+        />
+
+        {/* Sheet: position absolute, bottom & height both animated so top stays fixed */}
+        <Animated.View
+          style={{
+            position: 'absolute',
+            left: 0,
+            right: 0,
+            bottom: keyboardAnim,
+            // height shrinks by same amount as bottom rises → top edge stays fixed on screen
+            height: Animated.subtract(
+              Dimensions.get('window').height * 0.85,
+              keyboardAnim
+            ),
+            backgroundColor: '#fff',
+            borderTopLeftRadius: 30,
+            borderTopRightRadius: 30,
+            overflow: 'hidden',
+            transform: [{ translateY }],
+          }}
         >
-          <Pressable 
-            style={{ flex: 1, backgroundColor: 'transparent' }} 
-            onPress={() => setShowComments(false)} 
-          />
-          <Animated.View 
-            style={{ 
-              height: '85%', 
-              backgroundColor: '#fff', 
-              borderTopLeftRadius: 30, 
-              borderTopRightRadius: 30, 
-              overflow: 'hidden',
-              marginTop: 'auto',
-              transform: [{ translateY }],
-              elevation: 0,
-              shadowOpacity: 0
-            }}
+          {/* keyboardShouldPersistTaps=always ensures Post tap fires immediately */}
+          <ScrollView
+            style={{ flex: 1 }}
+            scrollEnabled={false}
+            keyboardShouldPersistTaps="always"
+            contentContainerStyle={{ flex: 1 }}
           >
             {/* Drag Handle */}
-            <View 
+            <View
               {...panResponder.panHandlers}
-              style={{ 
-                height: 40, 
-                width: '100%', 
-                alignItems: 'center', 
+              style={{
+                height: 40,
+                width: '100%',
+                alignItems: 'center',
                 justifyContent: 'center',
-                backgroundColor: '#fff' 
+                backgroundColor: '#fff',
               }}
             >
               <View style={{ height: 5, width: 40, backgroundColor: '#ddd', borderRadius: 3 }} />
             </View>
-            
-            <CommentSection 
+
+            <CommentSection
               postId={post._id || post.id}
               postOwnerId={post?.userId?._id || post?.userId}
               currentAvatar={currentUser?.avatar || currentUser?.photoURL || ''}
@@ -628,8 +663,8 @@ const PostCard: React.FC<PostCardProps> = ({
               maxHeight={Dimensions.get('window').height * 0.8}
               initialTab={showComments === 'reactions' ? 'reactions' : 'comment'}
             />
-          </Animated.View>
-        </KeyboardAvoidingView>
+          </ScrollView>
+        </Animated.View>
       </Modal>
 
       <Modal
