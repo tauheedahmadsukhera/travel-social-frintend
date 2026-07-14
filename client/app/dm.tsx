@@ -491,7 +491,17 @@ export default function DM() {
       { text: "Cancel", style: "cancel" },
       { text: "Clear", style: "destructive", onPress: async () => {
         const res = await clearConversation(conversationId);
-        if (res?.success) setMessages([]);
+        if (res?.success) {
+          setMessages([]);
+          // Clear memory cache in Zustand store
+          try {
+            useAppStore.getState().setCachedMessages(conversationId, []);
+          } catch (err) {
+            console.warn('[handleClearChat] Zustand clear failed:', err);
+          }
+          // Clear AsyncStorage disk cache
+          AsyncStorage.removeItem(`messages_cache_${conversationId}`).catch(() => {});
+        }
       }}
     ]);
   };
