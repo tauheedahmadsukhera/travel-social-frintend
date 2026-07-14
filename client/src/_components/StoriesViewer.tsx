@@ -870,6 +870,12 @@ export default function StoriesViewer({ stories, onClose, initialIndex = 0, isHi
                             if (!res.error) {
                               const updated = localStories.filter((_, idx) => idx !== currentIndex);
                               setLocalStories(updated);
+                              try {
+                                const { feedEventEmitter } = require('../../lib/feedEventEmitter');
+                                feedEventEmitter.emit('feedUpdated');
+                              } catch (err) {
+                                console.warn('[StoriesViewer] Failed to emit feedUpdated on highlight remove:', err);
+                              }
                               if (updated.length === 0) onClose();
                               else if (currentIndex >= updated.length) setCurrentIndex(updated.length - 1);
                             } else {
@@ -880,6 +886,12 @@ export default function StoriesViewer({ stories, onClose, initialIndex = 0, isHi
                             if (res.success) {
                               const updated = localStories.filter((_, idx) => idx !== currentIndex);
                               setLocalStories(updated);
+                              try {
+                                const { feedEventEmitter } = require('../../lib/feedEventEmitter');
+                                feedEventEmitter.emit('feedUpdated');
+                              } catch (err) {
+                                console.warn('[StoriesViewer] Failed to emit feedUpdated on story delete:', err);
+                              }
                               if (updated.length === 0) onClose();
                               else if (currentIndex >= updated.length) setCurrentIndex(updated.length - 1);
                             }
