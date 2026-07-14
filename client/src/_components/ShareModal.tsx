@@ -123,10 +123,18 @@ export default function ShareModal({
 
     const isStory = !!sharePayload?.isStory;
     const contentType = isStory ? 'story' : 'post';
-    const apiBase = getAPIBaseURL();
+    // Resolve share base URL dynamically:
+    // EXPO_PUBLIC_SHARE_DOMAIN can be set in client .env (e.g. to "https://travelsocial.com" or a custom domain)
+    // If not set, it defaults to the API base URL without the "/api" suffix.
+    const customShareDomain = process.env.EXPO_PUBLIC_SHARE_DOMAIN || '';
+    let shareBase = customShareDomain.trim().replace(/\/+$/, '');
+    if (!shareBase) {
+      const apiBase = getAPIBaseURL();
+      shareBase = apiBase.replace(/\/api\/?$/, '');
+    }
     const shareUrl = isStory 
-      ? `${apiBase}/share/story/${postId}`
-      : `${apiBase}/share/post/${postId}`;
+      ? `${shareBase}/share/story/${postId}`
+      : `${shareBase}/share/post/${postId}`;
 
     switch (actionType) {
       case 'story':
