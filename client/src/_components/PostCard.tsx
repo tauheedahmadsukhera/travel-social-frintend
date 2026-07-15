@@ -150,7 +150,7 @@ const PostCard: React.FC<PostCardProps> = ({
   }, [showComments]);
 
   useEffect(() => {
-    const sub = feedEventEmitter.onPostUpdated(post._id, (pid, data) => {
+    const sub = feedEventEmitter.onPostUpdated(post._id || post.id, (pid, data) => {
       if (!data) return; // Guard against undefined data
       if (data.reactions) {
         setLocalReactions(data.reactions);
@@ -159,7 +159,7 @@ const PostCard: React.FC<PostCardProps> = ({
       if (data.likeCount !== undefined) setLikeCount(data.likeCount);
       
       if (data.commentCount !== undefined) {
-        setLocalCommentCount(data.commentCount);
+        setLocalCommentCount(data.count || data.commentCount);
       } else if (data.commentsCount !== undefined) {
         setLocalCommentCount(data.commentsCount);
       }
@@ -240,14 +240,14 @@ const PostCard: React.FC<PostCardProps> = ({
     
     try {
       const userName = currentUser?.displayName || currentUser?.name || 'Someone';
-      if (newLiked) await likePost(post._id, activeUserId);
-      else await unlikePost(post._id, activeUserId);
+      if (newLiked) await likePost(post._id || post.id, activeUserId);
+      else await unlikePost(post._id || post.id, activeUserId);
     } catch (err) {
       // Revert on error
       setIsLiked(!newLiked);
       setLikeCount((prev: number) => !newLiked ? prev + 1 : prev - 1);
     }
-  }, [isLiked, post._id, currentUser]);
+  }, [isLiked, post._id, post.id, currentUser]);
 
   const onScroll = useCallback((event: any) => {
     const x = event.nativeEvent.contentOffset.x;
@@ -483,7 +483,7 @@ const PostCard: React.FC<PostCardProps> = ({
                 style={{ flexDirection: 'row', alignItems: 'center', padding: 18 }}
                 onPress={() => {
                   setShowPostMenu(false);
-                  router.push(`/create-post?editPostId=${post._id}&initialData=${encodeURIComponent(JSON.stringify(post))}`);
+                  router.push(`/create-post?editPostId=${post._id || post.id}&initialData=${encodeURIComponent(JSON.stringify(post))}`);
                 }}
               >
                 <Feather name="edit-3" size={22} color="#333" />
@@ -499,9 +499,9 @@ const PostCard: React.FC<PostCardProps> = ({
                       { text: "Cancel" },
                       { text: "Delete", style: "destructive", onPress: async () => {
                          try {
-                           const res = await apiService.delete(`/posts/${post._id}`);
+                           const res = await apiService.delete(`/posts/${post._id || post.id}`);
                            if (res && res.success) {
-                             feedEventEmitter.emitFeedUpdate({ type: 'POST_DELETED', postId: post._id });
+                             feedEventEmitter.emitFeedUpdate({ type: 'POST_DELETED', postId: post._id || post.id });
                              Alert.alert("Success", "Post deleted successfully.");
                            } else {
                              Alert.alert("Error", res?.error || "Failed to delete post.");

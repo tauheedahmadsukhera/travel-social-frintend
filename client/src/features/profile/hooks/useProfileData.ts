@@ -171,7 +171,19 @@ export function useProfileData({ viewedUserId, currentUserId, enabled }: UseProf
       try {
         const res = await apiService.get(`/users/${viewedUserId}/highlights`);
         const rawHighlights = res?.success && Array.isArray(res.data) ? res.data : [];
-        return rawHighlights.map((h: any) => ({
+        
+        // Filter out duplicates by ID or title to prevent showing duplicate highlights
+        const seen = new Set();
+        const uniqueHighlights = [];
+        for (const h of rawHighlights) {
+          const key = String(h.id || h._id || h.title || '').trim();
+          if (key && !seen.has(key)) {
+            seen.add(key);
+            uniqueHighlights.push(h);
+          }
+        }
+
+        return uniqueHighlights.map((h: any) => ({
           ...h,
           id: h.id || h._id || String(h._id || ''),
           coverImage: h.coverImage || h.image || (h.items && h.items[0]?.imageUrl) || 'https://via.placeholder.com/150'
