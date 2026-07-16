@@ -94,8 +94,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-around',
     paddingVertical: 12,
-    borderTopWidth: 1,
-    borderTopColor: '#eee',
+    borderTopWidth: 0,
+    borderTopColor: 'transparent',
   },
   inputArea: {
     flexDirection: 'row',

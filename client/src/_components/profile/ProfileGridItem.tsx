@@ -32,18 +32,19 @@ const ProfileGridItem = React.memo(({
     (Array.isArray(item.imageUrls) && item.imageUrls[0]) ||
     '';
   const explicitThumbnailUrl = item.thumbnailUrl || firstMedia?.thumbnailUrl || firstMedia?.thumbnail || '';
-  const isVideo = item.mediaType === 'video' || firstMediaType === 'video' || isVideoUrl(primaryMediaUrl);
-  const mediaUrl = explicitThumbnailUrl || (isVideo ? getVideoThumbnailUrl(primaryMediaUrl) : primaryMediaUrl) || '';
+  const normalizedPrimaryMediaUrl = normalizeMediaUrl(primaryMediaUrl);
+  const isVideo = item.mediaType === 'video' || firstMediaType === 'video' || isVideoUrl(normalizedPrimaryMediaUrl);
+  const mediaUrl = explicitThumbnailUrl || (isVideo ? getVideoThumbnailUrl(normalizedPrimaryMediaUrl) : normalizedPrimaryMediaUrl) || '';
   
   const [localThumbnail, setLocalThumbnail] = useState<string | null>(null);
 
   useEffect(() => {
     let isMounted = true;
-    if (isVideo && !explicitThumbnailUrl && primaryMediaUrl) {
+    if (isVideo && !explicitThumbnailUrl && normalizedPrimaryMediaUrl) {
       (async () => {
         try {
           const { getThumbnailAsync } = await import('expo-video-thumbnails');
-          const { uri } = await getThumbnailAsync(primaryMediaUrl, { time: 1000 });
+          const { uri } = await getThumbnailAsync(normalizedPrimaryMediaUrl, { time: 1000 });
           if (isMounted) {
             setLocalThumbnail(uri);
           }
@@ -55,7 +56,7 @@ const ProfileGridItem = React.memo(({
     return () => {
       isMounted = false;
     };
-  }, [isVideo, explicitThumbnailUrl, primaryMediaUrl]);
+  }, [isVideo, explicitThumbnailUrl, normalizedPrimaryMediaUrl]);
 
   const normalizedUrl = normalizeMediaUrl(localThumbnail || mediaUrl) || DEFAULT_IMAGE_URL;
 

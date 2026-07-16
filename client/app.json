@@ -29,7 +29,7 @@
       ],
       "config": {
         "googleMaps": {
-          "apiKey": "AIzaSyDKZ-vpdhQYe2gBak9utt0UOjMCy1BMsXQ"
+          "apiKey": "AIzaSyBSKBFf-2JyCDRvth2w490V7xfjeQqllt4"
         }
       }
     },
@@ -39,7 +39,7 @@
       "buildNumber": "21",
       "googleServicesFile": "./GoogleService-Info.plist",
       "config": {
-        "googleMapsApiKey": "AIzaSyDKZ-vpdhQYe2gBak9utt0UOjMCy1BMsXQ"
+        "googleMapsApiKey": "AIzaSyBSKBFf-2JyCDRvth2w490V7xfjeQqllt4"
       },
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,

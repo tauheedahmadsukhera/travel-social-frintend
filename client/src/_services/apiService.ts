@@ -252,7 +252,7 @@ async function apiRequestWithRetry(method: string, url: string, data?: any, conf
 
       // ✅ Add additional params from config
       if (config?.params) {
-        requestConfig.params = { ...requestConfig.params, ...config.params };
+        requestConfig.params = { ...(requestConfig.params || {}), ...config.params };
       }
 
       // ✅ Cache Buster — only for real-time endpoints that must never be stale

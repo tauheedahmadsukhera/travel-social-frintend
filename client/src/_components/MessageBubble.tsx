@@ -7,6 +7,8 @@ import { Feather, Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { DEFAULT_AVATAR_URL } from '@/lib/api';
 import { apiService } from '@/src/_services/apiService';
+import { normalizeMediaUrl, isVideoUrl } from '@/lib/utils/media';
+import { getVideoThumbnailUrl } from '@/lib/imageHelpers';
 
 type Props = {
   text?: string;
@@ -163,6 +165,45 @@ function MessageBubbleInner({
     return sharedPostMediaUrls.length;
   }, [sharedPost, sharedPostMediaUrls]);
   const sharedPostPreviewUrl = sharedPostMediaUrls[0] || sharedPost?.imageUrl || sharedPost?.image || null;
+  const [sharedPostThumb, setSharedPostThumb] = React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    let isMounted = true;
+    const rawUrl = sharedPostMediaUrls[0] || sharedPost?.imageUrl || sharedPost?.image || null;
+    if (!rawUrl) {
+      setSharedPostThumb(null);
+      return;
+    }
+    const normalized = normalizeMediaUrl(rawUrl);
+    const isVideo = sharedPost?.mediaType === 'video' || isVideoUrl(normalized);
+    
+    if (isVideo) {
+      const cloudThumb = getVideoThumbnailUrl(normalized);
+      if (cloudThumb !== normalized && cloudThumb.endsWith('.jpg')) {
+        setSharedPostThumb(cloudThumb);
+      } else {
+        // Fallback to local expo-video-thumbnails generation
+        (async () => {
+          try {
+            const { getThumbnailAsync } = await import('expo-video-thumbnails');
+            const { uri } = await getThumbnailAsync(normalized, { time: 1000 });
+            if (isMounted) {
+              setSharedPostThumb(uri);
+            }
+          } catch (e) {
+            console.warn('[MessageBubble] Failed to generate video thumbnail:', e);
+            setSharedPostThumb(normalized); // fallback to original
+          }
+        })();
+      }
+    } else {
+      setSharedPostThumb(normalized);
+    }
+    
+    return () => {
+      isMounted = false;
+    };
+  }, [sharedPost, sharedPostMediaUrls]);
   const legacyStoryId = typeof text === 'string'
     ? (text.match(/story[:;]\/\/([A-Za-z0-9_-]+)/i)?.[1] || text.match(/Shared a story:\s*([A-Za-z0-9_-]+)/i)?.[1] || '')
     : '';
@@ -565,9 +606,9 @@ function MessageBubbleInner({
                   />
                   <Text style={styles.sharedPostAuthorName} numberOfLines={1}>{sharedPost.userName || sharedPost.username || 'User'}</Text>
                 </View>
-                {sharedPostPreviewUrl ? (
+                {sharedPostThumb ? (
                   <View style={styles.sharedPostImageWrap}>
-                    <Image source={{ uri: sharedPostPreviewUrl }} style={styles.sharedPostImage} />
+                    <Image source={{ uri: sharedPostThumb }} style={styles.sharedPostImage} />
                     {sharedPostMediaCount > 1 && (
                       <View style={styles.multiMediaBadge}>
                         <Ionicons name="copy-outline" size={12} color="#fff" />

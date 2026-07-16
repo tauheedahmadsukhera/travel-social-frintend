@@ -172,14 +172,23 @@ export function useProfileData({ viewedUserId, currentUserId, enabled }: UseProf
         const res = await apiService.get(`/users/${viewedUserId}/highlights`);
         const rawHighlights = res?.success && Array.isArray(res.data) ? res.data : [];
         
-        // Filter out duplicates by ID or title to prevent showing duplicate highlights
+        // Filter out duplicates by title to prevent showing duplicate highlights
         const seen = new Set();
         const uniqueHighlights = [];
         for (const h of rawHighlights) {
-          const key = String(h.id || h._id || h.title || '').trim();
-          if (key && !seen.has(key)) {
-            seen.add(key);
-            uniqueHighlights.push(h);
+          const key = String(h.title || '').trim().toLowerCase();
+          if (key) {
+            if (!seen.has(key)) {
+              seen.add(key);
+              uniqueHighlights.push(h);
+            }
+          } else {
+            // fallback to ID if title is empty
+            const fallbackKey = String(h.id || h._id || '');
+            if (fallbackKey && !seen.has(fallbackKey)) {
+              seen.add(fallbackKey);
+              uniqueHighlights.push(h);
+            }
           }
         }
 

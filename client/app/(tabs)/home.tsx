@@ -52,7 +52,7 @@ const styles = StyleSheet.create({
     marginHorizontal: 10,
     marginTop: 12,
     marginBottom: 12,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#F0F2F5',
     height: 48,
     borderRadius: 24,
     flexDirection: 'row',
@@ -60,15 +60,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: 20,
     gap: 10,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
-    elevation: 3,
-    borderWidth: 1,
-    borderColor: '#F0F0F0',
   },
-  searchText: { color: '#222', fontSize: 15, fontWeight: '400' },
+  searchText: { color: '#222', fontSize: 15, fontWeight: '400', textAlign: 'center' },
   headerSection: { paddingBottom: 12, paddingTop: 12, backgroundColor: '#fff', marginBottom: 0 },
   chip: { alignItems: 'center', marginRight: 12 },
   chipIconWrap: { width: 64, height: 64, borderRadius: 14, backgroundColor: '#f5f5f5', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
@@ -277,38 +270,52 @@ export default function Home() {
   const showInitialSkeleton = loading && filteredRaw.length === 0;
   const skeletonItems = useMemo(() => Array.from({ length: 4 }, (_, i) => ({ key: `sk-${i}` })), []);
 
-  const listHeader = useMemo(() => (
-    <View>
-      <View style={styles.headerSection}>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={[
-            { paddingLeft: 10, paddingRight: 10, paddingVertical: 0, flexGrow: 1 },
-            MIRROR_HOME && { flexDirection: 'row-reverse' },
-          ]}
-        >
-          {categories.map((cat) => (
-            <TouchableOpacity
-              key={cat.name}
-              style={[styles.chip, MIRROR_HOME && { marginRight: 0, marginLeft: 10 }]}
-              onPress={() => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-                const next = cat.name === filter ? '' : cat.name;
-                listRef.current?.scrollToOffset({ offset: 0, animated: true });
-                router.push(next ? `/(tabs)/home?filter=${encodeURIComponent(next)}` : `/(tabs)/home`);
-              }}
-            >
-              <View style={[styles.chipIconWrap, filter === cat.name && styles.chipIconWrapActive]}>
-                <ExpoImage source={getCategoryImageSource(cat.name, cat.image)} style={styles.categoryImage} />
-              </View>
-              <Text style={[styles.chipText, filter === cat.name && styles.chipTextActive]}>{cat.name}</Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
+  const listHeader = useMemo(() => {
+    const searchText = (!filter && !params.location) ? 'Search' : (params.location || filter);
+    return (
+      <View>
+        <View style={styles.headerSection}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={[
+              { paddingLeft: 10, paddingRight: 10, paddingVertical: 0, flexGrow: 1 },
+              MIRROR_HOME && { flexDirection: 'row-reverse' },
+            ]}
+          >
+            {categories.map((cat) => (
+              <TouchableOpacity
+                key={cat.name}
+                style={[styles.chip, MIRROR_HOME && { marginRight: 0, marginLeft: 10 }]}
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+                  const next = cat.name === filter ? '' : cat.name;
+                  listRef.current?.scrollToOffset({ offset: 0, animated: true });
+                  router.push(next ? `/(tabs)/home?filter=${encodeURIComponent(next)}` : `/(tabs)/home`);
+                }}
+              >
+                <View style={[styles.chipIconWrap, filter === cat.name && styles.chipIconWrapActive]}>
+                  <ExpoImage source={getCategoryImageSource(cat.name, cat.image)} style={styles.categoryImage} />
+                </View>
+                <Text style={[styles.chipText, filter === cat.name && styles.chipTextActive]}>{cat.name}</Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+
+          <TouchableOpacity
+            style={[
+              styles.searchBar,
+              MIRROR_HOME ? { flexDirection: 'row-reverse', justifyContent: 'flex-start' } : null,
+            ]}
+            onPress={() => router.push('/search-modal')}
+          >
+            <Feather name="search" size={18} color="#222" />
+            <Text style={[styles.searchText, MIRROR_HOME && { marginLeft: 0, marginRight: 8 }]}>{searchText}</Text>
+          </TouchableOpacity>
+        </View>
       </View>
-    </View>
-  ), [categories, filter, router, params.location]);
+    );
+  }, [categories, filter, router, params.location]);
 
   const listFooter = useMemo(() => (
     loadingMore ? (

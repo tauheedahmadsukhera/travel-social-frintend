@@ -36,6 +36,7 @@ import CollectionDeleteModal from '@/src/_components/CollectionDeleteModal';
 import SaveToCollectionModal from '@/src/_components/SaveToCollectionModal';
 import PostViewerModal from '@/src/_components/PostViewerModal';
 import CommentSection from '@/src/_components/CommentSection';
+import ProfileGridItem from '@/src/_components/profile/ProfileGridItem';
 import { apiService } from '@/src/_services/apiService';
 import { feedEventEmitter } from '../../lib/feedEventEmitter';
 import { sharePost } from '../../lib/postShare';
@@ -231,10 +232,13 @@ export default function SavedScreen() {
         });
       }
 
-      setAllSavedPosts(mergedSavedRaw.map((p: any) => {
+      const mappedSavedPosts = mergedSavedRaw.map((p: any) => {
         const firstMedia = Array.isArray(p.media) && p.media.length > 0 ? p.media[0] : null;
-        const mediaUrlResolved = p.mediaUrl || p.imageUrl || firstMedia?.url || firstMedia?.uri || '';
-        const mediaTypeResolved = p.mediaType || firstMedia?.type || firstMedia?.mediaType || '';
+        const mediaUrlResolved = p.mediaUrl || p.imageUrl || 
+          (Array.isArray(p.mediaUrls) && p.mediaUrls[0]) || 
+          (Array.isArray(p.imageUrls) && p.imageUrls[0]) || 
+          firstMedia?.url || firstMedia?.uri || '';
+        const mediaTypeResolved = p.mediaType || firstMedia?.type || firstMedia?.mediaType || (isVideoUrl(mediaUrlResolved) ? 'video' : 'image');
 
         const isVideo = mediaTypeResolved === 'video' || isVideoUrl(mediaUrlResolved);
         let thumb = p.thumbnailUrl || firstMedia?.thumbnailUrl || firstMedia?.thumbnail;
@@ -252,7 +256,9 @@ export default function SavedScreen() {
           imageUrl: mediaUrlResolved,
           gridThumb: thumb || mediaUrlResolved,
         };
-      }));
+      });
+
+      setAllSavedPosts(mappedSavedPosts);
 
       // Initialize liked/saved maps
       const likes: Record<string, boolean> = {};
@@ -271,11 +277,7 @@ export default function SavedScreen() {
       try {
         await setCachedData(SAVED_CACHE_KEY(activeUid), {
           collections: mergedSections,
-          allSavedPosts: mergedSavedRaw.map((p: any) => ({
-            ...p,
-            id: p._id || p.id,
-            imageUrl: p.mediaUrl || p.imageUrl || (Array.isArray(p.mediaUrls) ? p.mediaUrls[0] : '') || '',
-          })),
+          allSavedPosts: mappedSavedPosts,
           likedPosts: likes,
           savedPosts: saves,
         }, { ttl: 24 * 60 * 60 * 1000 });
@@ -738,35 +740,20 @@ export default function SavedScreen() {
         maxToRenderPerBatch={12}
         windowSize={5}
         removeClippedSubviews={Platform.OS === 'android'}
-        renderItem={({ item, index }) => {
-          const gridUri = normalizeMediaUrl(item.gridThumb || item.imageUrl);
-          const isVideo = item.mediaType === 'video' || isVideoUrl(item.imageUrl);
-          
-          return (
-            <TouchableOpacity
-              style={styles.gridItem}
-              onPress={() => {
-                hapticLight();
-                setSelectedPostIndex(index);
-                setPostViewerVisible(true);
-              }}
-              activeOpacity={0.8}
-            >
-              <ExpoImage 
-                source={{ uri: gridUri }} 
-                style={styles.gridImg} 
-                contentFit="cover"
-                cachePolicy="memory-disk"
-                transition={200}
-              />
-              {isVideo && (
-                <View style={styles.playIconOverlay}>
-                  <Ionicons name="play" size={16} color="#fff" />
-                </View>
-              )}
-            </TouchableOpacity>
-          );
-        }}
+        renderItem={({ item, index }) => (
+          <ProfileGridItem
+            item={item}
+            index={index}
+            onPress={(it, idx) => {
+              hapticLight();
+              setSelectedPostIndex(idx);
+              setPostViewerVisible(true);
+            }}
+            normalizeMediaUrl={normalizeMediaUrl}
+            isVideoUrl={isVideoUrl}
+            DEFAULT_IMAGE_URL="https://via.placeholder.com/150"
+          />
+        )}
       />
     );
   };

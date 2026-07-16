@@ -37,7 +37,7 @@ export default {
       ],
       "config": {
         "googleMaps": {
-          "apiKey": process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY || "AIzaSyDKZ-vpdhQYe2gBak9utt0UOjMCy1BMsXQ"
+          "apiKey": process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY || "AIzaSyBSKBFf-2JyCDRvth2w490V7xfjeQqllt4"
         }
       }
     },
@@ -47,7 +47,7 @@ export default {
       "buildNumber": "20",
       "googleServicesFile": "./GoogleService-Info.plist",
       "config": {
-        "googleMapsApiKey": process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY || "AIzaSyDKZ-vpdhQYe2gBak9utt0UOjMCy1BMsXQ"
+        "googleMapsApiKey": process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY || "AIzaSyBSKBFf-2JyCDRvth2w490V7xfjeQqllt4"
       },
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,

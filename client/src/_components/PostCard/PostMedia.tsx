@@ -97,6 +97,13 @@ const VideoItem: React.FC<VideoItemProps> = ({
           transition={0}
         />
       )}
+      {!isLoaded && (
+        <ActivityIndicator
+          size="small"
+          color="#FF8D00"
+          style={{ position: 'absolute', zIndex: 2 }}
+        />
+      )}
       <Video
         ref={videoRef}
         source={{ uri: mediaUri }}
@@ -179,17 +186,17 @@ const ImageItem: React.FC<ImageItemProps> = ({ url, containerHeight, onPress, pr
     <TouchableOpacity
       activeOpacity={0.95}
       onPress={onPress}
-      style={{ width: SCREEN_WIDTH, height: containerHeight }}
+      style={{ width: SCREEN_WIDTH, height: containerHeight, backgroundColor: '#f3f4f6' }}
     >
       <ExpoImage
         source={{ uri: mediaUri }}
         placeholder={thumbUri ? { uri: thumbUri } : undefined}
-        style={{ width: SCREEN_WIDTH, height: containerHeight }}
+        style={{ width: SCREEN_WIDTH, height: containerHeight, backgroundColor: '#f3f4f6' }}
         contentFit="cover"
         cachePolicy="memory-disk"
         priority={priority}
         recyclingKey={url}
-        transition={0}
+        transition={200}
       />
     </TouchableOpacity>
   );
@@ -235,9 +242,11 @@ const PostMedia: React.FC<PostMediaProps> = ({
     if (!isFocused) setIsPlaying(false);
   }, [isFocused]);
 
-  // Reset detected ratio when the media changes (prevents recycled items using stale ratios)
+  // Reset detected ratio and scroll flags when the media changes (prevents recycled items using stale states)
   useEffect(() => {
     setDetectedRatio(null);
+    setIsInitialScrollDone(false);
+    setLocalActiveIndex(0);
   }, [firstItem?.url]);
 
   const handlePress = useCallback((index: number, isVideo: boolean = false) => {
