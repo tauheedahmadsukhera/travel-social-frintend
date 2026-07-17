@@ -117,9 +117,15 @@ const Dashboard = () => {
               <h3 className="text-2xl font-bold tracking-tight">Growth Analytics</h3>
               <p className="text-slate-400 text-sm">New users joined over the last 7 days</p>
             </div>
-            <div className="flex gap-2">
-              <span className="w-3 h-3 rounded-full bg-indigo-500 mt-1" />
-              <span className="text-sm font-bold text-slate-300">New Users</span>
+            <div className="flex gap-4">
+              <div className="flex items-center gap-2">
+                <span className="w-3 h-3 rounded-full bg-indigo-500" />
+                <span className="text-sm font-bold text-slate-300">New Users</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="w-3 h-3 rounded-full bg-emerald-500" />
+                <span className="text-sm font-bold text-slate-300">New Posts</span>
+              </div>
             </div>
           </div>
           
@@ -130,6 +136,10 @@ const Dashboard = () => {
                   <linearGradient id="colorUsers" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%" stopColor="#6366f1" stopOpacity={0.4}/>
                     <stop offset="95%" stopColor="#6366f1" stopOpacity={0}/>
+                  </linearGradient>
+                  <linearGradient id="colorPosts" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#10b981" stopOpacity={0.4}/>
+                    <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.03)" vertical={false} />
@@ -163,6 +173,14 @@ const Dashboard = () => {
                   stroke="#6366f1" 
                   fillOpacity={1} 
                   fill="url(#colorUsers)" 
+                  strokeWidth={4} 
+                />
+                <Area 
+                  type="monotone" 
+                  dataKey="posts" 
+                  stroke="#10b981" 
+                  fillOpacity={1} 
+                  fill="url(#colorPosts)" 
                   strokeWidth={4} 
                 />
               </AreaChart>
