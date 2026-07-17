@@ -231,6 +231,8 @@ export default function StoriesViewer({ stories, onClose, initialIndex = 0, isHi
   const [commentLikesCount, setCommentLikesCount] = useState<{ [key: string]: number }>({});
   const [newHighlightName, setNewHighlightName] = useState('');
   const [newHighlightVisibility, setNewHighlightVisibility] = useState<'Public' | 'Private'>('Public');
+  const [creatingHighlight, setCreatingHighlight] = useState(false);
+  const isCreatingHighlightRef = useRef(false);
   const [userHighlights, setUserHighlights] = useState<any[]>([]);
   const [loadingHighlights, setLoadingHighlights] = useState(false);
 
@@ -386,10 +388,13 @@ export default function StoriesViewer({ stories, onClose, initialIndex = 0, isHi
   };
 
   const handleCreateNewHighlight = async () => {
+    if (isCreatingHighlightRef.current || creatingHighlight) return;
     if (!newHighlightName.trim()) {
       Alert.alert('Error', 'Please enter a highlight name');
       return;
     }
+    isCreatingHighlightRef.current = true;
+    setCreatingHighlight(true);
     try {
       const res = await highlightManager.createAndAddStory({
         userId: String(currentUser?.uid || ''),
@@ -409,12 +414,15 @@ export default function StoriesViewer({ stories, onClose, initialIndex = 0, isHi
         setIsPaused(false);
         // Refresh highlights list so the new one is selectable immediately
         loadUserHighlights();
+        return; // Exit directly to keep disabled while closing
       } else {
         Alert.alert('Error', res.error || 'Failed to create highlight');
       }
     } catch (err) {
       Alert.alert('Error', 'Failed to create highlight');
     }
+    isCreatingHighlightRef.current = false;
+    setCreatingHighlight(false);
   };
 
   useEffect(() => {
@@ -986,6 +994,8 @@ export default function StoriesViewer({ stories, onClose, initialIndex = 0, isHi
           onCreateNew={() => {
             setShowHighlightModal(false);
             setShowNewHighlightModal(true);
+            isCreatingHighlightRef.current = false;
+            setCreatingHighlight(false);
           }}
           loading={loadingHighlights}
         />
@@ -998,14 +1008,15 @@ export default function StoriesViewer({ stories, onClose, initialIndex = 0, isHi
               <KeyboardAvoidingView 
                 behavior={Platform.OS === 'ios' ? 'padding' : undefined} 
                 enabled={Platform.OS === 'ios'}
-                style={{ backgroundColor: '#fff' }}
+                style={{ backgroundColor: '#fff', borderTopLeftRadius: 28, borderTopRightRadius: 28, overflow: 'hidden' }}
               >
-                <SafeAreaView style={{ backgroundColor: '#fff', borderTopLeftRadius: 20, borderTopRightRadius: 20, maxHeight: height * 0.9, minHeight: 420, overflow: 'hidden' }}>
+                <SafeAreaView style={{ backgroundColor: '#fff', borderTopLeftRadius: 28, borderTopRightRadius: 28, maxHeight: height * 0.9, minHeight: 420, overflow: 'hidden' }}>
                   <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: '#ddd', alignSelf: 'center', marginTop: 10, marginBottom: 2 }} />
 
                   <View style={{ height: 52, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#eee' }}>
                     <TouchableOpacity
                       onPress={() => { setShowNewHighlightModal(false); setIsPaused(false); }}
+                      disabled={creatingHighlight}
                       activeOpacity={0.7}
                       hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                       style={{ minWidth: 80, alignItems: 'flex-start' }}
@@ -1019,12 +1030,16 @@ export default function StoriesViewer({ stories, onClose, initialIndex = 0, isHi
 
                     <TouchableOpacity
                       onPress={handleCreateNewHighlight}
-                      disabled={!newHighlightName.trim()}
+                      disabled={!newHighlightName.trim() || creatingHighlight}
                       activeOpacity={0.7}
                       hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                       style={{ minWidth: 80, alignItems: 'flex-end' }}
                     >
-                      <Text style={{ fontSize: 15, color: newHighlightName.trim() ? '#007aff' : '#bbb', fontWeight: '700' }}>Save</Text>
+                      {creatingHighlight ? (
+                        <ActivityIndicator size="small" color="#007aff" />
+                      ) : (
+                        <Text style={{ fontSize: 15, color: newHighlightName.trim() ? '#007aff' : '#bbb', fontWeight: '700' }}>Save</Text>
+                      )}
                     </TouchableOpacity>
                   </View>
 

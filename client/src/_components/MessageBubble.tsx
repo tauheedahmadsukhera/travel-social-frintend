@@ -1,5 +1,5 @@
 import React, { useCallback } from 'react';
-import { AppState, Image, StyleSheet, Text, TouchableOpacity, View, Animated, Easing, Modal } from 'react-native';
+import { AppState, StyleSheet, Text, TouchableOpacity, View, Animated, Easing, Modal } from 'react-native';
 import { Image as ExpoImage } from 'expo-image';
 import { Audio, Video, ResizeMode } from 'expo-av';
 import * as FileSystem from 'expo-file-system';
@@ -522,7 +522,7 @@ function MessageBubbleInner({
             )}
             {resolvedMediaType === 'image' && resolvedMediaUrl && (
               <TouchableOpacity onPress={() => onPressImage?.(resolvedMediaUrl)}>
-                <Image source={{ uri: resolvedMediaUrl }} style={styles.msgImage} />
+                <ExpoImage source={{ uri: resolvedMediaUrl }} style={styles.msgImage} contentFit="cover" cachePolicy="memory-disk" transition={150} />
               </TouchableOpacity>
             )}
             
@@ -608,7 +608,7 @@ function MessageBubbleInner({
                 </View>
                 {sharedPostThumb ? (
                   <View style={styles.sharedPostImageWrap}>
-                    <Image source={{ uri: sharedPostThumb }} style={styles.sharedPostImage} />
+                    <ExpoImage source={{ uri: sharedPostThumb }} style={styles.sharedPostImage} contentFit="cover" cachePolicy="memory-disk" transition={150} />
                     {sharedPostMediaCount > 1 && (
                       <View style={styles.multiMediaBadge}>
                         <Ionicons name="copy-outline" size={12} color="#fff" />
@@ -635,9 +635,12 @@ function MessageBubbleInner({
                 style={styles.storyCard}
               >
                 {/* Story thumbnail */}
-                <Image
+                <ExpoImage
                   source={{ uri: resolvedStory.mediaUrl || resolvedStory.imageUrl || resolvedStory.videoUrl || resolvedStory.image || resolvedStory.video || DEFAULT_AVATAR_URL }}
                   style={styles.storyCardImage}
+                  contentFit="cover"
+                  cachePolicy="memory-disk"
+                  transition={150}
                 />
                 {/* Gradient overlay top */}
                 <View style={styles.storyCardGradientTop} />

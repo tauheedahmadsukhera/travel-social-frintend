@@ -69,10 +69,11 @@ const AutoplayVideoPreview: React.FC<{ uri: string; style: any }> = ({ uri, styl
       {!isLoaded && (
         <View style={[StyleSheet.absoluteFillObject, { backgroundColor: '#000', justifyContent: 'center', alignItems: 'center', borderRadius: 12 }]}>
           {uri.startsWith('ph://') || uri.startsWith('assets-library://') ? (
-            <Image
+            <ExpoImage
               source={{ uri }}
               style={{ width: '100%', height: '100%', borderRadius: 12 }}
-              resizeMode="cover"
+              contentFit="cover"
+              cachePolicy="memory-disk"
             />
           ) : (
             <ActivityIndicator size="small" color="#FF8D00" />
@@ -868,10 +869,11 @@ function StoriesRowComponent({ onStoryPress, onStoryViewerClose, refreshTrigger,
                     {String(selectedMedia?.type || '').toLowerCase() === 'video' || String(selectedMedia?.mimeType || '').toLowerCase().includes('video') ? (
                       <AutoplayVideoPreview uri={selectedMedia.uri} style={styles.modalImage} />
                     ) : (
-                      <Image
+                      <ExpoImage
                         source={{ uri: selectedMedia.uri }}
                         style={styles.modalImage}
-                        resizeMode="cover"
+                        contentFit="cover"
+                        cachePolicy="memory-disk"
                       />
                     )}
                     <TouchableOpacity

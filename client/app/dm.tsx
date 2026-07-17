@@ -676,13 +676,12 @@ export default function DM() {
         </Pressable>
       </Modal>
 
-      {/* Full Screen Image Viewer */}
       <Modal visible={!!viewerImage} transparent animationType="fade">
         <View style={{ flex: 1, backgroundColor: '#000', justifyContent: 'center', alignItems: 'center' }}>
           <TouchableOpacity style={{ position: 'absolute', top: 50, right: 20, zIndex: 10 }} onPress={() => setViewerImage(null)}>
             <Ionicons name="close" size={32} color="#fff" />
           </TouchableOpacity>
-          <Image source={{ uri: viewerImage! }} style={{ width: '100%', height: '80%', resizeMode: 'contain' }} />
+          <ExpoImage source={{ uri: viewerImage! }} style={{ width: '100%', height: '80%' }} contentFit="contain" cachePolicy="memory-disk" />
         </View>
       </Modal>
 

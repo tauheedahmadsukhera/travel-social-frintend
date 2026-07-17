@@ -43,6 +43,7 @@ export default function CreateHighlightModal({
   const [visibility, setVisibility] = useState('Public');
   const [loading, setLoading] = useState(false);
   const [selectedStories, setSelectedStories] = useState<Set<string>>(new Set());
+  const isSavingRef = React.useRef(false);
 
   // Reset states on visible change
   useEffect(() => {
@@ -50,6 +51,7 @@ export default function CreateHighlightModal({
       setName('');
       setCoverImage(null);
       setSelectedStories(new Set());
+      isSavingRef.current = false;
     }
   }, [visible]);
 
@@ -100,6 +102,7 @@ export default function CreateHighlightModal({
   };
 
   const handleCreate = async () => {
+    if (loading || isSavingRef.current) return;
     if (!name.trim()) {
       Alert.alert('Error', 'Please enter a highlight name');
       return;
@@ -110,6 +113,7 @@ export default function CreateHighlightModal({
       return;
     }
 
+    isSavingRef.current = true;
     setLoading(true);
 
     try {
@@ -144,7 +148,7 @@ export default function CreateHighlightModal({
       }
     } catch (error: any) {
       Alert.alert('Error', error.message || 'Failed to create highlight');
-    } finally {
+      isSavingRef.current = false;
       setLoading(false);
     }
   };
@@ -181,7 +185,7 @@ export default function CreateHighlightModal({
             </View>
 
             {/* Central Cover Preview */}
-            <TouchableOpacity style={styles.coverContainer} onPress={handlePickImage}>
+            <TouchableOpacity style={styles.coverContainer} onPress={handlePickImage} disabled={loading}>
               {coverImage ? (
                 <Image source={{ uri: coverImage }} style={styles.coverImage} />
               ) : (
@@ -200,10 +204,11 @@ export default function CreateHighlightModal({
                   value={name}
                   onChangeText={setName}
                   maxLength={30}
+                  editable={!loading}
                 />
               </View>
 
-              <TouchableOpacity style={styles.settingBtn} onPress={handleVisibilitySelect}>
+              <TouchableOpacity style={styles.settingBtn} onPress={handleVisibilitySelect} disabled={loading}>
                 <View style={styles.settingLeft}>
                   <Ionicons name="eye-outline" size={22} color="#000" />
                   <Text style={styles.settingText}>Visibility</Text>
@@ -231,6 +236,7 @@ export default function CreateHighlightModal({
                       <TouchableOpacity
                         style={[styles.storyOption, isSelected && styles.storyOptionSelected]}
                         onPress={() => toggleStory(item)}
+                        disabled={loading}
                       >
                         <Image source={{ uri: mediaUri }} style={styles.storyOptionImage} />
                         {isSelected && (
@@ -268,9 +274,10 @@ const styles = StyleSheet.create({
   },
   container: {
     backgroundColor: '#fff',
-    borderTopLeftRadius: 30,
-    borderTopRightRadius: 30,
+    borderTopLeftRadius: 36,
+    borderTopRightRadius: 36,
     minHeight: 480,
+    overflow: 'hidden',
   },
   handle: {
     width: 40,
@@ -286,6 +293,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 20,
     paddingVertical: 15,
+    borderTopLeftRadius: 36,
+    borderTopRightRadius: 36,
+    backgroundColor: '#fff',
   },
   headerTitle: {
     fontSize: 17,

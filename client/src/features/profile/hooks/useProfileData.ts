@@ -280,7 +280,25 @@ export function useProfileData({ viewedUserId, currentUserId, enabled }: UseProf
     userStories: storiesQuery.data || cachedData?.stories || [],
     savedSectionPosts: savedPostsQuery.data || cachedData?.savedPosts || [],
     taggedPosts: taggedPostsQuery.data || cachedData?.taggedPosts || [],
-    highlights: highlightsQuery.data || cachedData?.highlights || [],
+    highlights: (() => {
+      const raw = highlightsQuery.data || cachedData?.highlights || [];
+      const seen = new Set();
+      const unique = [];
+      for (const h of raw) {
+        const titleKey = String(h.title || '').trim().toLowerCase();
+        const idKey = String(h.id || h._id || '');
+        const key = titleKey || idKey;
+        if (key && !seen.has(key)) {
+          seen.add(key);
+          unique.push(h);
+        }
+      }
+      return unique.map((h: any) => ({
+        ...h,
+        id: h.id || h._id || String(h._id || ''),
+        coverImage: h.coverImage || h.image || (h.items && h.items[0]?.imageUrl) || 'https://via.placeholder.com/150'
+      }));
+    })(),
     isLoading: showSpinner,
     isRefetching: profileQuery.isRefetching,
     refetchAll: async () => {

@@ -86,7 +86,7 @@ export function useNetworkStatus() {
   return {
     isConnected,
     isInternetReachable,
-    isOnline: isConnected && isInternetReachable,
+    isOnline: isConnected !== false && isInternetReachable !== false,
     connectionType,
   };
 }
@@ -162,8 +162,18 @@ export function useOfflineFirst<T>(
 export function useOfflineBanner() {
   const { isOnline } = useNetworkStatus();
   const [showBanner, setShowBanner] = useState(false);
+  const [isReady, setIsReady] = useState(false);
 
   useEffect(() => {
+    const timer = setTimeout(() => {
+      setIsReady(true);
+    }, 1500);
+    return () => clearTimeout(timer);
+  }, []);
+
+  useEffect(() => {
+    if (!isReady) return;
+
     if (isOnline === false) {
       setShowBanner(true);
     } else if (isOnline === true && showBanner) {
@@ -171,10 +181,10 @@ export function useOfflineBanner() {
       const timer = setTimeout(() => setShowBanner(false), 2000);
       return () => clearTimeout(timer);
     }
-  }, [isOnline]);
+  }, [isOnline, isReady, showBanner]);
 
   return {
     showBanner,
-    isOnline,
+    isOnline: isOnline ?? true,
   };
 }

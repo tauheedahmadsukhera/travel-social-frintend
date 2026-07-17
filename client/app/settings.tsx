@@ -47,7 +47,7 @@ export default function SettingsScreen() {
         <TouchableOpacity
           onPress={() => {
             hapticLight();
-            safeRouterBack();
+            router.replace({ pathname: '/(tabs)/profile', params: { openMenu: 'true' } } as any);
           }}
           style={styles.backBtn}
           hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}

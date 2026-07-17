@@ -74,6 +74,7 @@ const PostCard: React.FC<PostCardProps> = ({
   const [localCommentCount, setLocalCommentCount] = useState<number>(
     post?.commentCount !== undefined ? post.commentCount : (post?.commentsCount || 0)
   );
+  const [localCaption, setLocalCaption] = useState(post?.caption || post?.text || '');
 
   // Sync like state when user or post changes
   useEffect(() => {
@@ -163,6 +164,12 @@ const PostCard: React.FC<PostCardProps> = ({
       } else if (data.commentsCount !== undefined) {
         setLocalCommentCount(data.commentsCount);
       }
+
+      if (data.caption !== undefined) {
+        setLocalCaption(data.caption);
+      } else if (data.text !== undefined) {
+        setLocalCaption(data.text);
+      }
     });
 
     const commentSub = (feedEventEmitter as any).addListener('commentAdded', (data: any) => {
@@ -192,10 +199,11 @@ const PostCard: React.FC<PostCardProps> = ({
     setIsLiked(post?.isLiked || false);
     setLikeCount(post?.likeCount || 0);
     setLocalReactions(post?.reactions || []);
+    setLocalCaption(post?.caption || post?.text || '');
     
     const count = post?.commentCount !== undefined ? post.commentCount : (post?.commentsCount || 0);
     setLocalCommentCount(count);
-  }, [post?._id, post?.id, post?.isLiked, post?.likeCount, post?.reactions, post?.commentCount, post?.commentsCount]);
+  }, [post?._id, post?.id, post?.isLiked, post?.likeCount, post?.reactions, post?.commentCount, post?.commentsCount, post?.caption, post?.text]);
 
 
   // Derived data
@@ -385,7 +393,7 @@ const PostCard: React.FC<PostCardProps> = ({
                 { top: '40%', left: '55%' },
                 { top: '20%', left: '50%' },
                 { top: '50%', left: '15%' },
-              ];
+              ] as const;
               const pos = positions[idx % positions.length];
               return (
                 <TouchableOpacity
@@ -444,7 +452,7 @@ const PostCard: React.FC<PostCardProps> = ({
 
         <PostCaption 
           postUserName={postUserName}
-          caption={post?.caption || post?.text || ''}
+          caption={localCaption}
           hashtags={post?.hashtags || []}
           isExpanded={isExpanded}
           onToggleExpand={() => setIsExpanded(!isExpanded)}

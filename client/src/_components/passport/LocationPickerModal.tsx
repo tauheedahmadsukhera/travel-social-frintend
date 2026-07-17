@@ -61,7 +61,7 @@ export const LocationPickerModal: React.FC<LocationPickerModalProps> = ({
           <View style={styles.modalBottomSheet}>
             {/* Modal Header */}
             <View style={styles.modalHeader}>
-              <View style={{ width: 100, alignItems: 'flex-start' }}>
+              <View style={{ width: 120, alignItems: 'flex-start' }}>
                 <TouchableOpacity style={styles.modalCloseBtn} onPress={onClose}>
                   <Text style={styles.modalCloseText}>Cancel</Text>
                 </TouchableOpacity>
@@ -69,10 +69,14 @@ export const LocationPickerModal: React.FC<LocationPickerModalProps> = ({
               <Text style={styles.modalTitle} numberOfLines={1}>
                 Select location
               </Text>
-              <View style={{ width: 100, alignItems: 'flex-end' }}>
+              <View style={{ width: 120, alignItems: 'flex-end' }}>
                 {canSubmitManualStamps && (
                   <TouchableOpacity style={styles.modalAddBtn} onPress={onAddStamp} disabled={isAdding}>
-                    <Text style={styles.modalAddText}>{isAdding ? 'Adding...' : 'Add'}</Text>
+                    {isAdding ? (
+                      <ActivityIndicator size="small" color="#fff" style={{ width: 24, height: 16 }} />
+                    ) : (
+                      <Text style={styles.modalAddText}>Add</Text>
+                    )}
                   </TouchableOpacity>
                 )}
               </View>

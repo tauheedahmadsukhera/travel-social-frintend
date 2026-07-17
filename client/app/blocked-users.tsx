@@ -84,7 +84,7 @@ export default function BlockedUsersScreen() {
                         try {
                             const success = await userService.unblockUser(userId, targetUserId);
                             if (success) {
-                                setBlockedUsers(prev => prev.filter(u => u.userId !== targetUserId));
+                                setBlockedUsers(prev => prev.filter(u => u.id !== targetUserId && u.userId !== targetUserId));
                                 showSuccess('User unblocked');
                             } else {
                                 throw new Error('Unblock failed');
@@ -144,10 +144,10 @@ export default function BlockedUsersScreen() {
                             </View>
                             <TouchableOpacity
                                 style={styles.unblockBtn}
-                                onPress={() => handleUnblock(item.userId)}
-                                disabled={unblocking === item.userId}
+                                onPress={() => handleUnblock(item.id || item.userId)}
+                                disabled={unblocking === (item.id || item.userId)}
                             >
-                                {unblocking === item.userId ? (
+                                {unblocking === (item.id || item.userId) ? (
                                     <ActivityIndicator size="small" color="#007aff" />
                                 ) : (
                                     <Text style={styles.unblockText}>Unblock</Text>

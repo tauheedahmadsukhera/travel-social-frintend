@@ -95,7 +95,7 @@ export default function Home() {
     loading, loadingMore, 
     loadInitialFeed, loadMorePosts, 
     HOME_CACHE_KEY 
-  } = useHomeFeed(currentUserId, !!isOnline);
+  } = useHomeFeed(currentUserId, !!isOnline, filter);
 
   const { categories, loadCategories } = useCategories();
   
@@ -206,9 +206,14 @@ export default function Home() {
       }
     }
 
+    console.log('[home.tsx] filter:', filter, 'posts length:', posts.length);
     if (filter) {
-      result = result.filter((p: any) => p.category?.toLowerCase() === filter.toLowerCase());
+      result = result.filter((p: any) => {
+        const catName = typeof p.category === 'string' ? p.category : String(p.category?.name || '');
+        return catName.toLowerCase() === filter.toLowerCase();
+      });
     }
+    console.log('[home.tsx] filteredRaw result length:', result.length);
     return result;
   }, [posts, filter, params.location, params.postId]);
 

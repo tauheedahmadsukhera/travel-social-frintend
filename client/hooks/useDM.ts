@@ -42,7 +42,10 @@ export function useDM(conversationIdParam: string | null, otherUserId: string | 
     return [];
   });
 
-  const [loading, setLoading] = useState(!resolvedConvoId || !messageCache[resolvedConvoId]);
+  const [loading, setLoading] = useState(() => {
+    if (!resolvedConvoId) return true;
+    return messageCache[resolvedConvoId] === undefined;
+  });
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(true);
   const [skip, setSkip] = useState(0);
@@ -98,21 +101,29 @@ export function useDM(conversationIdParam: string | null, otherUserId: string | 
     const loadCache = async () => {
       try {
         const raw = await AsyncStorage.getItem(cacheKey);
-        if (!raw || !mounted) return;
+        if (!mounted) return;
         
-        const parsed = JSON.parse(raw);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          // If we already have messages from a faster fetch, don't overwrite with stale cache
-          setMessages(prev => {
-            if (prev.length > 0) return prev;
-            return parsed.map(m => normalizeMessage(m));
-          });
-          setLoading(false);
-          hasPreloadedMessagesRef.current = true;
-          if (__DEV__) console.log(`⚡ [useDM] Cache loaded: ${parsed.length} messages`);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (Array.isArray(parsed)) {
+            // If we already have messages from a faster fetch, don't overwrite with stale cache
+            setMessages(prev => {
+              if (prev.length > 0) return prev;
+              return parsed.map(m => normalizeMessage(m));
+            });
+            // Update memory cache if not set
+            if (messageCache[conversationId] === undefined) {
+              setCachedMessages(conversationId, parsed.map(m => normalizeMessage(m)));
+            }
+          }
         }
+        hasPreloadedMessagesRef.current = true;
+        setLoading(false);
+        if (__DEV__) console.log(`⚡ [useDM] Cache loading finished. rawExists: ${!!raw}`);
       } catch (e) {
         if (__DEV__) console.warn('[useDM] Cache load error:', e);
+        hasPreloadedMessagesRef.current = true;
+        setLoading(false);
       }
     };
 
@@ -128,8 +139,9 @@ export function useDM(conversationIdParam: string | null, otherUserId: string | 
     const cid = conversationId;
     const cacheKey = `messages_cache_${conversationId}`;
 
-    // If we have preloaded messages, don't show the initial spinner
-    if (!hasPreloadedMessagesRef.current) {
+    // If we have preloaded messages (either in memory or loaded from disk), don't show the initial spinner
+    const hasCache = (messageCache[cid] !== undefined) || hasPreloadedMessagesRef.current;
+    if (!hasCache) {
       setLoading(true);
     }
     

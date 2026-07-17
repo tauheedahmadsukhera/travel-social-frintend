@@ -123,7 +123,7 @@ export const highlightManager = {
       const ok = r?.success !== false;
 
       // Auto-delete highlight if it has no stories left (Instagram-like optional).
-      if (params.autoDeleteHighlightIfEmpty !== false) {
+      if (params.autoDeleteHighlightIfEmpty !== false && r?.deletedHighlight !== true) {
         try {
           const cached = await getCachedHighlightStories(highlightId);
           const hasAny = Array.isArray(cached) && cached.length > 0;
@@ -139,7 +139,13 @@ export const highlightManager = {
             if (uid) {
               // Optimistic UI: remove from profile highlights immediately
               try { feedEventEmitter.emitHighlightDeleted(highlightId); } catch {}
-              await deleteHighlightApi(highlightId, uid);
+              try {
+                await deleteHighlightApi(highlightId, uid);
+              } catch (delErr: any) {
+                // If it's a 404, it means the highlight was already deleted on backend, which is fine
+                const is404 = delErr?.response?.status === 404 || delErr?.status === 404 || String(delErr?.message).includes('404');
+                if (!is404) throw delErr;
+              }
             }
           }
         } catch {}

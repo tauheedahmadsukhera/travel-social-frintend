@@ -185,7 +185,10 @@ export default function CreatePostScreen() {
         loadingLocationResults={loadingLocationResults}
         locationResults={locationResults}
         location={location}
-        setLocation={setLocation}
+        setLocation={(loc) => {
+          setLocation(loc);
+          if (loc) setVerifiedLocation(null);
+        }}
         getLocationKey={getLocationKey}
         panHandlers={dummyPanHandlers as any}
         iosSheetKeyboardOffset={0}
@@ -200,7 +203,10 @@ export default function CreatePostScreen() {
         verifiedResults={verifiedResults}
         verifiedOptions={verifiedOptions}
         verifiedLocation={verifiedLocation}
-        setVerifiedLocation={setVerifiedLocation}
+        setVerifiedLocation={(loc) => {
+          setVerifiedLocation(loc);
+          if (loc) setLocation(null);
+        }}
         getLocationKey={getLocationKey}
         verifiedCenter={verifiedCenter}
         panHandlers={dummyPanHandlers as any}

@@ -1075,7 +1075,7 @@ export default function StoryCreatorScreen() {
                                     ]}
                                     value={editingText}
                                     onChangeText={setEditingText}
-                                    placeholder="Type something..."
+                                    placeholder=""
                                     placeholderTextColor="rgba(255,255,255,0.4)"
                                     multiline
                                     autoFocus

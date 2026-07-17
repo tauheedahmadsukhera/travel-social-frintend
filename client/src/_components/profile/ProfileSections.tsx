@@ -93,7 +93,7 @@ const styles = StyleSheet.create({
   },
   sectionItem: {
     alignItems: 'center',
-    width: 60,
+    width: 80,
   },
   imageContainer: {
     width: 60,
@@ -117,7 +117,7 @@ const styles = StyleSheet.create({
     fontWeight: '400',
     color: '#333',
     textAlign: 'center',
-    width: 60,
+    width: 80,
   },
   activeLabel: {
     fontWeight: '700',

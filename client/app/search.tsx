@@ -4,14 +4,6 @@ import { FlashList } from '@shopify/flash-list';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
-// Native debounce — eliminates the full lodash bundle from this screen
-function debounce<T extends (...args: any[]) => any>(fn: T, delay: number): (...args: Parameters<T>) => void {
-  let timer: ReturnType<typeof setTimeout>;
-  return (...args: Parameters<T>) => {
-    clearTimeout(timer);
-    timer = setTimeout(() => fn(...args), delay);
-  };
-}
 import { Image as ExpoImage } from 'expo-image';
 import AsyncStorage from '@/lib/storage';
 import { getAllPosts, searchUsers } from '../lib/firebaseHelpers/index';

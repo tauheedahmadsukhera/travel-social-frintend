@@ -299,7 +299,7 @@ export default function PhoneLoginScreen() {
               />
               {/* <SocialButton
                 provider="tiktok"
-                onPress={() => {/* Handle TikTok login */ }}
+                onPress={() => {}}
                 style={styles.socialButton}
               /> */}
               <SocialButton

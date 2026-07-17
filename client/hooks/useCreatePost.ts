@@ -426,7 +426,16 @@ export const useCreatePost = (params: any = {}) => {
       if (res && res.success) {
         hapticSuccess();
         if (params.editPostId) {
-          feedEventEmitter.emitFeedUpdate({ type: 'POST_UPDATED', postId: params.editPostId as string });
+          feedEventEmitter.emitFeedUpdate({
+            type: 'POST_UPDATED',
+            postId: params.editPostId as string,
+            data: {
+              caption: caption,
+              text: caption,
+              category: selectedCategories.length > 0 ? selectedCategories[0].name : undefined,
+              hashtags: hashtags
+            }
+          });
         } else {
           feedEventEmitter.emitFeedUpdate({ type: 'POST_CREATED', postId: res.postId });
         }

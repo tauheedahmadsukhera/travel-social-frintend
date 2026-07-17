@@ -4,7 +4,7 @@ import { apiService } from '../src/_services/apiService';
 import { getUserProfile } from '../lib/firebaseHelpers/index';
 import { getCachedData, setCachedData } from '../hooks/useOffline';
 
-export function useHomeFeed(currentUserId: string | null, isOnline: boolean) {
+export function useHomeFeed(currentUserId: string | null, isOnline: boolean, categoryFilter?: string) {
   const [posts, setPosts] = useState<any[]>([]);
   const [allLoadedPosts, setAllLoadedPosts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -14,12 +14,16 @@ export function useHomeFeed(currentUserId: string | null, isOnline: boolean) {
   const nextPageRef = useRef(0);
   const allLoadedPostsRef = useRef<any[]>([]);
   const hasFetchedRef = useRef(false);
+  const lastCategoryRef = useRef<string | undefined>(categoryFilter);
 
   useEffect(() => {
     allLoadedPostsRef.current = Array.isArray(allLoadedPosts) ? allLoadedPosts : [];
   }, [allLoadedPosts]);
 
-  const HOME_CACHE_KEY = useMemo(() => `home_feed_v1_${String(currentUserId || 'anon')}`, [currentUserId]);
+  const HOME_CACHE_KEY = useMemo(
+    () => `home_feed_v1_${String(currentUserId || 'anon')}_${categoryFilter || 'all'}`,
+    [currentUserId, categoryFilter]
+  );
 
   const shufflePosts = useCallback((postsArray: any[]) => {
     if (Platform.OS === 'ios') return [...postsArray];
@@ -84,12 +88,15 @@ export function useHomeFeed(currentUserId: string | null, isOnline: boolean) {
     try {
       const limit = 20;
       const skip = pageNum * limit;
+      console.log('[useHomeFeed] Fetching feed for category:', categoryFilter, 'pageNum:', pageNum);
       const response = await apiService.getPosts({ 
         skip, 
         limit, 
         requesterUserId: currentUserId || undefined,
+        category: categoryFilter || undefined,
         ...options
       });
+      console.log('[useHomeFeed] Raw response success:', response?.success, 'isArray:', Array.isArray(response), 'data length:', response?.data?.length || response?.length);
 
       let postsData: any[] = [];
       if (response?.success && Array.isArray(response.data)) {
@@ -185,6 +192,13 @@ export function useHomeFeed(currentUserId: string | null, isOnline: boolean) {
         }
       } catch {}
 
+      // If category filter changed, force a reload and skip the already-fetched checks
+      const categoryChanged = lastCategoryRef.current !== categoryFilter;
+      if (categoryChanged) {
+        lastCategoryRef.current = categoryFilter;
+        hasFetchedRef.current = false;
+      }
+
       // Allow feed to load even without a userId (optionalAuth on backend).
       // If we already fetched WITH a userId, don't refetch.
       // If we fetched anonymously and now have a userId, refetch to get personalized data.
@@ -200,7 +214,7 @@ export function useHomeFeed(currentUserId: string | null, isOnline: boolean) {
         setLoading(prev => (prev ? false : prev));
       }
     })();
-  }, [HOME_CACHE_KEY, createMixedFeed, isOnline, currentUserId]);
+  }, [HOME_CACHE_KEY, createMixedFeed, isOnline, currentUserId, categoryFilter]);
 
   const loadMorePosts = useCallback(() => {
     if (loadingMore || loading || !hasMorePosts) return;

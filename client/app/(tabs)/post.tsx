@@ -440,6 +440,7 @@ export default function PostScreen() {
                   style={styles.locationItem}
                   onPress={() => {
                     setLocation(item);
+                    setVerifiedLocation(null);
                     setShowLocationModal(false);
                   }}
                 >
@@ -500,6 +501,7 @@ export default function PostScreen() {
                   style={styles.locationItem}
                   onPress={() => {
                     setVerifiedLocation(item);
+                    setLocation(null);
                     setShowVerifiedModal(false);
                   }}
                 >

@@ -257,9 +257,8 @@ async function apiRequestWithRetry(method: string, url: string, data?: any, conf
 
       // ✅ Cache Buster — only for real-time endpoints that must never be stale
       if (method === 'get') {
-        const needsFreshData = /\/(conversations|messages|notifications|inbox|posts|feed)/i.test(url);
+        const needsFreshData = /\/(conversations|messages|notifications|inbox|posts|feed|blocked)/i.test(url);
         if (needsFreshData) {
-
           requestConfig.params = { ...requestConfig.params, _t: Date.now() };
         }
       }
