@@ -190,8 +190,9 @@ export const UploadStoryModal: React.FC<UploadStoryModalProps> = ({
                         mediaTypes: ['images', 'videos'],
                         allowsEditing: true,
                         aspect: [9, 16],
-                        quality: 0.8,
-                        videoMaxDuration: 720
+                        quality: 0.7,
+                        videoMaxDuration: 720,
+                        videoExportPreset: ImagePicker.VideoExportPreset.H264_1280x720,
                       });
                       if (!pickerResult.canceled && pickerResult.assets && pickerResult.assets[0]?.uri) {
                         setSelectedMedia(pickerResult.assets[0]);

@@ -38,6 +38,7 @@ export function useDMMedia() {
       mediaTypes: ImagePicker.MediaTypeOptions.All,
       allowsEditing: false,
       quality: 0.7,
+      videoExportPreset: ImagePicker.VideoExportPreset.H264_1280x720,
     });
     if (res.canceled) return null;
     const asset = res.assets[0];
@@ -53,6 +54,7 @@ export function useDMMedia() {
       mediaTypes: ImagePicker.MediaTypeOptions.All,
       allowsEditing: false,
       quality: 0.7,
+      videoExportPreset: ImagePicker.VideoExportPreset.H264_1280x720,
     });
     if (res.canceled) return null;
     const asset = res.assets[0];

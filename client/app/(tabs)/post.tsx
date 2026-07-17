@@ -103,10 +103,11 @@ export default function PostScreen() {
         mediaTypes: ['images', 'videos'],
         allowsEditing: true,
         aspect: [4, 5],
-        quality: 0.8,
+        quality: 0.7,
         allowsMultipleSelection: true,
         selectionLimit: 25,
         videoMaxDuration: 2520, // 42 minutes in seconds
+        videoExportPreset: ImagePicker.VideoExportPreset.H264_1280x720,
       });
       
       if (!result.canceled && result.assets && result.assets.length > 0) {
