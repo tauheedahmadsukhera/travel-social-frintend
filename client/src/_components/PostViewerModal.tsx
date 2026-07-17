@@ -7,6 +7,7 @@ import { FlashList } from '@shopify/flash-list';
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import PostCard from './PostCard';
+import { feedEventEmitter } from '../../lib/feedEventEmitter';
 
 interface Post {
   id: string;
@@ -99,6 +100,13 @@ export default function PostViewerModal({
 
     return () => clearTimeout(timer);
   }, [visible, selectedPostIndex]);
+
+  useEffect(() => {
+    const subscription = feedEventEmitter.addListener('closePostViewer', () => {
+      onClose();
+    });
+    return () => subscription.remove();
+  }, [onClose]);
 
   return (
     <Modal

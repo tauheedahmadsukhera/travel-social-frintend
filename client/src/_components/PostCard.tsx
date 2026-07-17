@@ -491,7 +491,10 @@ const PostCard: React.FC<PostCardProps> = ({
                 style={{ flexDirection: 'row', alignItems: 'center', padding: 18 }}
                 onPress={() => {
                   setShowPostMenu(false);
-                  router.push(`/create-post?editPostId=${post._id || post.id}&initialData=${encodeURIComponent(JSON.stringify(post))}`);
+                  feedEventEmitter.emit('closePostViewer');
+                  setTimeout(() => {
+                    router.push(`/create-post?editPostId=${post._id || post.id}&initialData=${encodeURIComponent(JSON.stringify(post))}`);
+                  }, 100);
                 }}
               >
                 <Feather name="edit-3" size={22} color="#333" />
