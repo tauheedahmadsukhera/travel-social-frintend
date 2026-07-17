@@ -94,8 +94,8 @@ export async function signInWithEmailPassword(
     const userCredential = await signInWithEmailAndPassword(firebaseAuth, email, password);
     const firebaseUser = userCredential.user;
 
-    // Enforce email verification
-    if (!firebaseUser.emailVerified) {
+    // Enforce email verification (bypass for standard test account)
+    if (!firebaseUser.emailVerified && firebaseUser.email?.toLowerCase() !== 'test@gmail.com') {
       try {
         await sendEmailVerification(firebaseUser);
         console.log('[signInWithEmailPassword] ✉️ Resent verification email.');
