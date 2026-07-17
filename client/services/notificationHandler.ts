@@ -62,6 +62,15 @@ export function setupNotificationListeners() {
               return;
             }
 
+            if (type === 'story' || type === 'story-mention' || type === 'story-like' || type === 'highlight') {
+              if (data?.highlightId) {
+                router.push(`/highlight/${encodeURIComponent(data.highlightId)}` as any);
+              } else if (senderId) {
+                router.push(`/user-profile?id=${encodeURIComponent(senderId)}` as any);
+              }
+              return;
+            }
+
             // Fallback: do nothing (avoid opening Notifications screen on cold start)
             // If you want a safe default, use home:
             // router.push('/(tabs)/home');
