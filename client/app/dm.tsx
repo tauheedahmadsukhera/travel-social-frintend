@@ -330,8 +330,25 @@ export default function DM() {
         uri.startsWith('content://') ||
         uri.startsWith('/')
       );
+      
+      let finalUri = uri;
       if (isLocalUri) {
-        uploadRes = await uploadMedia(uri, type as any);
+        try {
+          const { compressVideoSafe, compressImageSafe } = require('../lib/mediaUtils');
+          if (type === 'video') {
+            if (__DEV__) console.log('[DM] Compressing local video:', uri);
+            finalUri = await compressVideoSafe(uri);
+          } else if (type === 'image') {
+            if (__DEV__) console.log('[DM] Compressing local image:', uri);
+            finalUri = await compressImageSafe(uri);
+          }
+        } catch (compressErr) {
+          console.warn('[DM] Media compression failed:', compressErr);
+        }
+      }
+
+      if (isLocalUri) {
+        uploadRes = await uploadMedia(finalUri, type as any);
       } else if (typeof uri === 'string' && (uri.startsWith('http://') || uri.startsWith('https://'))) {
         // Remote URI — uploadMedia handles downloading/re-uploading
         uploadRes = await uploadMedia(uri, type as any);
@@ -348,7 +365,12 @@ export default function DM() {
           currentUserId,
           uploadedUrl,
           type as any,
-          { recipientId: otherUserId || undefined, ...extra, tempId }
+          { 
+            recipientId: otherUserId || undefined, 
+            thumbnailUrl: uploadRes?.thumbnailUrl || uploadRes?.data?.thumbnailUrl,
+            ...extra, 
+            tempId 
+          }
         );
         if (res?.success) {
           const finalMsg = normalizeMessage((res as any).data || (res as any).message);

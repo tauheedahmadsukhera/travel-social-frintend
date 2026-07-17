@@ -43,6 +43,7 @@ type Props = {
   onReaction?: (emoji: string) => void;
   reactions?: { [emoji: string]: string[] };
   failed?: boolean;
+  thumbnailUrl?: string | null;
 };
 
 function MessageBubbleInner({
@@ -78,6 +79,7 @@ function MessageBubbleInner({
   onReaction,
   reactions,
   failed,
+  thumbnailUrl,
 }: Props) {
   const [playing, setPlaying] = React.useState(false);
   const [playVideoModalVisible, setPlayVideoModalVisible] = React.useState(false);
@@ -528,6 +530,22 @@ function MessageBubbleInner({
             
             {resolvedMediaType === 'video' && resolvedMediaUrl && (
               <TouchableOpacity onPress={() => setPlayVideoModalVisible(true)} style={styles.videoStub}>
+                {(() => {
+                  const poster = thumbnailUrl || getVideoThumbnailUrl(resolvedMediaUrl);
+                  if (poster) {
+                    return (
+                      <ExpoImage
+                        source={{ uri: poster }}
+                        style={StyleSheet.absoluteFillObject}
+                        contentFit="cover"
+                        cachePolicy="memory-disk"
+                        transition={150}
+                      />
+                    );
+                  }
+                  return null;
+                })()}
+                <View style={[StyleSheet.absoluteFillObject, { backgroundColor: 'rgba(0,0,0,0.2)' }]} />
                 <Ionicons name="play" color="white" size={40} style={styles.centerPlay} />
                 <View style={styles.bottomPlayCircle}>
                   <Ionicons name="play" color="white" size={14} />
@@ -791,7 +809,8 @@ const MessageBubble = React.memo(MessageBubbleInner, (prev, next) => {
     prev.isSelf === next.isSelf &&
     prev.mediaUrl === next.mediaUrl &&
     prev.audioUrl === next.audioUrl &&
-    prev.reactions === next.reactions
+    prev.reactions === next.reactions &&
+    prev.thumbnailUrl === next.thumbnailUrl
   );
 });
 

@@ -65,9 +65,23 @@ function Inbox() {
 
       const mType = (asset.type === 'video' || (asset as any).mediaType === 'video') ? 'video' : 'image';
       
+      let finalUri = asset.uri;
+      try {
+        const { compressVideoSafe, compressImageSafe } = require('../lib/mediaUtils');
+        if (mType === 'video') {
+          if (__DEV__) console.log('[Inbox] Compressing camera video:', asset.uri);
+          finalUri = await compressVideoSafe(asset.uri);
+        } else if (mType === 'image') {
+          if (__DEV__) console.log('[Inbox] Compressing camera image:', asset.uri);
+          finalUri = await compressImageSafe(asset.uri);
+        }
+      } catch (compressErr) {
+        console.warn('[Inbox] Media compression failed:', compressErr);
+      }
+
       const { uploadMedia, sendMediaMessage } = require('../lib/firebaseHelpers/messages');
       
-      const uploadRes = await uploadMedia(asset.uri, mType);
+      const uploadRes = await uploadMedia(finalUri, mType);
       if (!uploadRes?.success || !uploadRes?.url) {
         throw new Error(uploadRes?.error || 'Media upload failed');
       }
@@ -77,7 +91,14 @@ function Inbox() {
         userId,
         uploadRes.url,
         mType,
-        convo.otherUserId ? { recipientId: convo.otherUserId } : undefined
+        convo.otherUserId 
+          ? { 
+              recipientId: convo.otherUserId,
+              thumbnailUrl: uploadRes?.thumbnailUrl || uploadRes?.data?.thumbnailUrl
+            } 
+          : {
+              thumbnailUrl: uploadRes?.thumbnailUrl || uploadRes?.data?.thumbnailUrl
+            }
       );
 
       if (!sendRes?.success) {
@@ -814,6 +835,24 @@ function Inbox() {
       }
 
       const normalizedConvos = normalizeConversations(polledConversations);
+      
+      // DEEP EQUALITY CHECK to prevent unnecessary state writes and rendering flicker
+      const current = conversationsRef.current || [];
+      const isIdentical = current.length === normalizedConvos.length && 
+        current.every((c, idx) => {
+          const n = normalizedConvos[idx];
+          return c && n &&
+                 c.id === n.id && 
+                 c.lastMessageAt === n.lastMessageAt && 
+                 c.unreadCount === n.unreadCount && 
+                 c.lastMessage === n.lastMessage;
+        });
+
+      if (isIdentical) {
+        if (__DEV__) console.log('🟢 Conversations are identical, skipping update to prevent flickering');
+        return;
+      }
+
       if (__DEV__) {
         console.log('🟢 SETTING CONVERSATIONS:', normalizedConvos?.length, 'convos');
       }
@@ -1032,7 +1071,10 @@ function Inbox() {
 
       <FlashList
         data={filteredSortedConversations}
-        keyExtractor={(item: any) => String(item.conversationId || item.id || item._id)}
+        keyExtractor={(item: any, idx: number) => {
+          const key = item.conversationId || item.id || item._id;
+          return key ? String(key) : `convo-${idx}`;
+        }}
         renderItem={({ item }: { item: any }) => (
           <ConversationItem
             item={item}
