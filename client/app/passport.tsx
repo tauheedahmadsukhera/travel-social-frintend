@@ -358,14 +358,21 @@ export default function PassportScreen() {
       }
 
       if (wantPlace && selectedLocation) {
-        let countryName = 'Unknown';
-        let countryCode: string | undefined;
-        let parentCity: string | undefined;
+        let countryName = areaGeo?.country || 'Unknown';
+        let countryCode: string | undefined = areaGeo?.countryCode;
+        let parentCity: string | undefined = areaGeo?.city;
+
+        // Race native geocoder with a 1000ms timeout to prevent hanging UI
         try {
-          const geoLocation = await reverseGeocode(selectedLocation.latitude, selectedLocation.longitude);
-          countryName = geoLocation?.country || countryName;
-          countryCode = geoLocation?.countryCode;
-          parentCity = geoLocation?.city;
+          const geoLocation = await Promise.race([
+            reverseGeocode(selectedLocation.latitude, selectedLocation.longitude),
+            new Promise<null>((resolve) => setTimeout(() => resolve(null), 1000))
+          ]);
+          if (geoLocation) {
+            countryName = geoLocation.country || countryName;
+            countryCode = geoLocation.countryCode || countryCode;
+            parentCity = geoLocation.city || parentCity;
+          }
         } catch (e) {
           console.warn('Could not get country from geocoding:', e);
         }
