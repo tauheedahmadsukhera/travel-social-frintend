@@ -54,9 +54,9 @@ const AdminLogs = () => {
                 <td className="px-6 py-4">
                   <div className="flex items-center gap-2">
                     <div className="w-8 h-8 rounded-full bg-indigo-500/20 flex items-center justify-center text-indigo-500 font-bold text-xs">
-                      A
+                      {(log.adminId?.displayName || log.adminId?.email || 'A')[0].toUpperCase()}
                     </div>
-                    <span className="text-white text-sm font-medium">{log.adminId?.email || 'System'}</span>
+                    <span className="text-white text-sm font-medium">{log.adminId?.displayName || log.adminId?.email || 'System'}</span>
                   </div>
                 </td>
                 <td className="px-6 py-4">

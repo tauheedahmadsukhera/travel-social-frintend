@@ -14,6 +14,8 @@ const Management = lazy(() => import('./pages/Management'));
 const Login = lazy(() => import('./pages/Login'));
 const AdminLogs = lazy(() => import('./pages/AdminLogs'));
 const Settings = lazy(() => import('./pages/Settings'));
+const PostModeration = lazy(() => import('./pages/PostModeration'));
+const Broadcast = lazy(() => import('./pages/Broadcast'));
 
 // Loading Fallback
 const PageLoader = () => (
@@ -51,6 +53,8 @@ const App = () => {
           <Route path="/reports" element={<ProtectedRoute><Reports /></ProtectedRoute>} />
           <Route path="/users" element={<ProtectedRoute><Users /></ProtectedRoute>} />
           <Route path="/management" element={<ProtectedRoute><Management /></ProtectedRoute>} />
+          <Route path="/posts" element={<ProtectedRoute><PostModeration /></ProtectedRoute>} />
+          <Route path="/broadcast" element={<ProtectedRoute><Broadcast /></ProtectedRoute>} />
           <Route path="/logs" element={<ProtectedRoute><AdminLogs /></ProtectedRoute>} />
           <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
           <Route path="*" element={<Navigate to="/" replace />} />

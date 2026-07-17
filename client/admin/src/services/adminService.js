@@ -2,7 +2,7 @@ import apiClient from './apiClient';
 
 export const adminAPI = {
   // Users
-  getUsers: (page = 1, limit = 100, search = '', role = '', status = '') =>
+  getUsers: (page = 1, limit = 20, search = '', role = '', status = '') =>
     apiClient.get('/admin/users', { params: { page, limit, search, role, status } }),
 
   getUserDetails: (uid) =>
@@ -61,5 +61,17 @@ export const adminAPI = {
     apiClient.get('/admin/reports', { params: { page, limit, status } }),
   
   resolveReport: (reportId, status, note = '') =>
-    apiClient.post(`/admin/reports/${reportId}/resolve`, { status, note })
+    apiClient.post(`/admin/reports/${reportId}/resolve`, { status, note }),
+
+  // Broadcast Notification
+  broadcastNotification: (title, message, type = 'announcement') =>
+    apiClient.post('/admin/broadcast', { title, message, type }),
+
+  // Post Moderation
+  getPosts: (page = 1, limit = 20, search = '', flagged = false) =>
+    apiClient.get('/admin/posts', { params: { page, limit, search, flagged } }),
+
+  deletePost: (postId) =>
+    apiClient.delete(`/admin/posts/${postId}`),
 };
+

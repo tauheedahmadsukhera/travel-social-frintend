@@ -58,6 +58,20 @@ const Users = () => {
     onError: () => toast.error('Failed to update role')
   });
 
+  const deleteUserMutation = useMutation({
+    mutationFn: async (userId) => adminAPI.deleteUser(userId),
+    onSuccess: () => {
+      toast.success('User deleted permanently');
+      queryClient.invalidateQueries(['users']);
+    },
+    onError: (err) => toast.error(err?.response?.data?.error || 'Failed to delete user')
+  });
+
+  const handleDeleteUser = (user) => {
+    if (!window.confirm(`Are you sure you want to permanently delete "${user.displayName || user.email}"? This will also delete all their posts.`)) return;
+    deleteUserMutation.mutate(user._id);
+  };
+
   return (
     <div className="space-y-8 animate-fade-in flex flex-col h-full">
       <header className="flex justify-between items-center">
@@ -158,22 +172,27 @@ const Users = () => {
                       {user.createdAt ? format(new Date(user.createdAt), 'MMM dd, yyyy') : 'N/A'}
                     </td>
                     <td className="px-6 py-4 text-right">
-                      <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button 
-                          onClick={() => toggleStatusMutation.mutate({ userId: user._id, newStatus: user.status === 'suspended' ? 'active' : 'suspended' })}
-                          disabled={toggleStatusMutation.isLoading}
-                          className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${
-                            user.status === 'suspended' 
-                              ? 'bg-green-500/20 text-green-400 hover:bg-green-500/30' 
-                              : 'bg-red-500/20 text-red-400 hover:bg-red-500/30'
-                          }`}
-                        >
-                          {user.status === 'suspended' ? 'Unsuspend' : 'Suspend'}
-                        </button>
-                        <button className="p-2 text-slate-500 hover:text-white rounded-lg transition-all">
-                          <HiOutlineDotsVertical />
-                        </button>
-                      </div>
+                        <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <button 
+                            onClick={() => toggleStatusMutation.mutate({ userId: user._id, newStatus: user.status === 'suspended' ? 'active' : 'suspended' })}
+                            disabled={toggleStatusMutation.isPending}
+                            className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${
+                              user.status === 'suspended' 
+                                ? 'bg-green-500/20 text-green-400 hover:bg-green-500/30' 
+                                : 'bg-red-500/20 text-red-400 hover:bg-red-500/30'
+                            }`}
+                          >
+                            {user.status === 'suspended' ? 'Unsuspend' : 'Suspend'}
+                          </button>
+                          <button 
+                            onClick={() => handleDeleteUser(user)}
+                            disabled={deleteUserMutation.isPending}
+                            className="px-3 py-1 rounded-lg text-xs font-bold bg-red-900/40 text-red-400 hover:bg-red-600 hover:text-white transition-all"
+                            title="Permanently delete user"
+                          >
+                            Delete
+                          </button>
+                        </div>
                     </td>
                   </tr>
                 ))
