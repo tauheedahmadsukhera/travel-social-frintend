@@ -224,7 +224,7 @@ export function useHomeFeed(currentUserId: string | null, isOnline: boolean, cat
       const newData = Array.isArray(res) ? res : (res?.data || []);
       if (newData.length > 0) {
         nextPageRef.current = nextPage;
-        if (newData.length < 20) setHasMorePosts(false);
+        setHasMorePosts(true);
       } else {
         setHasMorePosts(false);
       }
