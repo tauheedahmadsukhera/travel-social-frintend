@@ -15,7 +15,6 @@ import NotificationsModal from '@/src/_components/NotificationsModal';
 import StoriesRow from '@/src/_components/StoriesRow';
 import StoriesViewer from '@/src/_components/StoriesViewer';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useNavigationState } from '@react-navigation/native';
 
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { logAnalyticsEvent, setAnalyticsUserId } from '../../lib/analytics';
@@ -81,12 +80,8 @@ export default function TabsLayout() {
   };
   const router = useRouter();
   const pathname = usePathname();
-  const activeTabName = useNavigationState(state => {
-    if (state && state.routes && state.routes[state.index]) {
-      return state.routes[state.index].name;
-    }
-    return 'home';
-  });
+  const segments = useSegments();
+  const activeTabName = segments[1] || 'home';
   const [menuVisible, setMenuVisible] = useState(false);
   const [groupsDrawerVisible, setGroupsDrawerVisible] = useState(false);
   const [showStoriesViewer, setShowStoriesViewer] = useState(false);
