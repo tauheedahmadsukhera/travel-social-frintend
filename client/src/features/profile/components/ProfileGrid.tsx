@@ -48,12 +48,9 @@ const ProfileGrid: React.FC<ProfileGridProps> = ({
       numColumns={3}
       estimatedItemSize={SCREEN_WIDTH / 3}
       ListHeaderComponent={
-        // IMPORTANT: wrap in a function component so FlashList always calls it
-        // on re-render. Passing a raw ReactElement causes FlashList to cache it
-        // and never update the header when state changes (e.g. follower count).
         typeof renderHeader === 'function'
-          ? renderHeader
-          : () => renderHeader
+          ? renderHeader()
+          : renderHeader
       }
       ListEmptyComponent={() => (
         !loading && (

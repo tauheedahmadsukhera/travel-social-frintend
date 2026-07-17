@@ -1,5 +1,5 @@
 import React, { useCallback } from 'react';
-import { AppState, StyleSheet, Text, TouchableOpacity, View, Animated, Easing, Modal } from 'react-native';
+import { AppState, StyleSheet, Text, TouchableOpacity, View, Animated, Easing, Modal, ActivityIndicator } from 'react-native';
 import { Image as ExpoImage } from 'expo-image';
 import { Audio, Video, ResizeMode } from 'expo-av';
 import * as FileSystem from 'expo-file-system';
@@ -83,6 +83,7 @@ function MessageBubbleInner({
 }: Props) {
   const [playing, setPlaying] = React.useState(false);
   const [playVideoModalVisible, setPlayVideoModalVisible] = React.useState(false);
+  const [videoLoaded, setVideoLoaded] = React.useState(false);
   const [isLoaded, setIsLoaded] = React.useState(false);
   const [playbackPosition, setPlaybackPosition] = React.useState(0);
   const [playbackDuration, setPlaybackDuration] = React.useState(0);
@@ -91,6 +92,12 @@ function MessageBubbleInner({
   const [storyLoading, setStoryLoading] = React.useState(false);
   const fadeAnim = React.useRef(new Animated.Value(0)).current;
   const scaleAnim = React.useRef(new Animated.Value(0.95)).current;
+
+  React.useEffect(() => {
+    if (!playVideoModalVisible) {
+      setVideoLoaded(false);
+    }
+  }, [playVideoModalVisible]);
 
   React.useEffect(() => {
     Animated.parallel([
@@ -531,7 +538,9 @@ function MessageBubbleInner({
             {resolvedMediaType === 'video' && resolvedMediaUrl && (
               <TouchableOpacity onPress={() => setPlayVideoModalVisible(true)} style={styles.videoStub}>
                 {(() => {
-                  const poster = thumbnailUrl || getVideoThumbnailUrl(resolvedMediaUrl);
+                  const poster = (thumbnailUrl && !isVideoUrl(thumbnailUrl))
+                    ? thumbnailUrl
+                    : (getVideoThumbnailUrl(resolvedMediaUrl) !== resolvedMediaUrl ? getVideoThumbnailUrl(resolvedMediaUrl) : null);
                   if (poster) {
                     return (
                       <ExpoImage
@@ -543,9 +552,13 @@ function MessageBubbleInner({
                       />
                     );
                   }
-                  return null;
+                  return (
+                    <View style={[StyleSheet.absoluteFillObject, { backgroundColor: '#1e1e1e', justifyContent: 'center', alignItems: 'center' }]}>
+                      <Ionicons name="videocam-outline" size={32} color="rgba(255,255,255,0.45)" style={{ marginBottom: 12 }} />
+                    </View>
+                  );
                 })()}
-                <View style={[StyleSheet.absoluteFillObject, { backgroundColor: 'rgba(0,0,0,0.2)' }]} />
+                <View style={[StyleSheet.absoluteFillObject, { backgroundColor: 'rgba(0,0,0,0.25)' }]} />
                 <Ionicons name="play" color="white" size={40} style={styles.centerPlay} />
                 <View style={styles.bottomPlayCircle}>
                   <Ionicons name="play" color="white" size={14} />
@@ -780,6 +793,14 @@ function MessageBubbleInner({
                 <Ionicons name="close" size={30} color="#fff" />
               </TouchableOpacity>
               
+              {!videoLoaded && (
+                <ActivityIndicator 
+                  size="large" 
+                  color="#FF8D00" 
+                  style={{ position: 'absolute', zIndex: 5 }} 
+                />
+              )}
+              
               <Video
                 source={{ uri: resolvedMediaUrl }}
                 style={{ width: '100%', height: '80%' }}
@@ -787,6 +808,8 @@ function MessageBubbleInner({
                 shouldPlay={playVideoModalVisible}
                 useNativeControls
                 isLooping={false}
+                onLoad={() => setVideoLoaded(true)}
+                status={{ shouldPlay: true }}
               />
             </View>
           </Modal>
