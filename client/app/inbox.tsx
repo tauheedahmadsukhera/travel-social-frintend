@@ -1059,17 +1059,33 @@ function Inbox() {
         ListEmptyComponent={
           (!polledLoading && polledReady) ? (
             <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 40, marginTop: 40 }}>
-              <Feather name="message-circle" size={64} color="#ccc" />
-              <Text style={{ color: '#999', marginTop: 16, fontSize: 16, fontWeight: '600' }}>No messages found</Text>
-              <Text style={{ color: '#ccc', marginTop: 8, textAlign: 'center', marginBottom: 20 }}>
-                {`Status: Connected as ${userId?.substring(0, 8)}... (Found: ${conversations?.length || 0})`}
+              <Feather 
+                name={activeTab === 'unread' ? "check-circle" : "message-circle"} 
+                size={64} 
+                color="#ccc" 
+              />
+              <Text style={{ color: '#999', marginTop: 16, fontSize: 16, fontWeight: '600' }}>
+                {activeTab === 'unread' 
+                  ? "No unread messages" 
+                  : activeTab === 'groups' 
+                    ? "No groups found" 
+                    : "No messages found"}
               </Text>
-              <TouchableOpacity 
-                style={{ backgroundColor: '#FF8D00', paddingHorizontal: 20, paddingVertical: 10, borderRadius: 8, marginBottom: 12 }}
-                onPress={() => { hapticLight(); setCreateGroupVisible(true); }}
-              >
-                <Text style={{ color: '#fff', fontWeight: '600' }}>Start Chatting</Text>
-              </TouchableOpacity>
+              <Text style={{ color: '#ccc', marginTop: 8, textAlign: 'center', marginBottom: 20 }}>
+                {activeTab === 'unread'
+                  ? "You're all caught up!"
+                  : `Status: Connected as ${userId?.substring(0, 8)}... (Found: ${conversations?.length || 0})`}
+              </Text>
+              {activeTab !== 'unread' && (
+                <TouchableOpacity 
+                  style={{ backgroundColor: '#FF8D00', paddingHorizontal: 20, paddingVertical: 10, borderRadius: 8, marginBottom: 12 }}
+                  onPress={() => { hapticLight(); setCreateGroupVisible(true); }}
+                >
+                  <Text style={{ color: '#fff', fontWeight: '600' }}>
+                    {activeTab === 'groups' ? "Create a Group" : "Start Chatting"}
+                  </Text>
+                </TouchableOpacity>
+              )}
               <TouchableOpacity 
                 style={{ paddingHorizontal: 20, paddingVertical: 10 }}
                 onPress={() => { hapticLight(); refreshInbox(); }}
