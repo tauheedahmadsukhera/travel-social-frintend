@@ -726,6 +726,22 @@ export async function uploadMedia(
         }
       }
 
+      if (mediaType === 'image') {
+        try {
+          const ImageManipulator = require('expo-image-manipulator');
+          console.log('[uploadMedia] 🔄 Compressing image before upload...');
+          const manipResult = await ImageManipulator.manipulateAsync(
+            finalUri,
+            [{ resize: { width: 1080 } }], // Resize to 1080px width (Instagram standard)
+            { compress: 0.7, format: ImageManipulator.SaveFormat.JPEG }
+          );
+          finalUri = manipResult.uri;
+          console.log('[uploadMedia] ✅ Image compressed successfully.');
+        } catch (manipErr) {
+          console.warn('[uploadMedia] Image compression failed, using original:', manipErr);
+        }
+      }
+
       if (mediaType === 'video') {
         finalUri = await compressVideoIfNeeded(finalUri);
       }
@@ -903,6 +919,22 @@ async function uploadStoryMedia(uri: string, userId: string, mediaType: 'image' 
         console.log('[uploadStoryMedia] Copy to safe local URI successful:', finalUri);
       } catch (copyErr) {
         console.warn('[uploadStoryMedia] Failed to copy file to safe cache, using original:', copyErr);
+      }
+    }
+
+    if (mediaType === 'image') {
+      try {
+        const ImageManipulator = require('expo-image-manipulator');
+        console.log('[uploadStoryMedia] 🔄 Compressing story image before upload...');
+        const manipResult = await ImageManipulator.manipulateAsync(
+          finalUri,
+          [{ resize: { width: 1080 } }], // Resize to 1080px width
+          { compress: 0.7, format: ImageManipulator.SaveFormat.JPEG }
+        );
+        finalUri = manipResult.uri;
+        console.log('[uploadStoryMedia] ✅ Story image compressed successfully.');
+      } catch (manipErr) {
+        console.warn('[uploadStoryMedia] Story image compression failed, using original:', manipErr);
       }
     }
 
