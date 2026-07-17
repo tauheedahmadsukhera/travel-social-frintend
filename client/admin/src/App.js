@@ -16,6 +16,9 @@ const AdminLogs = lazy(() => import('./pages/AdminLogs'));
 const Settings = lazy(() => import('./pages/Settings'));
 const PostModeration = lazy(() => import('./pages/PostModeration'));
 const Broadcast = lazy(() => import('./pages/Broadcast'));
+const CommentModeration = lazy(() => import('./pages/CommentModeration'));
+const StoryModeration = lazy(() => import('./pages/StoryModeration'));
+const StreamsManagement = lazy(() => import('./pages/StreamsManagement'));
 
 // Loading Fallback
 const PageLoader = () => (
@@ -54,6 +57,9 @@ const App = () => {
           <Route path="/users" element={<ProtectedRoute><Users /></ProtectedRoute>} />
           <Route path="/management" element={<ProtectedRoute><Management /></ProtectedRoute>} />
           <Route path="/posts" element={<ProtectedRoute><PostModeration /></ProtectedRoute>} />
+          <Route path="/comments" element={<ProtectedRoute><CommentModeration /></ProtectedRoute>} />
+          <Route path="/stories" element={<ProtectedRoute><StoryModeration /></ProtectedRoute>} />
+          <Route path="/streams" element={<ProtectedRoute><StreamsManagement /></ProtectedRoute>} />
           <Route path="/broadcast" element={<ProtectedRoute><Broadcast /></ProtectedRoute>} />
           <Route path="/logs" element={<ProtectedRoute><AdminLogs /></ProtectedRoute>} />
           <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />

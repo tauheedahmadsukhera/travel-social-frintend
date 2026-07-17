@@ -73,5 +73,30 @@ export const adminAPI = {
 
   deletePost: (postId) =>
     apiClient.delete(`/admin/posts/${postId}`),
+
+  // User Verification
+  toggleUserVerification: (uid, isVerified) =>
+    apiClient.post(`/admin/users/${uid}/verify`, { isVerified }),
+
+  // Comment Moderation
+  getComments: (page = 1, limit = 20, search = '') =>
+    apiClient.get('/admin/comments', { params: { page, limit, search } }),
+
+  deleteComment: (id) =>
+    apiClient.delete(`/admin/comments/${id}`),
+
+  // Story Moderation
+  getStories: (page = 1, limit = 20) =>
+    apiClient.get('/admin/stories', { params: { page, limit } }),
+
+  deleteStory: (id) =>
+    apiClient.delete(`/admin/stories/${id}`),
+
+  // Live Streams Management
+  getStreams: (page = 1, limit = 20) =>
+    apiClient.get('/admin/streams', { params: { page, limit } }),
+
+  endStream: (id) =>
+    apiClient.post(`/admin/streams/${id}/end`),
 };
 

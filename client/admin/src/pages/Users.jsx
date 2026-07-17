@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { adminAPI } from '../services/adminService';
 import { toast } from 'react-hot-toast';
-import { HiOutlineDotsVertical, HiOutlineSearch, HiOutlineUserAdd, HiOutlineChevronLeft, HiOutlineChevronRight } from 'react-icons/hi';
+import { HiOutlineDotsVertical, HiOutlineSearch, HiOutlineUserAdd, HiOutlineChevronLeft, HiOutlineChevronRight, HiBadgeCheck } from 'react-icons/hi';
 import { format } from 'date-fns';
 
 const Users = () => {
@@ -71,6 +71,15 @@ const Users = () => {
     if (!window.confirm(`Are you sure you want to permanently delete "${user.displayName || user.email}"? This will also delete all their posts.`)) return;
     deleteUserMutation.mutate(user._id);
   };
+
+  const toggleVerifyMutation = useMutation({
+    mutationFn: async ({ userId, isVerified }) => adminAPI.toggleUserVerification(userId, isVerified),
+    onSuccess: (res, variables) => {
+      toast.success(variables.isVerified ? 'User verified successfully' : 'Verification badge removed');
+      queryClient.invalidateQueries(['users']);
+    },
+    onError: () => toast.error('Failed to update verification status')
+  });
 
   return (
     <div className="space-y-8 animate-fade-in flex flex-col h-full">
@@ -144,7 +153,12 @@ const Users = () => {
                           {(user.displayName || user.email || 'U')[0].toUpperCase()}
                         </div>
                         <div>
-                          <p className="text-white font-bold">{user.displayName || 'Unnamed Traveler'}</p>
+                          <div className="flex items-center gap-1">
+                            <p className="text-white font-bold">{user.displayName || 'Unnamed Traveler'}</p>
+                            {user.isVerified && (
+                              <HiBadgeCheck className="text-blue-400 text-lg flex-shrink-0" title="Verified Traveler" />
+                            )}
+                          </div>
                           <p className="text-slate-500 text-xs">{user.email}</p>
                         </div>
                       </div>
@@ -173,6 +187,17 @@ const Users = () => {
                     </td>
                     <td className="px-6 py-4 text-right">
                         <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <button
+                            onClick={() => toggleVerifyMutation.mutate({ userId: user._id, isVerified: !user.isVerified })}
+                            disabled={toggleVerifyMutation.isPending}
+                            className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${
+                              user.isVerified
+                                ? 'bg-blue-500/10 text-blue-400 hover:bg-blue-500/20'
+                                : 'bg-slate-500/20 text-slate-300 hover:bg-slate-500/30'
+                            }`}
+                          >
+                            {user.isVerified ? 'Unverify' : 'Verify'}
+                          </button>
                           <button 
                             onClick={() => toggleStatusMutation.mutate({ userId: user._id, newStatus: user.status === 'suspended' ? 'active' : 'suspended' })}
                             disabled={toggleStatusMutation.isPending}

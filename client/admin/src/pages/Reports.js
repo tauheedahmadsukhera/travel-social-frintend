@@ -95,7 +95,68 @@ const Reports = () => {
               <tr key={report._id} className="hover:bg-white/[0.01] transition-all group">
                 <td className="px-6 py-4">
                   <p className="font-bold text-white">{report.reason}</p>
-                  <p className="text-[10px] text-slate-500 mt-1 uppercase tracking-tighter">Reporter ID: {report.reporterId}</p>
+                  {report.details && <p className="text-slate-400 text-xs mt-1">{report.details}</p>}
+                  <p className="text-[9px] text-slate-500 mt-2 uppercase tracking-widest font-mono">Reporter ID: {report.reporterId}</p>
+
+                  {/* Inline Target Preview */}
+                  {report.targetContent && (
+                    <div className="mt-3 p-3 bg-white/[0.02] border border-white/5 rounded-xl text-xs max-w-lg">
+                      <p className="text-[9px] text-slate-500 font-bold uppercase tracking-wider mb-2">Reported Content Preview:</p>
+                      
+                      {(report.targetType === 'post' || report.targetType === 'Post') && (
+                        <div className="flex gap-3">
+                          {report.targetContent.imageUrl || (report.targetContent.media && report.targetContent.media[0]?.url) ? (
+                            <img 
+                              src={report.targetContent.imageUrl || report.targetContent.media[0]?.url} 
+                              alt="" 
+                              className="w-12 h-12 rounded-lg object-cover bg-slate-800 flex-shrink-0"
+                            />
+                          ) : null}
+                          <div>
+                            <p className="text-slate-300 line-clamp-2">{report.targetContent.caption || 'No caption'}</p>
+                            <p className="text-slate-500 text-[10px] mt-1">Author: {report.targetContent.userId?.displayName || 'Unknown'}</p>
+                          </div>
+                        </div>
+                      )}
+
+                      {(report.targetType === 'user' || report.targetType === 'User') && (
+                        <div className="flex items-center gap-2">
+                          <div className="w-8 h-8 rounded-full bg-slate-800 flex items-center justify-center text-slate-400 font-bold overflow-hidden">
+                            {report.targetContent.avatar ? (
+                              <img src={report.targetContent.avatar} alt="" className="w-8 h-8 rounded-full object-cover" />
+                            ) : (report.targetContent.displayName || 'U')[0].toUpperCase()}
+                          </div>
+                          <div>
+                            <p className="text-slate-300 font-bold">{report.targetContent.displayName}</p>
+                            <p className="text-slate-500 text-[10px]">{report.targetContent.email}</p>
+                          </div>
+                        </div>
+                      )}
+
+                      {(report.targetType === 'comment' || report.targetType === 'Comment') && (
+                        <div>
+                          <p className="text-slate-300 italic">"{report.targetContent.text}"</p>
+                          <p className="text-slate-500 text-[10px] mt-1">Author: {report.targetContent.userName || 'Unknown'}</p>
+                        </div>
+                      )}
+
+                      {(report.targetType === 'story' || report.targetType === 'Story') && (
+                        <div className="flex gap-3">
+                          {report.targetContent.image || report.targetContent.thumbnail ? (
+                            <img 
+                              src={report.targetContent.image || report.targetContent.thumbnail} 
+                              alt="" 
+                              className="w-12 h-16 rounded-lg object-cover bg-slate-800 flex-shrink-0"
+                            />
+                          ) : null}
+                          <div>
+                            <p className="text-slate-300 line-clamp-2">{report.targetContent.caption || 'Story with no caption'}</p>
+                            <p className="text-slate-500 text-[10px] mt-1">Author: {report.targetContent.userName || 'Unknown'}</p>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </td>
                 <td className="px-6 py-4">
                   <span className="text-[10px] px-2 py-1 rounded-lg bg-indigo-500/10 text-indigo-400 font-black uppercase tracking-widest border border-indigo-500/20">{report.targetType}</span>
