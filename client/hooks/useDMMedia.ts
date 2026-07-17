@@ -42,8 +42,8 @@ export function useDMMedia() {
     });
     if (res.canceled) return null;
     const asset = res.assets[0];
-    if (asset.fileSize && asset.fileSize > 10 * 1024 * 1024) {
-      Alert.alert('File Too Large', 'Please select an image or video smaller than 10MB.');
+    if (asset.fileSize && asset.fileSize > 100 * 1024 * 1024) {
+      Alert.alert('File Too Large', 'Please select an image or video smaller than 100MB.');
       return null;
     }
     return asset;
@@ -58,8 +58,8 @@ export function useDMMedia() {
     });
     if (res.canceled) return null;
     const asset = res.assets[0];
-    if (asset.fileSize && asset.fileSize > 10 * 1024 * 1024) {
-      Alert.alert('File Too Large', 'Please select an image or video smaller than 10MB.');
+    if (asset.fileSize && asset.fileSize > 100 * 1024 * 1024) {
+      Alert.alert('File Too Large', 'Please select an image or video smaller than 100MB.');
       return null;
     }
     return asset;
