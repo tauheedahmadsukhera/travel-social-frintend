@@ -455,13 +455,20 @@ export default function PassportScreen() {
         list = list.filter(s => s.type === 'place');
       }
       
-      // Group by name and add count for duplicates
+      // Group by name and add count for duplicates, keeping the latest stamp
       const grouped: { [key: string]: any } = {};
       list.forEach(stamp => {
         if (!grouped[stamp.name]) {
           grouped[stamp.name] = { ...stamp, count: 1 };
         } else {
-          grouped[stamp.name].count += 1;
+          const currentCount = grouped[stamp.name].count + 1;
+          const currentNewest = new Date(grouped[stamp.name].createdAt).getTime();
+          const candidate = new Date(stamp.createdAt).getTime();
+          if (candidate > currentNewest) {
+            grouped[stamp.name] = { ...stamp, count: currentCount };
+          } else {
+            grouped[stamp.name].count = currentCount;
+          }
         }
       });
       return Object.values(grouped);
