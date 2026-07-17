@@ -1,4 +1,4 @@
-import { Ionicons } from '@expo/vector-icons';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import React from 'react';
 import { StyleSheet, View } from 'react-native';
 
@@ -7,11 +7,11 @@ interface VerifiedBadgeProps {
   color?: string;
 }
 
-// Shield with checkmark - using Ionicons shield-checkmark
-export default function VerifiedBadge({ size = 16, color = '#000' }: VerifiedBadgeProps) {
+// Instagram check-decagram badge (Instagram Blue: #3897f0)
+export default function VerifiedBadge({ size = 15, color = '#3897f0' }: VerifiedBadgeProps) {
   return (
     <View style={[styles.container, { width: size, height: size }]}>
-      <Ionicons name="shield-checkmark" size={size} color={color} />
+      <MaterialCommunityIcons name="check-decagram" size={size} color={color} />
     </View>
   );
 }
