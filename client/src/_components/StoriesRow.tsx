@@ -157,6 +157,8 @@ function normalizeAvatar(value: any): string {
   if (lower === 'null' || lower === 'undefined' || lower === 'n/a' || lower === 'na') return '';
   if (lower.includes('via.placeholder.com/200x200.png?text=profile')) return '';
   if (lower.includes('/default%2fdefault-pic.jpg') || lower.includes('/default/default-pic.jpg')) return '';
+  if (lower.includes('avatardefault.webp') || lower.includes('default-pic')) return '';
+  if (lower.includes('localhost') && Platform.OS !== 'web') return '';
   if (lower.startsWith('http://')) return `https://${trimmed.slice(7)}`;
   if (lower.startsWith('//')) return `https:${trimmed}`;
   return trimmed;
@@ -168,6 +170,7 @@ function normalizeStoryMediaUrl(value: any): string {
   if (!trimmed) return '';
   const lower = trimmed.toLowerCase();
   if (lower === 'null' || lower === 'undefined' || lower === 'n/a' || lower === 'na') return '';
+  if (lower.includes('localhost') && Platform.OS !== 'web') return '';
   if (lower.startsWith('http://')) return `https://${trimmed.slice(7)}`;
   if (lower.startsWith('//')) return `https:${trimmed}`;
   return trimmed;
