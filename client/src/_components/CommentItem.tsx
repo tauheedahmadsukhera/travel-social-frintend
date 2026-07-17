@@ -3,6 +3,7 @@ import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { Ionicons } from "@expo/vector-icons";
 import CommentAvatar from "./CommentAvatar";
 import { Comment } from "./CommentSection";
+import VerifiedBadge from "./VerifiedBadge";
 
 interface CommentItemProps {
   comment: Comment;
@@ -52,8 +53,9 @@ const CommentItemComponent: React.FC<CommentItemProps> = ({
           activeOpacity={0.7}
           onLongPress={() => onLongPress(comment, isReply, parentId)}
         >
-          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
             <Text style={styles.userName}>{comment.userName}</Text>
+            {!!(comment as any).verified && <VerifiedBadge size={12} />}
           </View>
           <Text style={styles.commentText}>{comment.text}</Text>
         </TouchableOpacity>

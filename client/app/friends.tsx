@@ -11,6 +11,7 @@ import AsyncStorage from '@/lib/storage';
 import { followUser, unfollowUser } from '../lib/firebaseHelpers/follow';
 import { userService } from '../lib/userService';
 import { DEFAULT_AVATAR_URL } from '@/lib/api';
+import VerifiedBadge from '@/src/_components/VerifiedBadge';
 import { hapticLight, hapticMedium } from '@/lib/haptics';
 import { useAppDialog } from '@/src/_components/AppDialogProvider';
 import { safeRouterBack } from '@/lib/safeRouterBack';
@@ -341,7 +342,10 @@ export default function FriendsScreen() {
         )}
 
         <View style={styles.userInfo}>
-          <Text style={styles.userName} numberOfLines={1}>{displayName}</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+            <Text style={styles.userName} numberOfLines={1}>{displayName}</Text>
+            {!!(item.verified || (item as any).isVerified) && <VerifiedBadge size={14} />}
+          </View>
           {item.username && (
             <Text style={styles.userHandle} numberOfLines={1}>@{item.username}</Text>
           )}

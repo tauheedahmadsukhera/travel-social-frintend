@@ -1,7 +1,8 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
-import { Feather, Ionicons } from '@expo/vector-icons';
+import { Feather } from '@expo/vector-icons';
 import { DEFAULT_AVATAR_URL } from '@/lib/api';
+import VerifiedBadge from '../VerifiedBadge';
 
 type DMHeaderProps = {
   displayName: string;
@@ -13,6 +14,7 @@ type DMHeaderProps = {
   onTitlePress?: () => void;
   onCall?: () => void;
   onVideoCall?: () => void;
+  verified?: boolean;
 };
 
 const DMHeader: React.FC<DMHeaderProps> = ({
@@ -25,6 +27,7 @@ const DMHeader: React.FC<DMHeaderProps> = ({
   onTitlePress,
   onCall,
   onVideoCall,
+  verified,
 }) => {
   return (
     <View style={styles.header}>
@@ -35,9 +38,12 @@ const DMHeader: React.FC<DMHeaderProps> = ({
       <TouchableOpacity style={styles.headerTitle} onPress={onTitlePress || onInfo} activeOpacity={0.7}>
         <Image source={{ uri: avatarUri || DEFAULT_AVATAR_URL }} style={styles.headerAvatar} />
         <View style={styles.headerNameContainer}>
-          <Text style={styles.headerName} numberOfLines={1}>
-            {displayName}
-          </Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+            <Text style={styles.headerName} numberOfLines={1}>
+              {displayName}
+            </Text>
+            {!!verified && <VerifiedBadge size={14} />}
+          </View>
           {statusText ? (
             <Text style={styles.headerStatus}>{statusText}</Text>
           ) : null}

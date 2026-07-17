@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator } from 'rea
 import { Image as ExpoImage } from 'expo-image';
 import { Feather } from '@expo/vector-icons';
 import { DEFAULT_AVATAR_URL } from '@/lib/api';
+import VerifiedBadge from '../VerifiedBadge';
 
 type ConversationItemProps = {
   item: any;
@@ -72,9 +73,12 @@ const ConversationItem: React.FC<ConversationItemProps> = ({
       </View>
 
       <View style={styles.chatContent}>
-        <Text style={[styles.username, hasUnread && styles.usernameBold]} numberOfLines={1}>
-          {displayName}
-        </Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+          <Text style={[styles.username, hasUnread && styles.usernameBold]} numberOfLines={1}>
+            {displayName}
+          </Text>
+          {!!(!isGroup && (profile?.verified || profile?.isVerified || embeddedUser?.verified || embeddedUser?.isVerified || item?.otherUser?.verified || item?.otherUser?.isVerified)) && <VerifiedBadge size={14} />}
+        </View>
         <Text style={[styles.preview, hasUnread && styles.previewBold]} numberOfLines={1}>
           {hasUnread ? `${item.unreadCount} new messages` : lastMsg} · {formatTime(item.lastMessageAt)}
         </Text>

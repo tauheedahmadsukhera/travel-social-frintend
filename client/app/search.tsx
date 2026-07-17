@@ -10,6 +10,7 @@ import { getAllPosts, searchUsers } from '../lib/firebaseHelpers/index';
 import { getPostsByHashtag, getTrendingHashtags } from '../lib/mentions';
 import { DEFAULT_AVATAR_URL } from '@/lib/api';
 import { apiService } from '@/src/_services/apiService';
+import VerifiedBadge from '@/src/_components/VerifiedBadge';
 import { normalizeMediaUrl, isVideoUrl } from '../lib/utils/media';
 import { getVideoThumbnailUrl } from '../lib/imageHelpers';
 import { resolveCanonicalUserId } from '../lib/currentUser';
@@ -122,7 +123,10 @@ export default function SearchScreen() {
                 cachePolicy="memory-disk"
               />
               <View style={{ flex: 1 }}>
-                <Text style={styles.name}>{item.displayName || item.userName || 'User'}</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                  <Text style={styles.name}>{item.displayName || item.userName || 'User'}</Text>
+                  {!!(item.verified || item.isVerified) && <VerifiedBadge size={14} />}
+                </View>
                 <Text style={styles.email}>{item.email}</Text>
               </View>
               <Feather name="chevron-right" size={20} color="#ccc" />
