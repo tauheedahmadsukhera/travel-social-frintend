@@ -29,6 +29,8 @@ type UserItem = {
   avatar: string;
   isFollowing?: boolean;
   isFollowingYou?: boolean;
+  verified?: boolean;
+  isVerified?: boolean;
 };
 
 type TabType = 'followers' | 'following' | 'friends';

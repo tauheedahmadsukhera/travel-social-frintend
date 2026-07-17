@@ -591,7 +591,7 @@ export default function DM() {
           displayName={displayName}
           avatarUri={avatarUri}
           isGroup={isGroupConversation}
-          verified={profile?.verified || profile?.isVerified}
+          verified={otherUserProfile?.verified || otherUserProfile?.isVerified}
           statusText={isOtherTyping ? 'typing...' : (otherUserPresence?.status === 'online' ? 'Online' : '')}
           onBack={() => safeRouterBack()}
           onInfo={() => setShowOptionsModal(true)}
