@@ -44,7 +44,7 @@ const PostHeader: React.FC<PostHeaderProps> = ({
           style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}
         >
           <Text style={styles.cardHeaderName} numberOfLines={1}>{postUserName}</Text>
-          {post?.user?.verified && <VerifiedBadge size={14} />}
+          {(post?.userId?.verified || post?.user?.verified || post?.userId?.isVerified || post?.user?.isVerified) && <VerifiedBadge size={14} />}
         </TouchableOpacity>
         <View style={[styles.cardHeaderSubRow, { flexWrap: 'nowrap' }]}>
           {locationName ? (

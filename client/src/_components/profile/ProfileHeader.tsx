@@ -5,6 +5,7 @@ import { Image as ExpoImage } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { hapticLight } from '@/lib/haptics';
 import { getOptimizedImageUrl } from '@/lib/imageHelpers';
+import VerifiedBadge from '../VerifiedBadge';
 
 interface ProfileHeaderProps {
   profile: any;
@@ -111,7 +112,10 @@ const ProfileHeader: React.FC<ProfileHeaderProps> = ({
         {/* Info Section (now on the right!) */}
         <View style={styles.infoBlock}>
           <View style={styles.nameRow}>
-            <Text style={styles.displayName}>{profile?.name || profile?.displayName || profile?.username || 'User'}</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, flexWrap: 'wrap' }}>
+              <Text style={styles.displayName}>{profile?.name || profile?.displayName || profile?.username || 'User'}</Text>
+              {(profile?.verified || profile?.isVerified) && <VerifiedBadge size={16} />}
+            </View>
             {!!profile?.username && <Text style={styles.username}>@{profile.username}</Text>}
           </View>
 
