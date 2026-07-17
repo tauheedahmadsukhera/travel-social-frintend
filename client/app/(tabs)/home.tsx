@@ -1,4 +1,4 @@
-import { Feather } from "@expo/vector-icons";
+import { Feather, Ionicons } from "@expo/vector-icons";
 import * as Haptics from 'expo-haptics';
 import { DEFAULT_AVATAR_URL, API_BASE_URL } from '../../lib/api';
 import { Image as ExpoImage } from 'expo-image';
@@ -342,6 +342,41 @@ export default function Home() {
         keyExtractor={(item: any, index: number) => showInitialSkeleton ? String(item?.key || `sk-${index}`) : keyExtractor(item)}
         ListHeaderComponent={listHeader}
         ListFooterComponent={listFooter}
+        ListEmptyComponent={
+          !loading ? (
+            <View style={{ flex: 1, paddingVertical: 80, paddingHorizontal: 30, alignItems: 'center', justifyContent: 'center' }}>
+              <Ionicons name="compass-outline" size={64} color="#ccc" style={{ marginBottom: 16 }} />
+              <Text style={{ fontSize: 18, fontWeight: '700', color: '#1f2937', marginBottom: 8, textAlign: 'center' }}>
+                No Posts in {filter || 'this Category'}
+              </Text>
+              <Text style={{ fontSize: 14, color: '#6b7280', textAlign: 'center', lineHeight: 20, maxWidth: 280 }}>
+                {filter 
+                  ? `Be the first to share your travel moments under the ${filter} category!` 
+                  : 'Be the first to share your travel adventures with the community!'}
+              </Text>
+              <TouchableOpacity
+                activeOpacity={0.85}
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+                  router.push('/create-post' as any);
+                }}
+                style={{
+                  marginTop: 20,
+                  backgroundColor: '#FF8D00',
+                  paddingVertical: 10,
+                  paddingHorizontal: 20,
+                  borderRadius: 20,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 6
+                }}
+              >
+                <Feather name="plus" size={16} color="#fff" />
+                <Text style={{ color: '#fff', fontSize: 14, fontWeight: '700' }}>Create Post</Text>
+              </TouchableOpacity>
+            </View>
+          ) : null
+        }
         onEndReached={loadMorePosts}
         onEndReachedThreshold={1.5}
         estimatedItemSize={750}
