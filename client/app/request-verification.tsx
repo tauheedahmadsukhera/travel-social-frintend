@@ -19,6 +19,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { hapticLight, hapticSuccess, hapticWarning } from '@/lib/haptics';
 import { useThemeColors } from '@/lib/theme';
 import { apiService } from '@/src/_services/apiService';
+import { uploadMedia } from '@/lib/firebaseHelpers/core';
 
 const CATEGORIES = ['Travel Blogger', 'Influencer', 'Photographer', 'Journalist', 'Business', 'Other'];
 
@@ -100,13 +101,7 @@ export default function RequestVerificationScreen() {
       hapticLight();
 
       // 1. Upload the image document
-      const fileData = {
-        uri: documentUri,
-        name: `verification_${Date.now()}.jpg`,
-        type: 'image/jpeg',
-      };
-      
-      const uploadRes = await apiService.uploadMedia(fileData, 'image', 'verifications');
+      const uploadRes = await uploadMedia(documentUri, 'image', 'verifications');
       if (!uploadRes?.success || !uploadRes?.url) {
         throw new Error('Image upload failed');
       }
