@@ -5,13 +5,37 @@
  */
 
 // Import implementations
-import ZeegocloudStreamingService from './implementations/ZeegocloudStreamingService';
 import { FirebaseStorageService } from './implementations/FirebaseStorageService';
 import { GoogleMapsService } from './implementations/GoogleMapsService';
 
 // Import interfaces
 import { IMapService } from './interfaces/IMapService';
 import { IStreamingService } from './interfaces/IStreamingService';
+
+class MockStreamingService implements IStreamingService {
+  async initialize() {}
+  async destroy() {}
+  async createChannel(userId: string) { return ''; }
+  async joinChannel(channelName: string, userId: string, isHost: boolean) {}
+  async leaveChannel() {}
+  async getToken(channelName: string, userId: string, isHost?: boolean) { return ''; }
+  async muteAudio() {}
+  async unmuteAudio() {}
+  isAudioMuted() { return false; }
+  async enableVideo() {}
+  async disableVideo() {}
+  async switchCamera() {}
+  isVideoEnabled() { return false; }
+  async setVideoQuality(quality: 'low' | 'medium' | 'high') {}
+  async setVideoConfig(config: any) {}
+  onUserJoined(callback: (userId: string) => void) {}
+  onUserLeft(callback: (userId: string) => void) {}
+  onConnectionStateChanged(callback: (state: string) => void) {}
+  onError(callback: (error: Error) => void) {}
+  getAppId() { return ''; }
+  getProvider() { return 'custom' as const; }
+  isInitialized() { return false; }
+}
 
 // ==================== SERVICE INSTANCES ====================
 
@@ -79,7 +103,7 @@ export const mapService: IMapService = {
  */
 export const getStreamingService = (): IStreamingService => {
   if (!_streamingService) {
-    _streamingService = ZeegocloudStreamingService.getInstance();
+    _streamingService = new MockStreamingService();
   }
   return _streamingService as IStreamingService;
 };
