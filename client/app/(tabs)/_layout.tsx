@@ -739,7 +739,6 @@ function TopMenu({ setMenuVisible, setGroupsDrawerVisible }: { setMenuVisible: (
     }
     if (type === 'message' || type === 'dm') return `/dm?otherUserId=${item?.senderId}`;
     if (type === 'live') {
-      if (item?.streamId) return `/watch-live?roomId=${encodeURIComponent(String(item.streamId))}`;
       return '/(tabs)/map';
     }
     if (type === 'story' || type === 'story-mention' || type === 'story-reply') {

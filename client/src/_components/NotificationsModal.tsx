@@ -54,11 +54,7 @@ export default function NotificationsModal({ visible, onClose }: NotificationsMo
             if (item?.senderId) return `/dm?otherUserId=${item.senderId}`;
             return '/inbox';
         } else if (type === 'live') {
-            if (item?.streamId && String(item.streamId).trim()) {
-                return `/watch-live?roomId=${encodeURIComponent(String(item.streamId))}`;
-            } else {
-                return '/(tabs)/map';
-            }
+            return '/(tabs)/map';
         } else if (type === 'story' || type === 'story-mention' || type === 'story-reply') {
             if (item?.storyId && String(item.storyId).trim()) {
                 return `/(tabs)/home?storyId=${encodeURIComponent(String(item.storyId))}`;

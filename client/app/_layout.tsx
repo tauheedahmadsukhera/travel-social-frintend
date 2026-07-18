@@ -245,8 +245,6 @@ export default function RootLayout() {
                   <Stack.Screen name="dm" options={{ headerShown: false }} />
                   <Stack.Screen name="notifications" options={{ headerShown: false }} />
                   <Stack.Screen name="post-detail" options={{ headerShown: false, animation: 'slide_from_right' }} />
-                  <Stack.Screen name="go-live" options={{ headerShown: false, presentation: 'fullScreenModal' }} />
-                  <Stack.Screen name="watch-live" options={{ headerShown: false }} />
                   <Stack.Screen name="location/[placeId]" options={{ headerShown: false }} />
                   <Stack.Screen name="hashtag-detail" options={{ headerShown: false }} />
                 </Stack>

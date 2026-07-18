@@ -20,7 +20,6 @@ import {
 import AsyncStorage from '@/lib/storage';
 import { FlashList } from '@shopify/flash-list';
 import PostCard from '@/src/_components/PostCard';
-import LiveStreamsRow from '@/src/_components/LiveStreamsRow';
 import { Skeleton } from '@/src/_components/SkeletonLoader';
 import { useHeaderVisibility } from './_layout';
 import { useTabEvent } from './_layout';

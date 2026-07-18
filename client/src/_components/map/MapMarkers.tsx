@@ -111,44 +111,7 @@ export const PostMarker = React.memo(({ post, postsAtLocation, onSelect }: {
 });
 
 export const LiveStreamMarker = React.memo(({ stream }: { stream: LiveStream }) => {
-  const router = useRouter();
-  if (!Marker || !stream.location) return null;
-
-  return (
-    <Marker
-      coordinate={{ latitude: stream.location.latitude, longitude: stream.location.longitude }}
-      anchor={{ x: 0.5, y: 0.5 }}
-      onPress={() => {
-        router.push({
-          pathname: '/watch-live' as any,
-          params: {
-            streamId: (stream as any)?.id || (stream as any)?._id,
-            roomId: (stream as any)?.roomId || stream.channelName || (stream as any)?.id,
-            channelName: stream.channelName || (stream as any)?.id,
-            title: (stream as any)?.title,
-            hostName: (stream as any)?.userName,
-            hostAvatar: (stream as any)?.userAvatar,
-          }
-        });
-      }}
-    >
-      <View style={styles.liveMarkerContainer}>
-        <View style={styles.liveBadgeNew}>
-          <Text style={styles.liveText}>LIVE</Text>
-        </View>
-        <View style={styles.liveAvatarOutside}>
-          <ExpoImage
-            source={{ uri: stream.userAvatar || DEFAULT_AVATAR_URL }}
-            style={styles.liveAvatarNew}
-            contentFit="cover"
-            cachePolicy="memory-disk"
-            placeholder={IMAGE_PLACEHOLDER}
-            transition={120}
-          />
-        </View>
-      </View>
-    </Marker>
-  );
+  return null;
 });
 
 const styles = StyleSheet.create({

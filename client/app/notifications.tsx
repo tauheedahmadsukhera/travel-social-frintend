@@ -115,11 +115,7 @@ export default function NotificationsScreen() {
     } else if (item.type === 'dm' || item.type === 'message') {
       navRoute = `/dm?otherUserId=${item.senderId}`;
     } else if (item.type === 'live') {
-      if (item?.streamId && String(item.streamId).trim()) {
-        navRoute = `/watch-live?roomId=${encodeURIComponent(String(item.streamId))}`;
-      } else {
-        navRoute = '/(tabs)/map';
-      }
+      navRoute = '/(tabs)/map';
     } else if (item.type === 'story' || item.type === 'story-mention' || item.type === 'story-reply') {
       if (item?.storyId && String(item.storyId).trim()) {
         navRoute = `/(tabs)/home?storyId=${encodeURIComponent(String(item.storyId))}`;
