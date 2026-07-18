@@ -230,10 +230,6 @@ function MessageBubbleInner({
     const needsLookup = resolvedMediaType === 'story' && storyId && !storyExpired;
     if (!needsLookup) return () => { cancelled = true; };
 
-    // Skip if we already have full story data with a media URL
-    const hasFullData = resolvedStory?.mediaUrl || resolvedStory?.imageUrl || resolvedStory?.image || resolvedStory?.videoUrl || resolvedStory?.video;
-    if (hasFullData) return () => { cancelled = true; };
-
     setStoryLoading(true);
     (async () => {
       try {
@@ -720,12 +716,27 @@ function MessageBubbleInner({
             {/* Story expired / unavailable */}
             {resolvedMediaType === 'story' && (storyExpired || (!resolvedStory && !storyLoading && (legacyStoryId || storyId))) && (
               <View style={[styles.storyCard, styles.storyCardUnavailable]}>
-                <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 20 }}>
+                {/* Header with avatar + name (dimmed to indicate unavailable state) */}
+                <View style={[styles.storyCardHeader, { opacity: 0.6 }]}>
+                  <View style={[styles.storyAvatarRing, { borderColor: '#555' }]}>
+                    <ExpoImage
+                      source={{ uri: resolvedStory?.userAvatar || sharedStory?.userAvatar || DEFAULT_AVATAR_URL }}
+                      style={styles.storyCardAvatar}
+                      contentFit="cover"
+                      cachePolicy="memory-disk"
+                    />
+                  </View>
+                  <Text style={styles.storyCardUsername} numberOfLines={1}>
+                    {resolvedStory?.userName || sharedStory?.userName || 'Story'}
+                  </Text>
+                </View>
+
+                {/* Center "Story unavailable" placeholder */}
+                <View style={styles.storyUnavailableCenter}>
                   <View style={styles.storyUnavailableIcon}>
-                    <Feather name="camera-off" size={28} color="#999" />
+                    <Feather name="camera-off" size={24} color="#8e8e8e" />
                   </View>
                   <Text style={styles.storyUnavailableTitle}>Story unavailable</Text>
-                  <Text style={styles.storyUnavailableText}>This story is no longer available</Text>
                 </View>
               </View>
             )}
@@ -1166,31 +1177,42 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   storyCardUnavailable: {
-    backgroundColor: '#f0f0f0',
+    backgroundColor: '#121212',
+    borderWidth: 1,
+    borderColor: '#262626',
+  },
+  storyUnavailableCenter: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    left: 0,
+    right: 0,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: '#e0e0e0',
+    paddingHorizontal: 16,
   },
   storyUnavailableIcon: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: '#e8e8e8',
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#1c1c1e',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 12,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: '#2d2d30',
   },
   storyUnavailableTitle: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#333',
-    marginBottom: 4,
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#8e8e8e',
+    textAlign: 'center',
   },
   storyUnavailableText: {
-    fontSize: 12,
-    color: '#888',
+    fontSize: 11,
+    color: '#666',
     textAlign: 'center',
+    marginTop: 2,
   },
   sharedPostCaptionBar: {
     paddingHorizontal: 12,

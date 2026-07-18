@@ -293,10 +293,10 @@ export default function TabsLayout() {
                   marginTop: 2,
                   marginBottom: 10,
                 },
-                tabBarIcon: ({ color, focused }) => (
-                  <MaterialCommunityIcons
-                    name={focused ? 'home' : 'home-outline'}
-                    size={ICON_SIZE + 4}
+                tabBarIcon: ({ color }) => (
+                  <Feather
+                    name="home"
+                    size={ICON_SIZE + 2}
                     color={color}
                   />
                 ),
@@ -320,7 +320,7 @@ export default function TabsLayout() {
                   marginBottom: 10,
                 },
                 tabBarIcon: ({ color }) => (
-                  <Ionicons name="search" size={ICON_SIZE + 2} color={color} />
+                  <Feather name="search" size={ICON_SIZE + 2} color={color} />
                 ),
               }}
             />
@@ -342,7 +342,7 @@ export default function TabsLayout() {
                   marginBottom: 10,
                 },
                 tabBarIcon: ({ color }) => (
-                  <Ionicons name="add" size={ICON_SIZE + 6} color={TAB_INACTIVE_COLOR} />
+                  <Feather name="plus" size={ICON_SIZE + 6} color={TAB_INACTIVE_COLOR} />
                 ),
               }}
             />
@@ -401,9 +401,9 @@ export default function TabsLayout() {
                   marginTop: 2,
                   marginBottom: 10,
                 },
-                tabBarIcon: ({ color, focused }) => (
-                  <Ionicons
-                    name={focused ? 'person-circle' : 'person-circle-outline'}
+                tabBarIcon: ({ color }) => (
+                  <Feather
+                    name="user"
                     size={ICON_SIZE + 2}
                     color={color}
                   />
