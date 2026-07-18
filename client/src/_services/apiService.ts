@@ -380,7 +380,7 @@ export const apiService = {
     if (mediaType) formData.append('mediaType', mediaType);
     if (path) formData.append('path', path);
 
-    return apiRequest('post', '/upload', formData, {
+    return apiRequest('post', '/upload/upload', formData, {
       headers: { 'Content-Type': 'multipart/form-data' }
     });
   },
