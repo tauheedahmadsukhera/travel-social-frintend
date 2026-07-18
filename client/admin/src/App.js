@@ -19,6 +19,7 @@ const Broadcast = lazy(() => import('./pages/Broadcast'));
 const CommentModeration = lazy(() => import('./pages/CommentModeration'));
 const StoryModeration = lazy(() => import('./pages/StoryModeration'));
 const StreamsManagement = lazy(() => import('./pages/StreamsManagement'));
+const VerificationRequests = lazy(() => import('./pages/VerificationRequests'));
 
 // Loading Fallback
 const PageLoader = () => (
@@ -60,6 +61,7 @@ const App = () => {
           <Route path="/comments" element={<ProtectedRoute><CommentModeration /></ProtectedRoute>} />
           <Route path="/stories" element={<ProtectedRoute><StoryModeration /></ProtectedRoute>} />
           <Route path="/streams" element={<ProtectedRoute><StreamsManagement /></ProtectedRoute>} />
+          <Route path="/verifications" element={<ProtectedRoute><VerificationRequests /></ProtectedRoute>} />
           <Route path="/broadcast" element={<ProtectedRoute><Broadcast /></ProtectedRoute>} />
           <Route path="/logs" element={<ProtectedRoute><AdminLogs /></ProtectedRoute>} />
           <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />

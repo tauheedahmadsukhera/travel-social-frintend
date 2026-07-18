@@ -103,6 +103,22 @@ export default function SettingsScreen() {
           <Feather name="chevron-right" size={18} color={colors.textSecondary} />
         </TouchableOpacity>
 
+        {/* Request Verification Section */}
+        <TouchableOpacity
+          style={[styles.settingsItem, { backgroundColor: colors.surface, borderColor: colors.border }]}
+          onPress={() => {
+            hapticLight();
+            router.push('/request-verification' as any);
+          }}
+        >
+          <Feather name="shield" size={20} color="#2563eb" style={{ marginRight: 12 }} />
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.settingsTitle, { color: colors.text }]}>Request Verification</Text>
+            <Text style={[styles.settingsSubtitle, { color: colors.textSecondary }]}>Apply for a verified badge (blue tick)</Text>
+          </View>
+          <Feather name="chevron-right" size={18} color={colors.textSecondary} />
+        </TouchableOpacity>
+
         {/* App Version & About Section */}
         <View style={[styles.aboutBox, { backgroundColor: colors.surface }]}>
           <Text style={[styles.aboutTitle, { color: colors.text }]}>About Trips</Text>

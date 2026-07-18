@@ -11,7 +11,8 @@ import {
   HiOutlineSpeakerphone,
   HiOutlineAdjustments,
   HiOutlineChat,
-  HiOutlineVideoCamera
+  HiOutlineVideoCamera,
+  HiOutlineShieldCheck
 } from 'react-icons/hi';
 import { useAuthStore } from '../stores/authStore';
 import toast from 'react-hot-toast';
@@ -24,6 +25,7 @@ const menuItems = [
   { name: 'Story Moderation', icon: <HiOutlinePhotograph />, path: '/stories' },
   { name: 'Live Streams', icon: <HiOutlineVideoCamera />, path: '/streams' },
   { name: 'Reports', icon: <HiOutlineExclamationCircle />, path: '/reports' },
+  { name: 'Verification Requests', icon: <HiOutlineShieldCheck />, path: '/verifications' },
   { name: 'App Management', icon: <HiOutlineAdjustments />, path: '/management' },
   { name: 'Broadcast', icon: <HiOutlineSpeakerphone />, path: '/broadcast' },
   { name: 'Admin Logs', icon: <HiOutlineDocumentText />, path: '/logs' },

@@ -98,5 +98,12 @@ export const adminAPI = {
 
   endStream: (id) =>
     apiClient.post(`/admin/streams/${id}/end`),
+
+  // Verification Requests
+  getVerificationRequests: (page = 1, limit = 20, status = 'pending') =>
+    apiClient.get('/admin/verification-requests', { params: { page, limit, status } }),
+
+  updateVerificationRequestStatus: (id, status, rejectionReason = '') =>
+    apiClient.put(`/admin/verification-requests/${id}`, { status, rejectionReason }),
 };
 
