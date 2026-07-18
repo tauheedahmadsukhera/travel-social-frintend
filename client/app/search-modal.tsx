@@ -28,6 +28,8 @@ import { CITY_CARD_IMAGES, COUNTRY_CARD_IMAGES, DEFAULT_CARD_IMAGE, REGION_CARD_
 import { getCachedData, setCachedData, useNetworkStatus, useOfflineBanner } from '../hooks/useOffline';
 import { OfflineBanner } from '@/src/_components/OfflineBanner';
 import { safeRouterBack } from '@/lib/safeRouterBack';
+import { apiService, getAPIBaseURL } from '@/src/_services/apiService';
+import { mapService } from '../services';
 
 // Type definitions
 type Region = {
@@ -222,7 +224,6 @@ export default function SearchModal() {
 
         // Load following list
         try {
-          const { apiService } = await import('@/src/_services/apiService');
           const response = await apiService.get(`/follow/users/${uid}/following`);
           if (response.success && Array.isArray(response.data)) {
             const followingIds = response.data.map((f: any) => f.followingId);
@@ -244,7 +245,6 @@ export default function SearchModal() {
   const fetchRegions = useCallback(async () => {
     setLoadingRegions(true);
     try {
-      const { apiService, getAPIBaseURL } = await import('@/src/_services/apiService');
       const url = `${getAPIBaseURL()}/all-regions?t=${Date.now()}`;
       console.log('[SearchModal] 📡 Fetching from:', url);
       let result = await apiService.getRegions();
@@ -322,7 +322,6 @@ export default function SearchModal() {
     setLoadingSuggest(true);
     const timer = setTimeout(async () => {
       try {
-        const { mapService } = await import('../services');
         const results = await mapService.getAutocompleteSuggestions(q);
         setSuggestions(results.map((r: any) => ({
           id: r.placeId || String(Math.random()),
@@ -417,7 +416,6 @@ export default function SearchModal() {
     setLoadingTags(true);
     const timer = setTimeout(async () => {
       try {
-        const { apiService } = await import('@/src/_services/apiService');
         const res = await apiService.get(`/posts/hashtags?q=${q.replace(/^#/, '')}`);
         if (res.success) {
           setHashtags(res.data || []);

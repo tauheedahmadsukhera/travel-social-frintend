@@ -308,7 +308,9 @@ export default function TabsLayout() {
                 tabPress: (e) => {
                   e.preventDefault();
                   logAnalyticsEvent('tab_search_press', {});
-                  router.push('/search-modal' as any);
+                  setTimeout(() => {
+                    router.push('/search-modal' as any);
+                  }, 0);
                 },
               }}
               options={{
