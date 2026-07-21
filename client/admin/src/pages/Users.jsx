@@ -167,7 +167,7 @@ const Users = () => {
                       <select 
                         value={user.role || 'user'}
                         onChange={(e) => roleChangeMutation.mutate({ userId: user._id, newRole: e.target.value })}
-                        disabled={roleChangeMutation.isLoading}
+                        disabled={roleChangeMutation.isPending}
                         className="bg-transparent text-slate-300 outline-none border border-white/10 rounded-lg px-2 py-1 text-sm focus:border-indigo-500"
                       >
                         <option value="user" className="bg-bgDark">Traveler</option>

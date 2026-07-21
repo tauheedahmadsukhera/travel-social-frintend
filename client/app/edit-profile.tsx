@@ -7,7 +7,7 @@ import { ActivityIndicator, Alert, Image, KeyboardAvoidingView, Platform, Scroll
 import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { uploadImage } from '../lib/firebaseHelpers';
-import { updateUserProfile } from '../lib/firebaseHelpers/index';
+import { updateUserProfile, toggleUserPrivacy } from '../lib/firebaseHelpers/index';
 import { getUserProfile } from '@/src/_services/firebaseService';
 import { useAuthLoading } from '@/src/_components/UserContext';
 import { hapticLight, hapticMedium, hapticSuccess } from '../lib/haptics';
@@ -202,21 +202,18 @@ export default function EditProfile() {
           await AsyncStorage.setItem('userAvatar', String(finalAvatar));
         }
 
-        // If privacy setting changed, TODO: implement backend API to update all user's posts
+        // Synchronize privacy setting across user's posts
         console.log('🔄 Updating posts privacy to:', isPrivate);
         
         try {
-          // TODO: Call backend API to update user posts
-          // const response = await fetch(`/api/users/${user.uid}/posts/privacy`, {
-          //   method: 'PATCH',
-          //   headers: { 'Content-Type': 'application/json' },
-          //   body: JSON.stringify({ isPrivate })
-          // });
-          
-          console.log(`ðŸ“ Posts privacy update complete`);
+          const privacyRes = await toggleUserPrivacy(userId, isPrivate);
+          if (privacyRes && privacyRes.success) {
+            console.log('✅ Posts privacy update complete');
+          } else {
+            console.warn('⚠️ Posts privacy update warning:', privacyRes?.error);
+          }
         } catch (error) {
-          console.error('âŒ Error updating posts privacy:', error);
-          Alert.alert('Warning', `Profile updated but some posts may not have been updated. Please try again.`);
+          console.error('❌ Error updating posts privacy:', error);
         }
         
         // Reload profile to get fresh data
