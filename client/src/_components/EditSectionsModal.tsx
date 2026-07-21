@@ -66,7 +66,11 @@ export default function EditSectionsModal({
 
   const isOwner = userId === currentUserId;
   const selectedSection = sections.find(s => s.name === selectedSectionForEdit);
-  const isCollaborator = selectedSection?.collaborators?.includes(currentUserId);
+  const isCollaborator = selectedSection?.collaborators?.some((c: any) => {
+    const id = typeof c === 'object' ? (c._id || c.userId || c.uid || c.firebaseUid || '') : c;
+    return String(id) === String(currentUserId);
+  });
+
   const canManagePosts = isOwner || isCollaborator;
 
   const normalizeSections = (data: any): Section[] => {

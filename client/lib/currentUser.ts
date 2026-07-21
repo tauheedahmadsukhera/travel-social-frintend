@@ -29,6 +29,29 @@ function isLikelyPlaceholderUser(user: any, candidate: string): boolean {
   );
 }
 
+function base64Decode(input: string): string {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=';
+  const str = String(input).replace(/=+$/, '');
+  let output = '';
+  if (str.length % 4 === 1) {
+    throw new Error("'atob' failed: The string to be decoded is not correctly encoded.");
+  }
+  for (
+    let bc = 0, bs = 0, r1 = 0, r2 = 0, idx = 0;
+    idx < str.length;
+  ) {
+    const char = str.charAt(idx++);
+    const charIndex = chars.indexOf(char);
+    if (charIndex === -1) continue;
+    r2 = charIndex;
+    r1 = bc % 4 ? r1 * 64 + r2 : r2;
+    if (bc++ % 4) {
+      output += String.fromCharCode(255 & (r1 >> ((-2 * bc) & 6)));
+    }
+  }
+  return output;
+}
+
 function readUserIdFromToken(token: string | null): string | null {
   if (!token) return null;
   try {
@@ -36,7 +59,7 @@ function readUserIdFromToken(token: string | null): string | null {
     if (parts.length < 2) return null;
     const base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
     const padded = base64.padEnd(Math.ceil(base64.length / 4) * 4, '=');
-    const json = atob(padded);
+    const json = base64Decode(padded);
     const payload = JSON.parse(json);
     const tokenUserId = payload?.userId;
     return tokenUserId ? String(tokenUserId) : null;

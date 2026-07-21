@@ -106,7 +106,7 @@ const ChatItem = React.memo(({ item, currentUserId, displayName, avatarUri, acti
       formatTime={formatTime}
       username={displayName}
       currentUserId={currentUserId!}
-      avatarUrl={avatarUri}
+      avatarUrl={item.senderAvatar || item.userAvatar || avatarUri}
       onReaction={(emoji: string) => onReaction(item, emoji)}
       reactions={item.reactions}
       onLongPress={() => onLongPress(item)}

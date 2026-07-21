@@ -98,8 +98,6 @@
     "recyclerlistview": "^4.2.3",
     "rn-emoji-keyboard": "^1.7.0",
     "socket.io-client": "^4.8.2",
-    "zego-express-engine-reactnative": "^3.22.0",
-    "zego-zim-react-native": "^2.27.0",
     "zustand": "^5.0.13"
   },
   "devDependencies": {

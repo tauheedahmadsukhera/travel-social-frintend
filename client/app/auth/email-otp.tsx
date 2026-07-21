@@ -15,7 +15,7 @@ export default function EmailOTPScreen() {
   const email = params.email as string || 'user@example.com';
   const phone = params.phone as string;
   const flow = params.flow as string || 'login';
-  const generatedOtp = params.generatedOtp as string; // For dev/testing
+  const target = (email || phone || '').trim();
 
   const [otp, setOtp] = useState(['', '', '', '', '', '']);
   const [loading, setLoading] = useState(false);
@@ -70,17 +70,24 @@ export default function EmailOTPScreen() {
       return;
     }
 
-    // Verify OTP (in dev mode, check against generated OTP)
-    if (generatedOtp && otpCode !== generatedOtp) {
-      setError(`Invalid OTP. Please check the console for the correct code.`);
-      console.log('âŒ OTP mismatch. Expected:', generatedOtp, 'Got:', otpCode);
-      return;
-    }
-
     setLoading(true);
     setError('');
 
     try {
+      // Verify OTP securely via backend
+      const { apiService } = await import('@/src/_services/apiService');
+      const verifyRes = await apiService.post('/auth/verify-otp', {
+        email: target.includes('@') ? target : undefined,
+        phone: !target.includes('@') ? target : undefined,
+        code: otpCode
+      });
+
+      if (!verifyRes?.success) {
+        setError(verifyRes?.error || 'Invalid OTP code');
+        setLoading(false);
+        return;
+      }
+
       // For phone signup flow, create account with email and phone
       if (flow === 'signup' && email && phone) {
         const { signUpUser } = await import('../../lib/firebaseHelpers');
@@ -102,7 +109,6 @@ export default function EmailOTPScreen() {
             await updateUserProfile(user.uid, { phoneNumber: phone });
           }
 
-          // Instagram-like: no success popup, just continue
           router.replace('/(tabs)/home');
           logAnalyticsEvent('auth_email_otp_signup_success');
         } else {
@@ -110,8 +116,7 @@ export default function EmailOTPScreen() {
           logAnalyticsEvent('auth_email_otp_signup_error', { error: result.error });
         }
       } else {
-        // For login flow
-        // Instagram-like: no success popup, just continue
+        // Login flow - OTP verified, continue
         router.replace('/(tabs)/home');
         logAnalyticsEvent('auth_email_otp_verify_success');
       }
@@ -126,23 +131,26 @@ export default function EmailOTPScreen() {
   const handleResend = async () => {
     logAnalyticsEvent('auth_email_otp_resend');
     try {
-      // Generate new OTP
-      const newOtp = Math.floor(100000 + Math.random() * 900000).toString();
-      console.log('ðŸ“± Resent OTP:', newOtp, 'for email:', email);
-
-      // TODO: In production, send this OTP via SMS or email service
-
-      Alert.alert(
-        'OTP Resent! âœ…',
-        `A new verification code has been generated. Check the console for the code.`,
-        [{ text: 'OK' }]
-      );
+      const { apiService } = await import('@/src/_services/apiService');
+      const res = await apiService.post('/auth/send-otp', {
+        email: target.includes('@') ? target : undefined,
+        phone: !target.includes('@') ? target : undefined
+      });
+      if (res?.success) {
+        Alert.alert(
+          'OTP Resent! ✅',
+          `A new verification code has been sent to ${target}.`,
+          [{ text: 'OK' }]
+        );
+      } else {
+        throw new Error(res?.error || 'Failed to resend OTP');
+      }
       setOtp(['', '', '', '', '', '']);
       setError('');
       inputRefs.current[0]?.focus();
     } catch (error: any) {
       console.error('Resend OTP error:', error);
-      Alert.alert('Error', 'Failed to resend OTP. Please try again.');
+      Alert.alert('Error', error.message || 'Failed to resend OTP. Please try again.');
     }
   };
 

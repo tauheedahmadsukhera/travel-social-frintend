@@ -72,7 +72,8 @@ export default function ShareModal({
       let successCount = 0;
 
       for (const targetId of selectedUsers) {
-        const targetIsGroup = typeof targetId === 'string' && targetId.startsWith('grp_');
+        const targetProfile = users.find(u => String(u.id) === String(targetId));
+        const targetIsGroup = (typeof targetId === 'string' && targetId.startsWith('grp_')) || !!targetProfile?.isGroup;
         let convoId = '';
         
         if (targetIsGroup) {
@@ -300,7 +301,7 @@ export default function ShareModal({
             const qSeeds = ['a', 'e', 'i'];
             for (const q of qSeeds) {
               const searchRes = await apiService.get('/users/search', { q, requesterUserId: currentUserId, limit: 12 });
-              const arr = Array.isArray(searchRes?.data) ? searchRes.data : [];
+              const arr = Array.isArray(searchRes) ? searchRes : (searchRes?.data || []);
               for (const u of arr) {
                 const id = String(u?._id || u?.id || '');
                 if (!id || id === String(currentUserId) || seenIds.has(id)) continue;
@@ -335,13 +336,12 @@ export default function ShareModal({
     setLoading(true);
     try {
       const res = await apiService.get('/users/search', { q: query.trim(), requesterUserId: currentUserId });
-      if (res?.success && Array.isArray(res.data)) {
-        setUsers(res.data.map((u: any) => ({
-          id: u._id || u.id,
-          username: u.username || u.displayName || u.name || `user_${String(u._id || u.id || '').slice(0, 6)}`,
-          avatar: u.avatar || u.photoURL || DEFAULT_AVATAR,
-        })));
-      }
+      const userList = Array.isArray(res) ? res : (res?.data || []);
+      setUsers(userList.map((u: any) => ({
+        id: u._id || u.id,
+        username: u.username || u.displayName || u.name || `user_${String(u._id || u.id || '').slice(0, 6)}`,
+        avatar: u.avatar || u.photoURL || DEFAULT_AVATAR,
+      })));
     } catch (err) {
       console.error('ShareModal search error:', err);
     } finally {

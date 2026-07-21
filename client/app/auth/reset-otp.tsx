@@ -7,6 +7,7 @@ import { AuthBrandHeader } from '@/src/_components/auth/AuthBrandHeader';
 import { AuthKeyboardScroll } from '@/src/_components/auth/AuthKeyboardScroll';
 import CustomButton from '@/src/_components/auth/CustomButton';
 import { safeRouterBack } from '@/lib/safeRouterBack';
+import { API_BASE_URL } from '../../lib/api';
 
 export default function ResetOTPScreen() {
   const router = useRouter();
@@ -66,13 +67,23 @@ export default function ResetOTPScreen() {
     setError('');
 
     try {
-      // Simulate OTP verification
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      // Navigate to reset password screen
-      router.push('/auth/reset-password');
+      const response = await fetch(`${API_BASE_URL}/auth/verify-reset-code`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: contact, code: otpCode }),
+      });
+      const data = await response.json();
+      if (data.success) {
+        // Navigate to reset password screen and pass email + code
+        router.push({
+          pathname: '/auth/reset-password',
+          params: { email: contact, code: otpCode }
+        });
+      } else {
+        setError(data.error || 'Invalid or expired verification code');
+      }
     } catch (err: any) {
-      setError(err.message || 'Verification failed');
+      setError(err.message || 'Verification failed. Please try again.');
     } finally {
       setLoading(false);
     }

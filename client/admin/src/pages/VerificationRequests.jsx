@@ -1,9 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { adminAPI } from '../services/adminService';
 import { 
   HiOutlineCheck, 
   HiOutlineX, 
-  HiOutlineClock,
   HiOutlineEye,
   HiOutlineShieldCheck
 } from 'react-icons/hi';
@@ -22,11 +21,7 @@ const VerificationRequests = () => {
   const [rejectingRequest, setRejectingRequest] = useState(null);
   const [rejectionReason, setRejectionReason] = useState('');
 
-  useEffect(() => {
-    fetchRequests();
-  }, [statusFilter, page]);
-
-  const fetchRequests = async () => {
+  const fetchRequests = useCallback(async () => {
     try {
       setLoading(true);
       const res = await adminAPI.getVerificationRequests(page, 20, statusFilter);
@@ -41,7 +36,12 @@ const VerificationRequests = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [page, statusFilter]);
+
+  useEffect(() => {
+    fetchRequests();
+  }, [fetchRequests]);
+
 
   const handleUpdateStatus = async (id, status, reason = '') => {
     try {

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { adminAPI } from '../services/adminService';
 import { 
   HiOutlineCheckCircle, 
@@ -13,11 +13,7 @@ const Reports = () => {
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState('pending');
 
-  useEffect(() => {
-    fetchReports();
-  }, [statusFilter]);
-
-  const fetchReports = async () => {
+  const fetchReports = useCallback(async () => {
     try {
       setLoading(true);
       const res = await adminAPI.getReports(1, 50, statusFilter);
@@ -29,7 +25,12 @@ const Reports = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [statusFilter]);
+
+  useEffect(() => {
+    fetchReports();
+  }, [fetchReports]);
+
 
   const handleResolve = async (id, status) => {
     try {

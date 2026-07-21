@@ -35,7 +35,14 @@ export async function fetchBlockedUserIds(uid: string): Promise<Set<string>> {
 
 export function filterOutBlocked<T extends Record<string, any>>(items: T[], blocked: Set<string>): T[] {
   return items.filter(i => {
-    const uid = i.userId || i.ownerId || i.authorId;
-    return uid ? !blocked.has(uid) : true;
+    const rawUid = i.userId || i.ownerId || i.authorId;
+    if (!rawUid) return true;
+
+    const authorId = typeof rawUid === 'object' 
+      ? (rawUid._id || rawUid.id || rawUid.uid || rawUid.firebaseUid)
+      : rawUid;
+
+    const cleanId = authorId ? String(authorId) : '';
+    return cleanId ? !blocked.has(cleanId) : true;
   });
 }

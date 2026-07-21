@@ -111,7 +111,7 @@ export function useSearchData({ query, activeTab, currentUserId }: UseSearchData
   return {
     trendingHashtags: trendingQuery.data || [],
     allPosts: allPostsQuery.data || [],
-    results: searchQuery.data || [],
+    results: query.trim() ? (searchQuery.data || []) : [],
     isLoading: trendingQuery.isLoading || allPostsQuery.isLoading || (!!query.trim() && searchQuery.isLoading),
     isSearching: searchQuery.isLoading,
     refetch: searchQuery.refetch,

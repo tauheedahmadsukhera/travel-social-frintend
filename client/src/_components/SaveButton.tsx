@@ -28,9 +28,6 @@ async function unsavePost(postId: string, userId: string) {
 export default function SaveButton({ post, currentUser }: any) {
   const user = useUser();
 
-  // Guard: if post is not defined, render nothing
-  if (!post) return null;
-
   const userForSave = currentUser || user;
   const userId =
     typeof userForSave === "string"
@@ -66,7 +63,7 @@ export default function SaveButton({ post, currentUser }: any) {
   }, [userId]);
 
   useEffect(() => {
-    const rawPid = post.id || post._id;
+    const rawPid = post?.id || post?._id;
     if (!rawPid) return;
     const pid = String(rawPid).split('-loop')[0];
     const { feedEventEmitter } = require("../../lib/feedEventEmitter");
@@ -76,7 +73,7 @@ export default function SaveButton({ post, currentUser }: any) {
       else if (data.saved !== undefined) setSaved(data.saved);
     });
     return () => sub.remove();
-  }, [post.id, post._id]);
+  }, [post?.id, post?._id]);
 
   async function handleSavePress() {
     const uid = resolvedUserId || userId;
@@ -91,6 +88,9 @@ export default function SaveButton({ post, currentUser }: any) {
     // whether this post already exists in any collection.
     setModalVisible(true);
   }
+
+  // Guard: if post is not defined, render nothing
+  if (!post) return null;
 
   const cleanPostId = String(post.id || post._id || "").split('-loop')[0];
 

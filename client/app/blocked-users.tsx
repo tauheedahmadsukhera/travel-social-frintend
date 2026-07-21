@@ -9,6 +9,7 @@ import { userService } from '../lib/userService';
 import { DEFAULT_AVATAR_URL } from '@/lib/api';
 import { useAppDialog } from '@/src/_components/AppDialogProvider';
 import { safeRouterBack } from '@/lib/safeRouterBack';
+import { resolveCanonicalUserId } from '../lib/currentUser';
 
 
 interface BlockedUser {
@@ -31,7 +32,7 @@ export default function BlockedUsersScreen() {
     useEffect(() => {
         const init = async () => {
             try {
-                const uid = await AsyncStorage.getItem('userId');
+                const uid = await resolveCanonicalUserId();
                 setUserId(uid);
             } catch (e) {
                 console.error('Error getting userId:', e);

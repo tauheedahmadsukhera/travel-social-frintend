@@ -18,8 +18,8 @@ import { API_BASE_URL } from '../../lib/api';
 
 export default function ResetPasswordScreen() {
   const router = useRouter();
-  const { email } = useLocalSearchParams<{ email: string }>();
-  const [code, setCode] = useState('');
+  const { email, code: initialCode } = useLocalSearchParams<{ email: string; code?: string }>();
+  const [code, setCode] = useState(initialCode || '');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);

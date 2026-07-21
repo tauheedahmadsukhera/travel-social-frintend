@@ -59,6 +59,8 @@ export default function PhoneOTPScreen() {
     }
   };
 
+  const target = (params.contact as string || params.phone as string || '').trim();
+
   const handleVerify = async () => {
     logAnalyticsEvent('auth_phone_otp_verify_click');
     const otpCode = otp.join('');
@@ -72,13 +74,32 @@ export default function PhoneOTPScreen() {
     setError('');
 
     try {
-      // TODO: Verify OTP with backend
-      // For demo, we'll simulate verification
-      // In production, this would verify the OTP against backend
-      
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
+      const { apiService } = await import('@/src/_services/apiService');
+      const verifyRes = await apiService.post('/auth/verify-otp', {
+        email: target.includes('@') ? target : undefined,
+        phone: !target.includes('@') ? target : undefined,
+        code: otpCode
+      });
+
+      if (!verifyRes?.success) {
+        setError(verifyRes?.error || 'Invalid OTP code');
+        setLoading(false);
+        return;
+      }
+
+      // If signup flow, create the account
+      if (flow === 'signup' && target) {
+        const { signUpUser } = await import('../../lib/firebaseHelpers');
+        const username = target.includes('@') ? target.split('@')[0] : `user_${Math.floor(Math.random() * 100000)}`;
+        const tempPassword = `UserTempPass123!`;
+        const result = await signUpUser(target.includes('@') ? target : `${target}@phone.trips.app`, tempPassword, undefined, username);
+        if (!result.success) {
+          setError(result.error || 'Signup failed');
+          setLoading(false);
+          return;
+        }
+      }
+
       // Instagram-like: no success popup, just continue
       router.replace('/(tabs)/home');
       logAnalyticsEvent('auth_phone_otp_verify_success');
@@ -92,11 +113,24 @@ export default function PhoneOTPScreen() {
 
   const handleResend = async () => {
     logAnalyticsEvent('auth_phone_otp_resend');
-    Alert.alert(
-      'OTP Resent! âœ…', 
-      `A new verification code has been sent to ${phone}`,
-      [{ text: 'OK' }]
-    );
+    try {
+      const { apiService } = await import('@/src/_services/apiService');
+      const res = await apiService.post('/auth/send-otp', {
+        email: target.includes('@') ? target : undefined,
+        phone: !target.includes('@') ? target : undefined
+      });
+      if (res?.success) {
+        Alert.alert(
+          'OTP Resent! ✅', 
+          `A new verification code has been sent to ${target}`,
+          [{ text: 'OK' }]
+        );
+      } else {
+        throw new Error(res?.error || 'Failed to resend OTP');
+      }
+    } catch (err: any) {
+      Alert.alert('Error', err.message || 'Failed to resend OTP');
+    }
     setOtp(['', '', '', '', '', '']);
     setError('');
     inputRefs.current[0]?.focus();

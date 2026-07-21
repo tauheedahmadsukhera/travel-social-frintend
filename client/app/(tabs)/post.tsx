@@ -101,9 +101,8 @@ export default function PostScreen() {
       
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ['images', 'videos'],
-        allowsEditing: true,
-        aspect: [4, 5],
-        quality: 0.7,
+        allowsEditing: false,
+        quality: 0.85,
         allowsMultipleSelection: true,
         selectionLimit: 25,
         videoMaxDuration: 2520, // 42 minutes in seconds

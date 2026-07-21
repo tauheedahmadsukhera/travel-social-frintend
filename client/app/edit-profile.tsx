@@ -198,6 +198,10 @@ export default function EditProfile() {
         hapticSuccess();
         console.log('✅ Profile updated');
         
+        if (finalAvatar) {
+          await AsyncStorage.setItem('userAvatar', String(finalAvatar));
+        }
+
         // If privacy setting changed, TODO: implement backend API to update all user's posts
         console.log('🔄 Updating posts privacy to:', isPrivate);
         

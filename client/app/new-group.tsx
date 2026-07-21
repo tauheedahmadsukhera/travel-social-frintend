@@ -79,7 +79,7 @@ export default function NewGroupScreen() {
         const seeds = ['a', 'e', 'i'];
         for (const q of seeds) {
           const res: any = await apiService.get('/users/search', { q, requesterUserId: uid, limit: 20 });
-          const arr = Array.isArray(res?.data) ? res.data : [];
+          const arr = Array.isArray(res) ? res : (Array.isArray(res?.data) ? res.data : []);
           for (const u of arr) {
             const id = String(u?._id || u?.id || '');
             if (!id || id === String(uid) || seen.has(id)) continue;
@@ -117,7 +117,7 @@ export default function NewGroupScreen() {
     const timer = setTimeout(async () => {
       try {
         const res: any = await apiService.get('/users/search', { q, requesterUserId: currentUserId, limit: 30 });
-        const arr = Array.isArray(res?.data) ? res.data : [];
+        const arr = Array.isArray(res) ? res : (Array.isArray(res?.data) ? res.data : []);
         const mapped: UserItem[] = arr
           .map((u: any) => {
             const id = String(u?._id || u?.id || '');
@@ -219,7 +219,7 @@ export default function NewGroupScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={["top", "bottom"]}>
+    <SafeAreaView style={styles.container} edges={["top", "left", "right", "bottom"]}>
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -310,8 +310,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingTop: 4,
-    paddingBottom: 8,
+    paddingTop: 8,
+    paddingBottom: 10,
+    minHeight: 56,
   },
   backBtn: {
     width: 36,

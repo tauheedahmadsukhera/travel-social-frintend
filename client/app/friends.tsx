@@ -15,6 +15,7 @@ import VerifiedBadge from '@/src/_components/VerifiedBadge';
 import { hapticLight, hapticMedium } from '@/lib/haptics';
 import { useAppDialog } from '@/src/_components/AppDialogProvider';
 import { safeRouterBack } from '@/lib/safeRouterBack';
+import { resolveCanonicalUserId } from '../lib/currentUser';
 import { useQueryClient } from '@tanstack/react-query';
 
 
@@ -45,7 +46,7 @@ export default function FriendsScreen() {
   useEffect(() => {
     const loadUserId = async () => {
       try {
-        const uid = await AsyncStorage.getItem('userId');
+        const uid = await resolveCanonicalUserId();
         setCurrentUserId(uid);
       } catch (e) {
         setCurrentUserId(null);

@@ -64,7 +64,7 @@ export const CreateGroupModal: React.FC<CreateGroupModalProps> = ({
       try {
         const res = await apiService.get('/users/search', { q: query.trim(), requesterUserId: userId, limit: 30 });
         console.log('[CreateGroupModal] Search response success:', res?.success, 'count:', res?.data?.length);
-        const users = Array.isArray(res?.data) ? res.data : [];
+        const users = Array.isArray(res) ? res : (Array.isArray(res?.data) ? res.data : []);
         setGroupSearchResults(users);
       } catch (err) {
         console.error('[CreateGroupModal] Search failed:', err);
@@ -188,7 +188,13 @@ export const CreateGroupModal: React.FC<CreateGroupModalProps> = ({
           <Pressable style={StyleSheet.absoluteFillObject} onPress={onClose} />
           <Pressable style={[styles.groupSheet, { paddingBottom: Math.max(insets.bottom, 20) }]} onPress={() => {}}>
             <View style={styles.groupHandle} />
-            <Text style={styles.groupTitle}>{selectedGroupMembers.length > 1 ? 'New Group' : 'New Message'}</Text>
+            <View style={styles.groupHeaderRow}>
+              <TouchableOpacity onPress={onClose} style={styles.groupCloseBtn}>
+                <Text style={styles.groupCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <Text style={styles.groupTitle}>{selectedGroupMembers.length > 1 ? 'New Group' : 'New Message'}</Text>
+              <View style={{ minWidth: 60 }} />
+            </View>
             
             {selectedGroupMembers.length > 1 && (
               <TextInput
@@ -333,11 +339,25 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
     marginBottom: 12,
   },
+  groupHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 10,
+  },
+  groupCloseBtn: {
+    minWidth: 60,
+  },
+  groupCancelText: {
+    fontSize: 15,
+    color: '#666',
+    fontWeight: '500',
+  },
   groupTitle: {
     fontSize: 18,
     fontWeight: '800',
     color: '#111827',
-    marginBottom: 10,
+    textAlign: 'center',
   },
   groupNameInput: {
     borderWidth: 1,

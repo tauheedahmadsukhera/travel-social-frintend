@@ -104,16 +104,18 @@ export async function updateUserProfile(uid: string, data: any) {
     // Import apiService dynamically to avoid circular dependencies
     const { apiService } = await import('@/src/_services/apiService');
 
-    let avatarValue = data?.avatar;
-    if (!avatarValue || (typeof avatarValue === 'string' && avatarValue.trim() === '')) {
-      avatarValue = DEFAULT_AVATAR_URL;
-    }
     const safeData = {
       ...data,
-      avatar: avatarValue,
-      photoURL: avatarValue,
-      isPrivate: data.isPrivate !== undefined ? data.isPrivate : false,
     };
+
+    if (data && 'avatar' in data) {
+      let avatarValue = data.avatar;
+      if (!avatarValue || (typeof avatarValue === 'string' && avatarValue.trim() === '')) {
+        avatarValue = DEFAULT_AVATAR_URL;
+      }
+      safeData.avatar = avatarValue;
+      safeData.photoURL = avatarValue;
+    }
 
     const responseData = await apiService.patch(`/users/${uid}`, safeData);
     return { success: true, data: responseData };

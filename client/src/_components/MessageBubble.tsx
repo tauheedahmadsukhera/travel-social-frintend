@@ -844,7 +844,8 @@ const MessageBubble = React.memo(MessageBubbleInner, (prev, next) => {
     prev.mediaUrl === next.mediaUrl &&
     prev.audioUrl === next.audioUrl &&
     prev.reactions === next.reactions &&
-    prev.thumbnailUrl === next.thumbnailUrl
+    prev.thumbnailUrl === next.thumbnailUrl &&
+    prev.avatarUrl === next.avatarUrl
   );
 });
 

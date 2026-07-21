@@ -355,7 +355,11 @@ export default function StoriesViewer({ stories, onClose, initialIndex = 0, isHi
     }
   };
 
+  const [isAddingToHighlight, setIsAddingToHighlight] = useState(false);
+
   const handleAddToHighlight = async (highlightId: string) => {
+    if (isAddingToHighlight) return;
+    setIsAddingToHighlight(true);
     try {
       const result = await highlightManager.addStoryToHighlight({ highlightId, story: currentStory });
       if (result.success) {
@@ -373,6 +377,8 @@ export default function StoriesViewer({ stories, onClose, initialIndex = 0, isHi
     } catch (error: any) {
       Alert.alert('Error', error.message || 'Failed to add story to highlight');
       setIsPaused(false);
+    } finally {
+      setIsAddingToHighlight(false);
     }
   };
 
@@ -842,23 +848,24 @@ export default function StoriesViewer({ stories, onClose, initialIndex = 0, isHi
              <TouchableOpacity onPress={goToNext} style={viewerStyles.navSide} activeOpacity={1} />
            </View>
         )}
-
         {/* Footer Actions */}
         <View style={[viewerStyles.footer, { paddingBottom: Math.max(insets.bottom, 20) }]}>
           <LinearGradient colors={['transparent', 'rgba(0,0,0,0.85)']} style={StyleSheet.absoluteFillObject} pointerEvents="none" />
           
           <View style={viewerStyles.footerIconsRow}>
-             <View style={viewerStyles.footerIconBtnRow}>
-                <Feather name="film" size={22} color="#fff" />
-                <Text style={viewerStyles.footerIconText}>
-                  {(() => {
-                    const durationMilli = videoDuration || 5000;
-                    const mins = Math.floor(durationMilli / 60000);
-                    const secs = Math.floor((durationMilli % 60000) / 1000);
-                    return `${mins}:${secs.toString().padStart(2, '0')}`;
-                  })()}
-                </Text>
-             </View>
+             {currentStory?.mediaType === 'video' && (
+               <View style={viewerStyles.footerIconBtnRow}>
+                  <Feather name="film" size={22} color="#fff" />
+                  <Text style={viewerStyles.footerIconText}>
+                    {(() => {
+                      const durationMilli = videoDuration || 5000;
+                      const mins = Math.floor(durationMilli / 60000);
+                      const secs = Math.floor((durationMilli % 60000) / 1000);
+                      return `${mins}:${secs.toString().padStart(2, '0')}`;
+                    })()}
+                  </Text>
+               </View>
+             )}
 
              {isOwnCurrentStory && (
                 <TouchableOpacity 
@@ -997,7 +1004,7 @@ export default function StoriesViewer({ stories, onClose, initialIndex = 0, isHi
             isCreatingHighlightRef.current = false;
             setCreatingHighlight(false);
           }}
-          loading={loadingHighlights}
+          loading={loadingHighlights || isAddingToHighlight}
         />
 
         {/* Create Highlight (IG-like bottom sheet) */}

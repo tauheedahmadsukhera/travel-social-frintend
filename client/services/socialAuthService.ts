@@ -446,53 +446,20 @@ export async function signInWithTikTok() {
         avatar_url: tokenData.avatarUrl,
       };
 
-      // Create custom token in Firebase (you'll need Cloud Function for this)
-      // For now, use email/password with TikTok ID
-      const { createUserWithEmailAndPassword, signInWithEmailAndPassword } = await import('firebase/auth');
-      const { doc, setDoc, getDoc, serverTimestamp } = await import('firebase/firestore');
-      const { db } = await import('../config/firebase');
-
-      // Use TikTok open_id as unique identifier
-      const tiktokEmail = `tiktok_${tiktokUser.open_id}@trave-social.app`;
-      // Use a deterministic password based on the user ID (not client secret which might change)
-      const tiktokPassword = `TikTok${tiktokUser.open_id.substring(0, 16)}!@#`;
-
       let firebaseUser;
 
-      try {
-        // Try to sign in first
-        console.log('📱 Trying to sign in existing TikTok user:', tiktokEmail);
+      if (tokenData.customToken) {
+        console.log('📱 Signing in TikTok user with Firebase custom token...');
+        const { signInWithCustomToken } = await import('firebase/auth');
         const authInstance = await requireAuth();
-        const signInResult = await signInWithEmailAndPassword(authInstance, tiktokEmail, tiktokPassword);
+        const signInResult = await signInWithCustomToken(authInstance, tokenData.customToken);
         firebaseUser = signInResult.user;
-        console.log('✅ Signed in existing TikTok user');
-      } catch (signInError: any) {
-        console.log('⚠️ TikTok sign-in failed, error code:', signInError.code);
-        if (signInError.code === 'auth/user-not-found' || signInError.code === 'auth/invalid-credential') {
-          // Create new account
-          try {
-            console.log('🆕 Creating new TikTok user...');
-            const authInstance = await requireAuth();
-            const createResult = await createUserWithEmailAndPassword(authInstance, tiktokEmail, tiktokPassword);
-            firebaseUser = createResult.user;
-            console.log('✅ New TikTok user created');
-          } catch (createError: any) {
-            if (createError.code === 'auth/email-already-in-use') {
-              console.error('❌ TikTok email already in use (wrong password)');
-              throw new Error('This account is already registered with a different password.');
-            }
-            throw createError;
-          }
-
-          // No Firestore write - backend sync handled by handleSocialAuthResult
-          console.log('✅ TikTok user auth ready');
-        } else if (signInError.code === 'auth/wrong-password') {
-          console.error('❌ TikTok password mismatch detected');
-          throw new Error('Password mismatch with stored TikTok credentials');
-        } else {
-          console.error('❌ TikTok auth error:', signInError.code, signInError.message);
-          throw signInError;
-        }
+        console.log('✅ Signed in TikTok user via custom token');
+      } else {
+        // Backend must always return a customToken for secure sign-in.
+        // Falling back to a deterministic password derived from a public ID is a
+        // security vulnerability — reject instead of silently using weak credentials.
+        throw new Error('TikTok sign-in failed: server did not return a secure authentication token. Please try again.');
       }
 
       console.log('✅ TikTok authentication successful for user:', firebaseUser?.uid);
@@ -576,7 +543,7 @@ export async function signInWithSnapchat() {
         redirectUri: redirectUri,
       });
 
-      if (!tokenData || !tokenData.success || !tokenData.externalId) {
+      if (!tokenData || !tokenData.success || (!tokenData.externalId && !tokenData.customToken)) {
         throw new Error(tokenData?.error || 'Failed to get Snapchat user data');
       }
 
@@ -588,43 +555,20 @@ export async function signInWithSnapchat() {
         avatar_url: tokenData.avatarUrl,
       };
 
-      const { createUserWithEmailAndPassword, signInWithEmailAndPassword } = await import('firebase/auth');
-      const authInstance = await requireAuth();
-
-      // Use Snapchat external_id as unique identifier
-      const snapchatEmail = `snapchat_${snapchatUser.external_id}@trave-social.app`;
-      // Use a deterministic password based on the user ID
-      const snapchatPassword = `Snapchat${snapchatUser.external_id.substring(0, 16)}!@#`;
-
       let firebaseUser;
 
-      try {
-        console.log('📱 Trying to sign in existing Snapchat user:', snapchatEmail);
-        const signInResult = await signInWithEmailAndPassword(authInstance, snapchatEmail, snapchatPassword);
+      if (tokenData.customToken) {
+        console.log('📱 Signing in Snapchat user with Firebase custom token...');
+        const { signInWithCustomToken } = await import('firebase/auth');
+        const authInstance = await requireAuth();
+        const signInResult = await signInWithCustomToken(authInstance, tokenData.customToken);
         firebaseUser = signInResult.user;
-        console.log('✅ Signed in existing Snapchat user');
-      } catch (signInError: any) {
-        console.log('⚠️ Snapchat sign-in failed, error code:', signInError.code);
-        if (signInError.code === 'auth/user-not-found' || signInError.code === 'auth/invalid-credential') {
-          try {
-            console.log('🆕 Creating new Snapchat user...');
-            const createResult = await createUserWithEmailAndPassword(authInstance, snapchatEmail, snapchatPassword);
-            firebaseUser = createResult.user;
-            console.log('✅ New Snapchat user created');
-          } catch (createError: any) {
-            if (createError.code === 'auth/email-already-in-use') {
-              console.error('❌ Snapchat email already in use (wrong password)');
-              throw new Error('This account is already registered with a different password.');
-            }
-            throw createError;
-          }
-        } else if (signInError.code === 'auth/wrong-password') {
-          console.error('❌ Snapchat password mismatch detected');
-          throw new Error('Password mismatch with stored Snapchat credentials');
-        } else {
-          console.error('❌ Snapchat auth error:', signInError.code, signInError.message);
-          throw signInError;
-        }
+        console.log('✅ Signed in Snapchat user via custom token');
+      } else {
+        // Backend must always return a customToken for secure sign-in.
+        // A deterministic password derived from a public Snapchat external_id is a
+        // security vulnerability — reject instead of silently using weak credentials.
+        throw new Error('Snapchat sign-in failed: server did not return a secure authentication token. Please try again.');
       }
 
       console.log('✅ Snapchat authentication successful for user:', firebaseUser?.uid);
