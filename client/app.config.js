@@ -62,6 +62,7 @@ export default {
         ]
       },
       "entitlements": {
+        "aps-environment": "production",
         "com.apple.developer.applesignin": [
           "Default"
         ]
@@ -74,6 +75,14 @@ export default {
     "plugins": [
       "expo-router",
       "expo-apple-authentication",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/icon.png",
+          "color": "#4F46E5",
+          "sounds": []
+        }
+      ],
       [
         "@react-native-google-signin/google-signin",
         {
