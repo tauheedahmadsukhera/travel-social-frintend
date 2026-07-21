@@ -1,5 +1,5 @@
 // Test location data fetching using the Google API Key
-const API_KEY = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY || process.env.GOOGLE_MAPS_API_KEY || 'AIzaSyBSKBFf-2JyCDRvth2w490V7xfjeQqllt4';
+const API_KEY = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY || process.env.GOOGLE_MAPS_API_KEY;
 
 async function testLocationFetch() {
   console.log('Using API Key:', API_KEY.substring(0, 10) + '...');

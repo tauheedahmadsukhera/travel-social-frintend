@@ -6,6 +6,7 @@ module.exports = {
     '/android/',
     '/ios/',
     '/.expo/',
+    '/e2e/',
   ],
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/$1',

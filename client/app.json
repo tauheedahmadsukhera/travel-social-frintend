@@ -29,17 +29,16 @@
       ],
       "config": {
         "googleMaps": {
-          "apiKey": "AIzaSyBSKBFf-2JyCDRvth2w490V7xfjeQqllt4"
+          "apiKey": ""
         }
       }
     },
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.tauhee56.travesocial",
-      "buildNumber": "21",
       "googleServicesFile": "./GoogleService-Info.plist",
       "config": {
-        "googleMapsApiKey": "AIzaSyBSKBFf-2JyCDRvth2w490V7xfjeQqllt4"
+        "googleMapsApiKey": ""
       },
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
