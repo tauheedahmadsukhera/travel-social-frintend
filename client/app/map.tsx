@@ -449,7 +449,7 @@ export default function MapScreen() {
     useCallback(() => {
       fetchLiveStreams();
       centerOnUserLocation();
-      const t = setInterval(fetchLiveStreams, 5000);
+      const t = setInterval(fetchLiveStreams, 20000);
       return () => clearInterval(t);
     }, [centerOnUserLocation, fetchLiveStreams])
   );

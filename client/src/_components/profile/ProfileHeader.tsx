@@ -5,6 +5,7 @@ import { Image as ExpoImage } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { hapticLight } from '@/lib/haptics';
 import { getOptimizedImageUrl } from '@/lib/imageHelpers';
+import { resolveAvatarUrl } from '@/lib/utils/avatar';
 import VerifiedBadge from '../VerifiedBadge';
 
 interface ProfileHeaderProps {
@@ -49,7 +50,7 @@ const ProfileHeader: React.FC<ProfileHeaderProps> = ({
   onPressFollowers,
   onPressFollowing
 }) => {
-  const avatar = profile?.avatar || profile?.photoURL || profile?.profilePicture;
+  const avatar = resolveAvatarUrl(profile?.avatar || profile?.photoURL || profile?.profilePicture);
   const dimmed = isPrivate && !isOwnProfile && !approvedFollower;
 
   // Dynamic avatar sizes (larger on own profile, compact on others)
@@ -75,7 +76,7 @@ const ProfileHeader: React.FC<ProfileHeaderProps> = ({
             <View style={{ position: 'relative' }}>
               <TouchableOpacity activeOpacity={0.8} onPress={onPressAvatar}>
                 <ExpoImage
-                  source={{ uri: avatar || 'https://via.placeholder.com/200x200.png?text=Profile' }}
+                  source={{ uri: avatar }}
                   style={[styles.avatar, { width: avatarSize, height: avatarSize, borderRadius: avatarBorderRadius }, dimmed && { opacity: 0.3 }]}
                   contentFit="cover"
                   cachePolicy="memory-disk"

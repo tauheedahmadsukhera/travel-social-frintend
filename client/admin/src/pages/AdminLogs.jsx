@@ -1,29 +1,22 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { adminAPI } from '../services/adminService';
 import { format } from 'date-fns';
 import { HiOutlineClock } from 'react-icons/hi';
 
 const AdminLogs = () => {
-  const [logs, setLogs] = useState([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    fetchLogs();
-  }, []);
-
-  const fetchLogs = async () => {
-    try {
-      setLoading(true);
+  const { data, isLoading: loading } = useQuery({
+    queryKey: ['admin-logs'],
+    queryFn: async () => {
       const res = await adminAPI.getAdminLogs(1, 50);
-      if (res.success) {
-        setLogs(res.data);
-      }
-    } catch (err) {
-      console.error('Failed to fetch logs', err);
-    } finally {
-      setLoading(false);
-    }
-  };
+      if (!res.success) throw new Error('Failed to fetch logs');
+      return res.data || [];
+    },
+    staleTime: 60 * 1000,
+    refetchOnWindowFocus: false,
+  });
+
+  const logs = data || [];
 
   return (
     <div className="space-y-8 animate-fade-in">
@@ -49,37 +42,33 @@ const AdminLogs = () => {
                   <td colSpan="4" className="px-6 py-6"><div className="h-4 bg-white/5 rounded w-full" /></td>
                 </tr>
               ))
-            ) : logs.map((log) => (
-              <tr key={log._id} className="hover:bg-white/[0.02] transition-colors">
-                <td className="px-6 py-4">
-                  <div className="flex items-center gap-2">
-                    <div className="w-8 h-8 rounded-full bg-indigo-500/20 flex items-center justify-center text-indigo-500 font-bold text-xs">
-                      {(log.adminId?.displayName || log.adminId?.email || 'A')[0].toUpperCase()}
-                    </div>
-                    <span className="text-white text-sm font-medium">{log.adminId?.displayName || log.adminId?.email || 'System'}</span>
-                  </div>
-                </td>
-                <td className="px-6 py-4">
-                  <span className="px-2 py-1 bg-white/5 rounded text-[10px] font-bold text-slate-300 uppercase">
-                    {log.action}
-                  </span>
-                </td>
-                <td className="px-6 py-4 text-slate-400 text-sm">
-                  {log.targetType}: {log.targetId}
-                </td>
-                <td className="px-6 py-4 text-slate-500 text-xs flex items-center gap-2">
-                  <HiOutlineClock />
-                  {format(new Date(log.timestamp || log.createdAt), 'MMM dd, HH:mm:ss')}
+            ) : logs.length === 0 ? (
+              <tr>
+                <td colSpan="4" className="px-6 py-12 text-center text-slate-500">
+                  <HiOutlineClock className="mx-auto text-3xl mb-2 opacity-40" />
+                  No admin logs yet
                 </td>
               </tr>
-            ))}
+            ) : (
+              logs.map((log) => (
+                <tr key={log._id} className="hover:bg-white/[0.02] transition-colors">
+                  <td className="px-6 py-4 text-sm text-white font-medium">
+                    {log.adminId?.displayName || log.adminId?.email || 'System'}
+                  </td>
+                  <td className="px-6 py-4 text-sm text-slate-300">
+                    {String(log.action || '').replace(/_/g, ' ')}
+                  </td>
+                  <td className="px-6 py-4 text-sm text-slate-400">
+                    {log.targetType || '—'} {log.targetId ? `(${String(log.targetId).slice(0, 8)}…)` : ''}
+                  </td>
+                  <td className="px-6 py-4 text-sm text-slate-500">
+                    {log.createdAt ? format(new Date(log.createdAt), 'MMM dd, yyyy HH:mm') : '—'}
+                  </td>
+                </tr>
+              ))
+            )}
           </tbody>
         </table>
-        {!loading && logs.length === 0 && (
-          <div className="p-20 text-center text-slate-500 italic">
-            No audit logs found.
-          </div>
-        )}
       </div>
     </div>
   );

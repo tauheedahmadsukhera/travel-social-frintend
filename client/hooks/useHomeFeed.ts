@@ -88,7 +88,7 @@ export function useHomeFeed(currentUserId: string | null, isOnline: boolean, cat
     try {
       const limit = 20;
       const skip = pageNum * limit;
-      console.log('[useHomeFeed] Fetching feed for category:', categoryFilter, 'pageNum:', pageNum);
+      if (__DEV__) console.log('[useHomeFeed] Fetching feed for category:', categoryFilter, 'pageNum:', pageNum);
       const response = await apiService.getPosts({ 
         skip, 
         limit, 
@@ -96,7 +96,7 @@ export function useHomeFeed(currentUserId: string | null, isOnline: boolean, cat
         category: categoryFilter || undefined,
         ...options
       });
-      console.log('[useHomeFeed] Raw response success:', response?.success, 'isArray:', Array.isArray(response), 'data length:', response?.data?.length || response?.length);
+      if (__DEV__) console.log('[useHomeFeed] Raw response success:', response?.success, 'isArray:', Array.isArray(response), 'data length:', response?.data?.length || response?.length);
 
       let postsData: any[] = [];
       if (response?.success && Array.isArray(response.data)) {

@@ -90,14 +90,30 @@ export default function ResetOTPScreen() {
   };
 
   const handleResend = async () => {
-    Alert.alert(
-      'OTP Resent! âœ…',
-      'A new verification code has been sent to your email.',
-      [{ text: 'OK' }]
-    );
-    setOtp(['', '', '', '', '', '']);
-    setError('');
-    inputRefs.current[0]?.focus();
+    if (!contact) {
+      Alert.alert('Error', 'Missing email. Go back and try again.');
+      return;
+    }
+    try {
+      setLoading(true);
+      const res = await fetch(`${API_BASE_URL}/auth/forgot-password`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: contact }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || data?.success === false) {
+        throw new Error(data?.error || 'Failed to resend code');
+      }
+      Alert.alert('OTP Resent', 'A new verification code has been sent to your email.', [{ text: 'OK' }]);
+      setOtp(['', '', '', '', '', '']);
+      setError('');
+      inputRefs.current[0]?.focus();
+    } catch (err: any) {
+      Alert.alert('Error', err?.message || 'Could not resend code. Please try again.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (

@@ -191,7 +191,7 @@ const resolveAvatarSource = (uri: string, defaultAvatarSource: any) => {
 };
 
 function StoriesRowComponent({ onStoryPress, onStoryViewerClose, refreshTrigger, resetTrigger, mirror = false, incomingMedia }: { onStoryPress?: (stories: any[], initialIndex: number) => void; onStoryViewerClose?: () => void; refreshTrigger?: number; resetTrigger?: number; mirror?: boolean; incomingMedia?: { uri: string; type: string } | null }): React.ReactElement {
-  const DEFAULT_AVATAR_SOURCE = require('../../assets/images/splash-icon.png');
+  const DEFAULT_AVATAR_SOURCE = { uri: DEFAULT_AVATAR_URL } as const;
   const router = useRouter();
   const [storyUsers, setStoryUsers] = useState<StoryUser[]>([]);
   const [loading, setLoading] = useState(true);
@@ -212,8 +212,8 @@ function StoriesRowComponent({ onStoryPress, onStoryViewerClose, refreshTrigger,
   const lastStoriesLoadAtRef = React.useRef(0);
   const hydratedFromCacheRef = React.useRef(false);
 
-  const STORIES_CACHE_KEY = 'storiesRowCache_v1';
-  const STORIES_CACHE_TTL_MS = 60_000; // 1 min
+  const STORIES_CACHE_KEY = 'storiesRowCache_v2';
+  const STORIES_CACHE_TTL_MS = 120_000; // 2 min
 
   // Use ref to prevent picker from opening during transitions
   const pickerBlockedRef = React.useRef(false);
@@ -270,7 +270,9 @@ function StoriesRowComponent({ onStoryPress, onStoryViewerClose, refreshTrigger,
         const parsed = JSON.parse(raw);
         const data = parsed?.data;
         if (!Array.isArray(data) || data.length === 0) return;
-        // Always show cached row instantly (even if stale), then refresh in background.
+        const ts = Number(parsed?.ts || 0);
+        // Always show cached row instantly; TTL only skips if absurdly old (7d)
+        if (ts && Date.now() - ts > 7 * 24 * 60 * 60 * 1000) return;
         hydratedFromCacheRef.current = true;
         setStoryUsers(data);
         setLoading(false);
@@ -280,6 +282,19 @@ function StoriesRowComponent({ onStoryPress, onStoryViewerClose, refreshTrigger,
     loadStories({ preferCache: true });
     loadCurrentUserAvatar();
   }, [refreshTrigger]);
+
+  // Prefetch bubble thumbs so the row paints instantly (no UI change)
+  useEffect(() => {
+    if (!storyUsers.length) return;
+    try {
+      const urls = storyUsers
+        .slice(0, 14)
+        .flatMap((u) => [u.bubblePreviewUrl, u.userAvatar])
+        .map((u) => normalizeStoryMediaUrl(u))
+        .filter((u) => !!u && /^https?:\/\//i.test(u));
+      ExpoImage.prefetch([...new Set(urls)]).catch(() => {});
+    } catch { }
+  }, [storyUsers]);
 
   useEffect(() => {
     const sub = feedEventEmitter.addListener('feedUpdated', () => {
@@ -432,10 +447,7 @@ function StoriesRowComponent({ onStoryPress, onStoryViewerClose, refreshTrigger,
       }
       lastStoriesLoadAtRef.current = now;
 
-      console.log('[StoriesRow] ðŸ“¥ Loading stories...');
       const result = await getAllStoriesForFeed();
-      console.log('[StoriesRow] API Response received:', JSON.stringify(result).substring(0, 200));
-      console.log('[StoriesRow] Got result.success:', result.success, 'result.data type:', typeof result.data, 'length:', result.data?.length);
       let seenSet = new Set<string>();
       try {
         const raw = await AsyncStorage.getItem('seenStoryIds');
@@ -446,7 +458,7 @@ function StoriesRowComponent({ onStoryPress, onStoryViewerClose, refreshTrigger,
       } catch { }
 
       if (result.success && result.data && Array.isArray(result.data)) {
-        const now = Date.now();
+        const nowMs = Date.now();
         const users: StoryUser[] = [];
 
         // Group stories by userId (API returns flat array, we need to group them)
@@ -455,8 +467,7 @@ function StoriesRowComponent({ onStoryPress, onStoryViewerClose, refreshTrigger,
         for (const story of result.data) {
           // Filter out expired stories (robust check)
           const expiryTime = story.expiresAt ? new Date(story.expiresAt).getTime() : 0;
-          if (expiryTime > 0 && expiryTime <= now) {
-            console.log('[StoriesRow] Skipping expired story:', story._id);
+          if (expiryTime > 0 && expiryTime <= nowMs) {
             continue;
           }
 
@@ -468,12 +479,10 @@ function StoriesRowComponent({ onStoryPress, onStoryViewerClose, refreshTrigger,
           storyMap.get(userId)!.push(story);
         }
 
-        console.log('[StoriesRow] Grouped stories into', storyMap.size, 'users');
-
         // Avatar resolution strategy (fast):
         // 1) use story.userAvatar if present
         // 2) use in-memory cache
-        // 3) fetch profile ONLY for missing avatars (and limit how many we fetch)
+        // 3) fetch profile ONLY for missing avatars (hard limit — keep row snappy)
         const avatarMap = new Map<string, string>();
         const userIdsToFetch = Array.from(storyMap.keys());
         const idsMissingAvatar: string[] = [];
@@ -494,8 +503,7 @@ function StoriesRowComponent({ onStoryPress, onStoryViewerClose, refreshTrigger,
           idsMissingAvatar.push(uid);
         }
 
-        // Limit profile fetches to keep the row snappy
-        const MAX_PROFILE_FETCHES = 12;
+        const MAX_PROFILE_FETCHES = 4;
         const idsToFetch = idsMissingAvatar.slice(0, MAX_PROFILE_FETCHES);
         await Promise.all(idsToFetch.map(async (uid) => {
           try {
@@ -518,16 +526,25 @@ function StoriesRowComponent({ onStoryPress, onStoryViewerClose, refreshTrigger,
           const firstStory = stories[0];
 
           // Transform stories to match StoriesViewer format (image -> imageUrl, video -> videoUrl)
-          const transformedStories = stories.map((story: any) => ({
-            ...story,
-            id: story._id || story.id,
-            imageUrl: normalizeStoryMediaUrl(story.image || story.imageUrl || story.mediaUrl),
-            videoUrl: normalizeStoryMediaUrl(story.video || story.videoUrl),
-            thumbnailUrl: normalizeStoryMediaUrl(story.thumbnail || story.thumbnailUrl),
-            mediaType: (story.video || story.videoUrl || story.mediaType === 'video') ? 'video' : 'image',
-            postMetadata: story.postMetadata || undefined,
-            isPostShare: !!(story.isPostShare || story.postMetadata?.postId),
-          }));
+          const transformedStories = stories.map((story: any) => {
+            const videoUrl = normalizeStoryMediaUrl(story.video || story.videoUrl);
+            const imageUrl = normalizeStoryMediaUrl(story.image || story.imageUrl || story.mediaUrl);
+            const thumbnailUrl = normalizeStoryMediaUrl(story.thumbnail || story.thumbnailUrl);
+            const isVideo = !!(videoUrl || story.mediaType === 'video');
+            return {
+              ...story,
+              id: story._id || story.id,
+              imageUrl: isVideo ? (thumbnailUrl || imageUrl) : (imageUrl || thumbnailUrl),
+              videoUrl,
+              thumbnailUrl,
+              mediaType: isVideo ? 'video' : 'image',
+              commentsCount: Number(story.commentsCount ?? story.comments?.length ?? 0),
+              // Feed payload no longer includes full comments — keep UI light
+              comments: Array.isArray(story.comments) ? story.comments : [],
+              postMetadata: story.postMetadata || undefined,
+              isPostShare: !!(story.isPostShare || story.postMetadata?.postId),
+            };
+          });
           const hasUnseen = transformedStories.some((s: any) => !seenSet.has(String(s.id)));
 
           // Pick bubble preview: first unseen story, else latest by createdAt, else first
@@ -539,9 +556,13 @@ function StoriesRowComponent({ onStoryPress, onStoryViewerClose, refreshTrigger,
           }, transformedStories[0]);
           const previewStory = firstUnseen || latest || transformedStories[0];
           const bubbleMediaType: 'image' | 'video' = previewStory?.mediaType === 'video' ? 'video' : 'image';
-          const bubblePreviewUrl = bubbleMediaType === 'video'
+          // Never put a video URL in the bubble — ExpoImage would stall
+          let bubblePreviewUrl = bubbleMediaType === 'video'
             ? (previewStory?.thumbnailUrl || previewStory?.imageUrl || '')
             : (previewStory?.imageUrl || previewStory?.thumbnailUrl || '');
+          if (/\.(mp4|mov|webm|m4v)(\?|$)/i.test(bubblePreviewUrl) || bubblePreviewUrl === previewStory?.videoUrl) {
+            bubblePreviewUrl = previewStory?.thumbnailUrl || avatarMap.get(userId) || '';
+          }
           const latestLocation = latest?.locationData?.name || latest?.location || (typeof latest?.locationData === 'string' ? latest.locationData : '');
 
           users.push({
@@ -556,17 +577,39 @@ function StoriesRowComponent({ onStoryPress, onStoryViewerClose, refreshTrigger,
           });
         }
 
-        console.log('[StoriesRow] âœ… Setting storyUsers:', users.length, 'users');
         setStoryUsers(users);
-        // Persist cache for next warm start
+        // Persist slim cache for next warm start (drop bulky nested arrays)
         try {
-          await AsyncStorage.setItem(STORIES_CACHE_KEY, JSON.stringify({ ts: Date.now(), data: users }));
+          const slim = users.map((u) => ({
+            ...u,
+            stories: (u.stories || []).map((s: any) => ({
+              id: s.id,
+              _id: s._id || s.id,
+              userId: s.userId,
+              userName: s.userName,
+              userAvatar: s.userAvatar,
+              imageUrl: s.imageUrl,
+              videoUrl: s.videoUrl,
+              thumbnailUrl: s.thumbnailUrl,
+              mediaType: s.mediaType,
+              createdAt: s.createdAt,
+              expiresAt: s.expiresAt,
+              caption: s.caption,
+              locationData: s.locationData,
+              location: s.location,
+              likes: s.likes,
+              views: s.views,
+              commentsCount: s.commentsCount || 0,
+              comments: [],
+              postMetadata: s.postMetadata,
+              isPostShare: s.isPostShare,
+            })),
+          }));
+          await AsyncStorage.setItem(STORIES_CACHE_KEY, JSON.stringify({ ts: Date.now(), data: slim }));
         } catch { }
-      } else {
-        console.log('[StoriesRow] âŒ Result not success or no data');
       }
     } catch (error) {
-      console.error('[StoriesRow] âŒ Error loading stories:', error);
+      console.error('[StoriesRow] Error loading stories:', error);
     }
     setLoading(false);
   };

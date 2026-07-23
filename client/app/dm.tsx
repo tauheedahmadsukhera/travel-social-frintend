@@ -528,6 +528,28 @@ export default function DM() {
     ]);
   };
 
+  const handleDeleteMessage = async () => {
+    if (!selectedMessage || !conversationId || !currentUserId) return;
+    const msgId = getMessageId(selectedMessage);
+    Alert.alert("Delete Message?", "Are you sure you want to delete this message?", [
+      { text: "Cancel", style: "cancel" },
+      { text: "Delete", style: "destructive", onPress: async () => {
+        try {
+          const res = await deleteMessage(conversationId, msgId, currentUserId);
+          if (res?.success) {
+            setMessages(prev => prev.filter(m => getMessageId(m) !== msgId));
+            setShowMessageMenu(false);
+            setSelectedMessage(null);
+          } else {
+            Alert.alert("Error", res?.error || "Failed to delete message");
+          }
+        } catch (err) {
+          Alert.alert("Error", "Failed to delete message");
+        }
+      }}
+    ]);
+  };
+
   const formatTimeForBubble = useCallback((t: any) => {
     const date = new Date(t);
     if (isNaN(date.getTime())) return '';
@@ -567,6 +589,18 @@ export default function DM() {
         if (kind === 'post' || kind === 'story') {
           setSharePostItem({ shareType: kind, data: msg.sharedPost || msg.sharedStory });
           setShowShareModal(true);
+        } else if (kind === 'image' || kind === 'video') {
+          setSharePostItem({ 
+            shareType: kind, 
+            data: { 
+              id: msg.id || msg._id,
+              mediaUrl: msg.mediaUrl || msg.imageUrl,
+              imageUrl: msg.mediaUrl || msg.imageUrl,
+              mediaType: kind,
+              isStory: false
+            } 
+          });
+          setShowShareModal(true);
         }
       }}
       onPlayStart={(id: string) => setActiveSoundId(id)}    />
@@ -603,6 +637,12 @@ export default function DM() {
         extraData={messages}
         contentContainerStyle={{ paddingTop: 16, paddingBottom: 16 }}
         keyboardShouldPersistTaps="handled"
+        // Perf: same UI, fewer off-screen mounts (especially long threads)
+        removeClippedSubviews={Platform.OS === 'android'}
+        maxToRenderPerBatch={12}
+        windowSize={7}
+        initialNumToRender={16}
+        updateCellsBatchingPeriod={50}
       />
     );
   };
@@ -691,10 +731,12 @@ export default function DM() {
           <View style={styles.optionsContainer}>
             <View style={styles.optionsHandle} />
             <Text style={styles.optionsTitle}>Chat Settings</Text>
-            <TouchableOpacity style={styles.optionsItem} onPress={handleClearChat}>
-              <Ionicons name="trash-outline" size={24} color="#ff3b30" />
-              <Text style={[styles.optionsLabel, { color: '#ff3b30' }]}>Clear Chat</Text>
-            </TouchableOpacity>
+            {messages.length > 0 && (
+              <TouchableOpacity style={styles.optionsItem} onPress={handleClearChat}>
+                <Ionicons name="trash-outline" size={24} color="#ff3b30" />
+                <Text style={[styles.optionsLabel, { color: '#ff3b30' }]}>Clear Chat</Text>
+              </TouchableOpacity>
+            )}
           </View>
         </Pressable>
       </Modal>
@@ -742,10 +784,16 @@ export default function DM() {
                <Ionicons name="arrow-undo-outline" size={22} color="#000" />
              </TouchableOpacity>
              {selectedMessage?.senderId === currentUserId && (
-               <TouchableOpacity style={styles.instaMenuItem} onPress={() => { setEditingMessage(selectedMessage); setInput(selectedMessage.text); setShowMessageMenu(false); }}>
-                 <Text style={styles.instaMenuLabel}>Edit</Text>
-                 <Ionicons name="create-outline" size={22} color="#000" />
-               </TouchableOpacity>
+               <>
+                 <TouchableOpacity style={styles.instaMenuItem} onPress={() => { setEditingMessage(selectedMessage); setInput(selectedMessage.text); setShowMessageMenu(false); }}>
+                   <Text style={styles.instaMenuLabel}>Edit</Text>
+                   <Ionicons name="create-outline" size={22} color="#000" />
+                 </TouchableOpacity>
+                 <TouchableOpacity style={styles.instaMenuItem} onPress={handleDeleteMessage}>
+                   <Text style={[styles.instaMenuLabel, { color: '#ff3b30' }]}>Delete</Text>
+                   <Ionicons name="trash-outline" size={22} color="#ff3b30" />
+                 </TouchableOpacity>
+               </>
              )}
            </View>
          </Pressable>

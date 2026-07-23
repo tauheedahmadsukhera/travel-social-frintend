@@ -383,6 +383,15 @@ export const useCreatePost = (params: any = {}) => {
         }
       }
       
+      // Automatically commit any typed hashtag that wasn't submitted via keyboard enter
+      let finalHashtags = [...hashtags];
+      if (hashtagInput.trim()) {
+        const tag = hashtagInput.trim().replace(/^#/, '');
+        if (tag && !finalHashtags.includes(tag)) {
+          finalHashtags.push(tag);
+        }
+      }
+
       let res;
       if (params.editPostId) {
         res = await updatePost(
@@ -395,7 +404,7 @@ export const useCreatePost = (params: any = {}) => {
           verifiedLocation || location || undefined,
           taggedUsers.map(u => u.uid),
           selectedCategories.length > 0 ? selectedCategories[0].name : undefined,
-          hashtags,
+          finalHashtags,
           [], // mentions
           visibility,
           selectedGroupId ? [selectedGroupId] : [],
@@ -413,7 +422,7 @@ export const useCreatePost = (params: any = {}) => {
           verifiedLocation || location || undefined,
           taggedUsers.map(u => u.uid),
           selectedCategories.length > 0 ? selectedCategories[0].name : undefined,
-          hashtags,
+          finalHashtags,
           [], // mentions
           visibility,
           selectedGroupId ? [selectedGroupId] : [],
@@ -433,7 +442,7 @@ export const useCreatePost = (params: any = {}) => {
               caption: caption,
               text: caption,
               category: selectedCategories.length > 0 ? selectedCategories[0].name : undefined,
-              hashtags: hashtags
+              hashtags: finalHashtags
             }
           });
         } else {

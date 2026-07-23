@@ -6,11 +6,12 @@ import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, FlatList, Image, KeyboardAvoidingView, Modal, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { createPost, searchUsers } from '../../lib/firebaseHelpers/index';
-import { useUser } from '@/src/_components/UserContext';
+import { getAuthenticatedUserId } from '@/lib/currentUser';
 import VerifiedBadge from '@/src/_components/VerifiedBadge';
 import { hapticLight, hapticMedium, hapticSuccess } from '../../lib/haptics';
 import { useAppDialog } from '@/src/_components/AppDialogProvider';
 import { safeRouterBack } from '@/lib/safeRouterBack';
+import { apiService } from '@/src/_services/apiService';
 
 // Runtime import of ImagePicker with graceful fallback
 let ImagePicker: any = null;
@@ -26,7 +27,6 @@ export default function PostScreen() {
     // Default avatar from Firebase Storage
     
   const router = useRouter();
-  const user = useUser();
   const { showSuccess } = useAppDialog();
   const [caption, setCaption] = useState('');
   const [location, setLocation] = useState<any>(null);
@@ -40,17 +40,31 @@ export default function PostScreen() {
   const [showLocationModal, setShowLocationModal] = useState(false);
   const [showVerifiedModal, setShowVerifiedModal] = useState(false);
   const [showTagModal, setShowTagModal] = useState(false);
+  const [showCategoryModal, setShowCategoryModal] = useState(false);
 
   const [users, setUsers] = useState<any[]>([]);
   const [loadingUsers, setLoadingUsers] = useState(false);
   const [locationInput, setLocationInput] = useState('');
   const [locationResults, setLocationResults] = useState<any[]>([]);
+  const [categories, setCategories] = useState<any[]>([]);
+  const [selectedCategory, setSelectedCategory] = useState<string>('');
 
   useEffect(() => {
     loadUsers();
     loadGalleryImages();
     fetchLocations();
+    fetchCategories();
   }, []);
+
+  const fetchCategories = async () => {
+    try {
+      const response = await apiService.getCategories();
+      const list = Array.isArray(response) ? response : (response?.data || []);
+      setCategories(list);
+    } catch (err) {
+      setCategories([]);
+    }
+  };
 
   const loadUsers = async () => {
     setLoadingUsers(true);
@@ -134,32 +148,31 @@ export default function PostScreen() {
       return;
     }
     hapticMedium();
-    // const user = getCurrentUser() as { uid: string } | null;
-    // if (!user || !user.uid) {
-    //   Alert.alert('Not signed in', 'Please sign in to create a post');
-    //   router.replace('/auth/welcome');
-    //   return;
-    // }
-    // TODO: Use user from context or props
+    const userId = await getAuthenticatedUserId();
+    if (!userId) {
+      Alert.alert('Not signed in', 'Please sign in to create a post');
+      router.replace('/auth/welcome');
+      return;
+    }
     
     setLoading(true);
     try {
       const isVideo = selectedImages.length > 0 && (selectedImages[0].toLowerCase().endsWith('.mp4') || selectedImages[0].toLowerCase().endsWith('.mov') || selectedImages[0].toLowerCase().includes('video'));
       const result = await createPost(
-        user.uid,
+        userId,
         selectedImages,
         caption,
         location?.name || '',
         isVideo ? 'video' : 'image',
         location || undefined,
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        undefined,
+        undefined, // taggedUserIds
+        selectedCategory || undefined, // category
+        undefined, // hashtags
+        undefined, // mentions
+        undefined, // visibility
+        undefined, // allowedFollowers
+        undefined, // postType
+        undefined, // thumbnailUrlRaw
         aspectRatio
       );
       if (result && typeof result.success === 'boolean' && result.success) {
@@ -171,6 +184,7 @@ export default function PostScreen() {
             setLocation(null);
             setVerifiedLocation(null);
             setTaggedUsers([]);
+            setSelectedCategory('');
             router.push('/(tabs)/home?refresh=1');
           },
         });
@@ -278,9 +292,17 @@ export default function PostScreen() {
             </TouchableOpacity>
 
             {/* Add Category */}
-            <TouchableOpacity style={styles.optionRow}>
+            <TouchableOpacity 
+              style={styles.optionRow} 
+              onPress={() => {
+                hapticLight();
+                setShowCategoryModal(true);
+              }}
+            >
               <Feather name="bookmark" size={20} color="#000" style={{ marginRight: 12 }} />
-              <Text style={styles.optionText}>Add a category for the home feed</Text>
+              <Text style={styles.optionText}>
+                {selectedCategory ? `Category: ${selectedCategory}` : "Add a category for the home feed"}
+              </Text>
               <Feather name="chevron-right" size={20} color="#999" style={{ marginLeft: "auto" }} />
             </TouchableOpacity>
 
@@ -588,6 +610,57 @@ export default function PostScreen() {
           </View>
         </View>
         </KeyboardAvoidingView>
+      </Modal>
+
+      {/* Category Selection Modal */}
+      <Modal visible={showCategoryModal} animationType="slide" transparent>
+        <View style={styles.modalOverlay}>
+          <TouchableOpacity
+            style={{ flex: 1 }}
+            activeOpacity={1}
+            onPress={() => setShowCategoryModal(false)}
+          />
+          <View style={styles.modalBox}>
+            <Text style={styles.modalTitle}>Select a category</Text>
+            <Text style={styles.modalSubtitle}>
+              Choose a category to classify your post on the home feed.
+            </Text>
+            <FlatList
+              data={categories}
+              keyExtractor={(item: any, index: number) => item._id || item.id || item.name || String(index)}
+              renderItem={({ item }: { item: any }) => (
+                <TouchableOpacity
+                  style={[
+                    styles.locationItem,
+                    selectedCategory === item.name && { backgroundColor: '#f0f4ff' }
+                  ]}
+                  onPress={() => {
+                    setSelectedCategory(item.name);
+                    setShowCategoryModal(false);
+                  }}
+                >
+                  <Feather name="tag" size={20} color="#FF8D00" style={{ marginRight: 12 }} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 16, fontWeight: '600', color: '#111' }}>{item.name}</Text>
+                  </View>
+                  {selectedCategory === item.name && (
+                    <Feather name="check" size={20} color="#FF8D00" />
+                  )}
+                </TouchableOpacity>
+              )}
+              ListEmptyComponent={
+                <View style={{ paddingVertical: 20, alignItems: 'center' }}>
+                  <Text style={{ color: '#999' }}>No categories found</Text>
+                </View>
+              }
+            />
+            <View style={styles.modalFooter}>
+              <TouchableOpacity onPress={() => setShowCategoryModal(false)}>
+                <Text style={styles.cancelText}>Cancel</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
       </Modal>
     </SafeAreaView>
   );

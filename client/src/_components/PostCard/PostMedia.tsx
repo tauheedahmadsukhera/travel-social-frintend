@@ -214,6 +214,8 @@ interface PostMediaProps {
   isMuted: boolean;
   toggleMute: () => void;
   videoRef: React.RefObject<Video>;
+  /** Pause off-screen videos so only visible posts buffer/play. */
+  isVisible?: boolean;
 }
 
 const PostMedia: React.FC<PostMediaProps> = ({
@@ -225,6 +227,7 @@ const PostMedia: React.FC<PostMediaProps> = ({
   toggleMute,
   videoRef,
   onDoubleTap,
+  isVisible = true,
 }) => {
   const isFocused = useIsFocused();
   const [isPlaying, setIsPlaying] = useState(true);
@@ -237,10 +240,11 @@ const PostMedia: React.FC<PostMediaProps> = ({
 
   const firstItem = media[0];
 
-  // Auto-pause when screen loses focus
+  // Auto-pause when screen loses focus or card scrolls off-screen
   useEffect(() => {
-    if (!isFocused) setIsPlaying(false);
-  }, [isFocused]);
+    if (!isFocused || !isVisible) setIsPlaying(false);
+    else setIsPlaying(true);
+  }, [isFocused, isVisible]);
 
   // Reset detected ratio and scroll flags when the media changes (prevents recycled items using stale states)
   useEffect(() => {
@@ -270,7 +274,7 @@ const PostMedia: React.FC<PostMediaProps> = ({
 
     const containerHeight = mediaHeight || getMediaHeight(detectedRatio || media[0]?.aspectRatio);
     const normalizedIndex = index % media.length;
-    const shouldAutoPlay = isFocused && normalizedIndex === localActiveIndex;
+    const shouldAutoPlay = isFocused && isVisible && normalizedIndex === localActiveIndex;
 
     if (isVideo) {
       return (
@@ -300,7 +304,7 @@ const PostMedia: React.FC<PostMediaProps> = ({
         thumbnailUrl={item.thumbnailUrl}
       />
     );
-  }, [media, mediaHeight, isFocused, localActiveIndex, isPlaying, isMuted, toggleMute, videoRef, handlePress, detectedRatio]);
+  }, [media, mediaHeight, isFocused, isVisible, localActiveIndex, isPlaying, isMuted, toggleMute, videoRef, handlePress, detectedRatio]);
 
   const loopedMedia = useMemo(() => {
     if (media.length <= 1) return media;

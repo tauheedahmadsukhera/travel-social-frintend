@@ -99,6 +99,8 @@ export default {
               "appAuthRedirectScheme": "trave-social",
               "traveSocialScheme": "trave-social"
             },
+            "allowBackup": false,
+            "usesCleartextTraffic": false,
             "enableProguardInReleaseBuilds": false,
             "enableShrinkResourcesInReleaseBuilds": false,
             "compileSdkVersion": 35,

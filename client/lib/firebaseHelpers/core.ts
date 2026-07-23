@@ -94,8 +94,8 @@ export async function signInWithEmailPassword(
     const userCredential = await signInWithEmailAndPassword(firebaseAuth, email, password);
     const firebaseUser = userCredential.user;
 
-    // Enforce email verification (bypass for standard test account)
-    if (!firebaseUser.emailVerified && firebaseUser.email?.toLowerCase() !== 'test@gmail.com') {
+    // Enforce email verification — no hard-coded production bypasses
+    if (!firebaseUser.emailVerified) {
       try {
         await sendEmailVerification(firebaseUser);
         console.log('[signInWithEmailPassword] ✉️ Resent verification email.');
@@ -664,31 +664,36 @@ export async function toggleUserPrivacy(uid: string, isPrivate: boolean) {
 
 // ============= MEDIA =============
 
-// Compress video if it exceeds maxSizeBytes (default 9MB to stay within Cloudinary 10MB limit)
-async function compressVideoIfNeeded(uri: string, maxSizeBytes: number = 9 * 1024 * 1024): Promise<string> {
+// Compress videos for feed upload. Always re-encode large iPhone 4K clips so
+// upload size stays small (faster share) and playback starts quicker.
+async function compressVideoIfNeeded(uri: string, maxSizeBytes: number = 2 * 1024 * 1024): Promise<string> {
   try {
     const FileSystem = require('expo-file-system');
     const info = await FileSystem.getInfoAsync(uri, { size: true });
     const fileSize = info?.size || 0;
-    
-    if (fileSize <= maxSizeBytes) {
-      console.log(`[compressVideo] ✅ File size ${(fileSize / 1024 / 1024).toFixed(1)}MB is within limit, no compression needed`);
+
+    // Tiny clips can skip; everything else (incl. 4K/60fps iPhone) gets compressed.
+    if (fileSize > 0 && fileSize <= maxSizeBytes) {
+      console.log(`[compressVideo] ✅ ${(fileSize / 1024 / 1024).toFixed(1)}MB within limit`);
       return uri;
     }
-    
-    console.log(`[compressVideo] 🔄 File size ${(fileSize / 1024 / 1024).toFixed(1)}MB exceeds ${(maxSizeBytes / 1024 / 1024).toFixed(0)}MB limit, compressing...`);
-    
+
+    console.log(`[compressVideo] 🔄 Compressing ${(fileSize / 1024 / 1024).toFixed(1)}MB → 720p…`);
+
     const { Video: VideoCompressor } = require('react-native-compressor');
     const compressedUri = await VideoCompressor.compress(uri, {
-      compressionMethod: 'auto',
+      compressionMethod: 'manual',
       maxSize: 720,
-      bitrate: 2000000, // 2 Mbps
+      bitrate: 2_500_000, // ~2.5 Mbps — good for 30s phone clips without huge files
+      minimumFileSizeForCompress: 0,
     });
-    
+
     const compressedInfo = await FileSystem.getInfoAsync(compressedUri, { size: true });
-    console.log(`[compressVideo] ✅ Compressed from ${(fileSize / 1024 / 1024).toFixed(1)}MB to ${((compressedInfo?.size || 0) / 1024 / 1024).toFixed(1)}MB`);
-    
-    return compressedUri;
+    console.log(
+      `[compressVideo] ✅ ${(fileSize / 1024 / 1024).toFixed(1)}MB → ${((compressedInfo?.size || 0) / 1024 / 1024).toFixed(1)}MB`
+    );
+
+    return compressedUri || uri;
   } catch (err: any) {
     console.warn('[compressVideo] ⚠️ Compression failed, using original:', err?.message);
     return uri;

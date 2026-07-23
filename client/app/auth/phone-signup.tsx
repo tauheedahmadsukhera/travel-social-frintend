@@ -1,5 +1,4 @@
 import { Ionicons } from '@expo/vector-icons';
-import * as Clipboard from 'expo-clipboard';
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import { FlatList, Modal, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
@@ -89,12 +88,15 @@ export default function PhoneSignUpScreen() {
       // Create account directly with email and phone
       const { signUpUser, updateUserProfile } = await import('../../lib/firebaseHelpers');
 
-      // Generate secure password from phone number + random number
-      const randomNum = Math.floor(1000 + Math.random() * 9000);
-      const tempPassword = `${phoneNumber.replace(/\D/g, '')}${randomNum}!`;
+      // Generate a non-guessable temporary password (user resets via email)
+      const randomSalt =
+        Math.random().toString(36).substring(2, 12) +
+        Date.now().toString(36) +
+        Math.random().toString(36).substring(2, 8);
+      const tempPassword = `Sec!${randomSalt.toUpperCase()}${Math.floor(1000 + Math.random() * 9000)}#`;
       const username = email.split('@')[0];
 
-      console.log('ðŸ“± Creating account for:', email, 'with phone:', fullPhone);
+      console.log('Creating account for:', email, 'with phone:', fullPhone);
 
       // Import auth first
       const { auth } = await import('../../config/firebase');
@@ -117,11 +119,7 @@ export default function PhoneSignUpScreen() {
           }
         }
 
-        try {
-          await Clipboard.setStringAsync(tempPassword);
-        } catch {
-          /* best-effort: no modal */
-        }
+          // Do not copy passwords to clipboard — user must verify email / use password reset
         router.replace('/auth/login-options');
       } else {
         setError(result.error || 'Signup failed');

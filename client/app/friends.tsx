@@ -10,7 +10,7 @@ import { API_BASE_URL } from '../lib/api';
 import AsyncStorage from '@/lib/storage';
 import { followUser, unfollowUser } from '../lib/firebaseHelpers/follow';
 import { userService } from '../lib/userService';
-import { DEFAULT_AVATAR_URL } from '@/lib/api';
+import { resolveAvatarUrl } from '@/lib/utils/avatar';
 import VerifiedBadge from '@/src/_components/VerifiedBadge';
 import { hapticLight, hapticMedium } from '@/lib/haptics';
 import { useAppDialog } from '@/src/_components/AppDialogProvider';
@@ -18,8 +18,6 @@ import { safeRouterBack } from '@/lib/safeRouterBack';
 import { resolveCanonicalUserId } from '../lib/currentUser';
 import { useQueryClient } from '@tanstack/react-query';
 
-
-const DEFAULT_AVATAR = DEFAULT_AVATAR_URL;
 const API_URL = API_BASE_URL;
 
 type UserItem = {
@@ -70,24 +68,6 @@ export default function FriendsScreen() {
   const [profileName, setProfileName] = useState('');
 
   const isOwnProfile = !!userId && !!currentUserId && userId === currentUserId;
-
-  const normalizeAvatarUri = (uri?: string | null) => {
-    const raw = (uri ?? '').toString().trim();
-    if (!raw) return null;
-    const lower = raw.toLowerCase();
-    if (lower === 'null' || lower === 'undefined' || lower === 'none') return null;
-    return raw;
-  };
-
-  const getInitials = (name?: string) => {
-    const safe = (name || '').trim();
-    if (!safe) return '?';
-    const parts = safe.split(/\s+/).filter(Boolean);
-    const first = parts[0]?.[0] || '';
-    const last = parts.length > 1 ? (parts[parts.length - 1]?.[0] || '') : '';
-    const initials = (first + last).toUpperCase();
-    return initials || '?';
-  };
 
   useFocusEffect(
     useCallback(() => {
@@ -318,7 +298,7 @@ export default function FriendsScreen() {
       !!currentUserId &&
       (item.uid === currentUserId || (item.firebaseUid ? item.firebaseUid === currentUserId : false));
     const isFollowLoading = followLoadingIds.has(item.uid);
-    const avatarUri = normalizeAvatarUri(item.avatar);
+    const avatarUri = resolveAvatarUrl(item.avatar);
     const displayName = (item.name || '').trim() || (item.username ? `@${item.username}` : 'User');
 
     return (
@@ -330,19 +310,13 @@ export default function FriendsScreen() {
         }}
         activeOpacity={0.7}
       >
-        {avatarUri ? (
-          <ExpoImage
+        <ExpoImage
             source={{ uri: avatarUri }}
             style={styles.avatar}
             contentFit="cover"
             cachePolicy="memory-disk"
             transition={150}
           />
-        ) : (
-          <View style={styles.avatarFallback}>
-            <Text style={styles.avatarInitials}>{getInitials(item.name)}</Text>
-          </View>
-        )}
 
         <View style={styles.userInfo}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>

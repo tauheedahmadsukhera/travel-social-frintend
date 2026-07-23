@@ -14,6 +14,8 @@ import { safeRouterBack } from '@/lib/safeRouterBack';
 export default function UsernameLoginScreen() {
   const router = useRouter();
   const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
 
   const handleLogin = async () => {
@@ -21,12 +23,25 @@ export default function UsernameLoginScreen() {
       Alert.alert('Error', 'Please enter your username');
       return;
     }
+    if (!password) {
+      Alert.alert('Error', 'Please enter your password');
+      return;
+    }
 
     setLoading(true);
-    const result = await loginWithUsername(username);
+    const result = await loginWithUsername(username, password);
     setLoading(false);
 
     if (result.success) {
+      const storage = (await import('@/lib/storage')).default;
+      const token = result.token;
+      const userId = String(result.user?.id ?? result.user?._id ?? '');
+      if (token) {
+        await storage.setItem('token', token);
+      }
+      if (userId) {
+        await storage.setItem('userId', userId);
+      }
       router.replace('/(tabs)/home');
     } else {
       Alert.alert('Login Failed', result.error || 'Could not login with username');
@@ -79,6 +94,30 @@ export default function UsernameLoginScreen() {
                 autoCorrect={false}
                 spellCheck={false}
               />
+            </View>
+
+            {/* Password Input */}
+            <View style={styles.inputContainer}>
+              <Text style={styles.label}>Enter your password</Text>
+              <View style={styles.passwordRow}>
+                <TextInput
+                  style={[styles.input, styles.passwordInput]}
+                  placeholder="Please enter your password"
+                  placeholderTextColor="#999"
+                  value={password}
+                  onChangeText={setPassword}
+                  secureTextEntry={!showPassword}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                />
+                <TouchableOpacity
+                  onPress={() => setShowPassword((v) => !v)}
+                  style={styles.eyeButton}
+                  accessibilityLabel={showPassword ? 'Hide password' : 'Show password'}
+                >
+                  <Ionicons name={showPassword ? 'eye-off' : 'eye'} size={22} color="#666" />
+                </TouchableOpacity>
+              </View>
             </View>
 
             {/* Login Button */}
@@ -177,6 +216,20 @@ const styles = StyleSheet.create({
     padding: 16,
     fontSize: 16,
     color: '#000',
+  },
+  passwordRow: {
+    position: 'relative',
+    justifyContent: 'center',
+  },
+  passwordInput: {
+    paddingRight: 48,
+  },
+  eyeButton: {
+    position: 'absolute',
+    right: 12,
+    height: '100%',
+    justifyContent: 'center',
+    paddingHorizontal: 4,
   },
   loginButton: {
     marginBottom: 15,

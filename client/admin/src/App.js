@@ -1,7 +1,8 @@
-import React, { Suspense, lazy } from 'react';
+import React, { Suspense, lazy, useEffect, useState } from 'react';
 import { Toaster } from 'react-hot-toast';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { useAuthStore } from './stores/authStore';
+import { adminAPI } from './services/adminService';
 
 // Components
 import Sidebar from './components/Sidebar';
@@ -21,17 +22,54 @@ const StoryModeration = lazy(() => import('./pages/StoryModeration'));
 const StreamsManagement = lazy(() => import('./pages/StreamsManagement'));
 const VerificationRequests = lazy(() => import('./pages/VerificationRequests'));
 
-// Loading Fallback
 const PageLoader = () => (
   <div className="flex items-center justify-center min-h-[60vh]">
     <div className="w-10 h-10 border-4 border-indigo-500/30 border-t-indigo-500 rounded-full animate-spin"></div>
   </div>
 );
 
-// Protected Route Wrapper
 const ProtectedRoute = ({ children }) => {
-  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
-  if (!isAuthenticated) {
+  const token = useAuthStore((state) => state.token);
+  const logout = useAuthStore((state) => state.logout);
+  const user = useAuthStore((state) => state.user);
+  const [status, setStatus] = useState(token ? 'checking' : 'unauthenticated');
+
+  useEffect(() => {
+    let cancelled = false;
+    async function verifySession() {
+      if (!token) {
+        setStatus('unauthenticated');
+        return;
+      }
+      try {
+        // Server-side proof of admin access (not just token presence)
+        const res = await adminAPI.getDashboardAnalytics();
+        if (cancelled) return;
+        if (res === undefined || res === null) {
+          logout();
+          setStatus('unauthenticated');
+          return;
+        }
+        if (user && user.role && user.role !== 'admin') {
+          logout();
+          setStatus('unauthenticated');
+          return;
+        }
+        setStatus('authenticated');
+      } catch (err) {
+        if (cancelled) return;
+        logout();
+        setStatus('unauthenticated');
+      }
+    }
+    verifySession();
+    return () => { cancelled = true; };
+  }, [token, logout, user]);
+
+  if (status === 'checking') {
+    return <PageLoader />;
+  }
+  if (status !== 'authenticated') {
     return <Navigate to="/login" replace />;
   }
   return (

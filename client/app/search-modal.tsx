@@ -138,6 +138,7 @@ const defaultRegions: Region[] = [
 ];
 
 export default function SearchModal() {
+  const inputRef = React.useRef<TextInput>(null);
   const [tab, setTab] = useState<'place' | 'people' | 'tags'>('place');
   const [q, setQ] = useState<string>('');
   const [selectedRegion, setSelectedRegion] = useState<string | null>(null);
@@ -294,10 +295,16 @@ export default function SearchModal() {
       setHashtags([]);
       setSelectedRegion(null);
 
+      // Auto-focus search input to bring up keyboard immediately
+      const timer = setTimeout(() => {
+        inputRef.current?.focus();
+      }, 50);
+
       const task = InteractionManager.runAfterInteractions(() => {
         fetchRegions();
       });
       return () => {
+        clearTimeout(timer);
         task.cancel();
       };
     }, [fetchRegions])
@@ -500,11 +507,13 @@ export default function SearchModal() {
           {/* Search and Region Select */}
           <View style={styles.searchRegionBorderBox}>
             <View style={styles.searchBox}>
-              <Feather name="search" size={18} color="#222" style={styles.searchIcon} />
+              <Feather name="search" size={18} color="#65676B" style={styles.searchIcon} />
               <TextInput
+                ref={inputRef}
+                autoFocus={true}
                 style={styles.input}
                 placeholder={tab === 'people' ? 'Search for traveler' : 'Search a destination'}
-                placeholderTextColor="#999"
+                placeholderTextColor="#65676B"
                 value={q}
                 onChangeText={setQ}
                 autoCapitalize="none"
@@ -861,28 +870,21 @@ const styles = StyleSheet.create({
   searchBox: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#F0F2F5',
     height: 48,
     borderRadius: 24,
     paddingHorizontal: 20,
     marginBottom: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
-    elevation: 3,
-    borderWidth: 1,
-    borderColor: '#F0F0F0',
   },
   searchIcon: {
     marginRight: 8,
   },
   input: {
     flex: 1,
-    fontSize: 16,
-    color: '#333',
+    fontSize: 15,
+    color: '#222',
     paddingVertical: 0,
-    paddingHorizontal: 8,
+    paddingHorizontal: 4,
     textAlign: 'left',
   },
   inputClear: {

@@ -87,6 +87,7 @@ export async function getUserProfile(uid: string) {
       followingCount: userData.followingCount || 0,
       postsCount: userData.postsCount || 0,
       isPrivate: userData.isPrivate || false,
+      isVerified: userData.isVerified || userData.verified || false,
       approvedFollowers: userData.followers || [],
       createdAt: userData.createdAt
     };

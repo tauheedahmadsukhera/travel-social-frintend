@@ -50,6 +50,11 @@ export function useDMMedia() {
   }, []);
 
   const handleLaunchCamera = useCallback(async () => {
+    const { status } = await ImagePicker.requestCameraPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Permission needed', 'Please allow camera access to capture and send photos.');
+      return null;
+    }
     const res = await ImagePicker.launchCameraAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.All,
       allowsEditing: false,

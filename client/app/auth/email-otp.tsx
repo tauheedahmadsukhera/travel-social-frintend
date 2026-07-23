@@ -92,8 +92,9 @@ export default function EmailOTPScreen() {
       if (flow === 'signup' && email && phone) {
         const { signUpUser } = await import('../../lib/firebaseHelpers');
 
-        // Generate password from phone number (user can change later)
-        const tempPassword = `${phone.replace(/\D/g, '')}Temp!`;
+        // Generate secure random password (user will use email/OTP or reset password link)
+        const randomSalt = Math.random().toString(36).substring(2, 12) + Date.now().toString(36);
+        const tempPassword = `Sec!${randomSalt.toUpperCase()}${Math.floor(1000 + Math.random() * 9000)}#`;
         const username = email.split('@')[0];
 
         // Create account (skip email verification since we're using OTP)

@@ -47,7 +47,7 @@ export default function HighlightScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => safeRouterBack()} style={styles.backBtn}>
+        <TouchableOpacity onPress={() => router.replace('/(tabs)/home')} style={styles.backBtn}>
           <Feather name="arrow-left" size={24} color="#111" />
         </TouchableOpacity>
         <Text style={styles.title}>Highlight</Text>
@@ -77,7 +77,7 @@ export default function HighlightScreen() {
           initialIndex={0}
           onClose={() => {
             setViewerVisible(false);
-            safeRouterBack();
+            router.replace('/(tabs)/home');
           }}
         />
       </Modal>

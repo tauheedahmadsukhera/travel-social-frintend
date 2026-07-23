@@ -23,8 +23,8 @@ export function useInboxPolling(
   options: UseInboxPollingOptions = {}
 ) {
   const { setConvoMapping } = useAppStore();
-  // Default to a calmer poll interval to reduce loading/spinner churn and battery usage.
-  const { pollingInterval = 12000, autoStart = true } = options;
+  // Default poll interval: calmer to reduce battery/network without changing UI.
+  const { pollingInterval = 20000, autoStart = true } = options;
 
   const [conversations, setConversations] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -185,7 +185,7 @@ export function useMessagesPolling(
   conversationId: string | null,
   options: UseMessagesPollingOptions = {}
 ) {
-  const { pollingInterval = 8000, enabled = true } = options;
+  const { pollingInterval = 15000, enabled = true } = options;
 
   const [messages, setMessages] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);

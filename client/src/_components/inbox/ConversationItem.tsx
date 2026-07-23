@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator } from 'rea
 import { Image as ExpoImage } from 'expo-image';
 import { Feather } from '@expo/vector-icons';
 import { DEFAULT_AVATAR_URL } from '@/lib/api';
+import { resolveAvatarUrl } from '@/lib/utils/avatar';
 import VerifiedBadge from '../VerifiedBadge';
 
 type ConversationItemProps = {
@@ -35,11 +36,11 @@ const ConversationItem: React.FC<ConversationItemProps> = ({
     ? (item?.groupName || 'Group chat')
     : (profile?.displayName || profile?.username || embeddedUser?.displayName || embeddedUser?.name || item?.otherUserName || 'User');
 
-  const avatar = isGroup
-    ? (item?.groupAvatar || DEFAULT_AVATAR_URL)
-    : (profile?.avatar || profile?.photoURL || embeddedUser?.avatar || embeddedUser?.photoURL || item?.otherUserAvatar || DEFAULT_AVATAR_URL);
-
-  const isDefaultAvatar = !avatar || avatar === DEFAULT_AVATAR_URL || avatar.includes('avatardefault.webp');
+  const avatar = resolveAvatarUrl(
+    isGroup
+      ? (item?.groupAvatar || '')
+      : (profile?.avatar || profile?.photoURL || embeddedUser?.avatar || embeddedUser?.photoURL || item?.otherUserAvatar || '')
+  );
 
   const hasUnread = typeof item?.unreadCount === 'number' && item.unreadCount > 0;
   const lastMsg = item.lastMessage || 'No messages yet';
@@ -53,21 +54,13 @@ const ConversationItem: React.FC<ConversationItemProps> = ({
     >
       <View style={styles.avatarContainer}>
         <View style={[styles.avatarRing, hasUnread && styles.avatarRingUnread, { overflow: 'hidden' }]}>
-          {isDefaultAvatar ? (
-            <View style={[styles.avatar, { backgroundColor: '#788d9a', alignItems: 'center', justifyContent: 'center' }]}>
-              <Text style={{ color: '#fff', fontSize: 26, fontWeight: '700' }}>
-                {String(displayName || 'U').trim().charAt(0).toUpperCase()}
-              </Text>
-            </View>
-          ) : (
-            <ExpoImage 
-              source={{ uri: avatar }} 
-              style={styles.avatar} 
-              contentFit="cover"
-              cachePolicy="memory-disk"
-              transition={150}
-            />
-          )}
+          <ExpoImage 
+            source={{ uri: avatar }} 
+            style={styles.avatar} 
+            contentFit="cover"
+            cachePolicy="memory-disk"
+            transition={150}
+          />
         </View>
         {profile?.isOnline && <View style={styles.onlineDot} />}
       </View>

@@ -218,13 +218,26 @@ export default function Home() {
 
   useAssetPreloader(filteredRaw, (item: any) => {
     const media = Array.isArray(item.media) ? item.media : [];
+    const isVideoUrl = (u: string) => /\.(mp4|mov|webm|m4v)(\?|$)/i.test(u) || /\/video\//i.test(u);
     return [
-      ...media.map((m: any) => m.url),
-      item.imageUrl,
+      // Prefer posters/thumbs — do not prefetch full MP4s via ExpoImage
+      ...media.map((m: any) => m.thumbnailUrl || (m.type === 'video' ? '' : m.url)),
       item.thumbnailUrl,
-      item.userAvatar
-    ].filter(Boolean);
+      item.imageUrl && !isVideoUrl(String(item.imageUrl)) ? item.imageUrl : '',
+      item.userAvatar,
+    ].filter((u) => !!u && !isVideoUrl(String(u)));
   });
+
+  const [visiblePostIds, setVisiblePostIds] = useState<Set<string>>(() => new Set());
+  const onViewableItemsChanged = useRef(({ viewableItems }: { viewableItems: Array<{ item?: any }> }) => {
+    const next = new Set<string>();
+    for (const v of viewableItems || []) {
+      const id = String(v?.item?.id || v?.item?._id || '');
+      if (id) next.add(id);
+    }
+    setVisiblePostIds(next);
+  }).current;
+  const viewabilityConfig = useRef({ itemVisiblePercentThreshold: 55, minimumViewTime: 80 }).current;
 
   const [refreshing, setRefreshing] = useState(false);
   const onRefresh = useCallback(async () => {
@@ -239,14 +252,19 @@ export default function Home() {
   }, []);
 
   const renderPostItem = useCallback(
-    ({ item }: { item: any }) => (
-      <PostCard
-        post={item}
-        currentUser={currentUserData || currentUserId}
-        mirror={MIRROR_HOME}
-      />
-    ),
-    [currentUserData, currentUserId]
+    ({ item }: { item: any }) => {
+      const id = String(item?.id || item?._id || '');
+      const isVisible = !id || visiblePostIds.size === 0 || visiblePostIds.has(id);
+      return (
+        <PostCard
+          post={item}
+          currentUser={currentUserData || currentUserId}
+          mirror={MIRROR_HOME}
+          isVisible={isVisible}
+        />
+      );
+    },
+    [currentUserData, currentUserId, visiblePostIds]
   );
 
   const renderSkeletonItem = useCallback(() => (
@@ -384,7 +402,9 @@ export default function Home() {
           const mediaHeight = SCREEN_WIDTH / getDisplayRatio(firstMedia?.aspectRatio);
           layout.size = 60 + mediaHeight + 50 + 60 + 20;
         }}
-        drawDistance={SCREEN_HEIGHT * 5}
+        drawDistance={SCREEN_HEIGHT * 2}
+        onViewableItemsChanged={onViewableItemsChanged}
+        viewabilityConfig={viewabilityConfig}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#FF8D00" />}
       />
     </View>

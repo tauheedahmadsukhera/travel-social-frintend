@@ -83,9 +83,20 @@ export default function SaveButton({ post, currentUser }: any) {
     }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
 
-    // Always open collection modal.
-    // Global "All" auto-save should be decided inside the modal after checking
-    // whether this post already exists in any collection.
+    const cleanId = String(post.id || post._id || "").split('-loop')[0];
+
+    // If not saved yet, automatically save to default Private Saved list immediately!
+    if (!saved) {
+      setSaved(true);
+      savePost(cleanId, uid).catch((err) => {
+        console.warn('[SaveButton] Auto-save error:', err);
+      });
+      try {
+        const { feedEventEmitter } = require("../../lib/feedEventEmitter");
+        feedEventEmitter.emitPostUpdated(cleanId, { isSaved: true });
+      } catch {}
+    }
+
     setModalVisible(true);
   }
 

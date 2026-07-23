@@ -21,11 +21,13 @@ export async function compressVideoSafe(uri: string): Promise<string> {
         const compressedUri = await Video.compress(
             uri,
             {
-                compressionMethod: 'auto',
+                compressionMethod: 'manual',
+                maxSize: 720,
+                bitrate: 2_500_000,
                 minimumFileSizeForCompress: 0,
             }
         );
-        return compressedUri;
+        return compressedUri || uri;
     } catch (error) {
         console.warn('[mediaUtils] Video compression failed or library not linked. Using original URI.', error);
         return uri;

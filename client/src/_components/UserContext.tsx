@@ -1,20 +1,61 @@
-// This context is deprecated - app now uses token-based auth with AsyncStorage
-// Keeping UserProvider for backward compatibility with components that might still use it
-// But it no longer tries to initialize Firebase auth
-import React, { createContext, ReactNode, useContext } from 'react';
+import React, { createContext, ReactNode, useCallback, useContext, useEffect, useState } from 'react';
+import storage from '@/lib/storage';
+import { getAuthenticatedUserId } from '@/lib/currentUser';
 
-export type AuthUser = any;
-const UserContext = createContext<{ user: AuthUser; loading: boolean }>({ user: null, loading: false });
+export type AuthUser = {
+  uid: string;
+  id?: string;
+  email?: string | null;
+  displayName?: string | null;
+  avatar?: string | null;
+} | null;
+
+const UserContext = createContext<{ user: AuthUser; loading: boolean; refresh: () => Promise<void> }>({
+  user: null,
+  loading: true,
+  refresh: async () => {},
+});
 
 interface UserProviderProps {
   children: ReactNode;
 }
 
 export const UserProvider: React.FC<UserProviderProps> = ({ children }) => {
-  // No longer initializing Firebase auth - app uses AsyncStorage token-based auth
-  // This provider is kept for compatibility only
+  const [user, setUser] = useState<AuthUser>(null);
+  const [loading, setLoading] = useState(true);
+
+  const refresh = useCallback(async () => {
+    try {
+      const userId = await getAuthenticatedUserId();
+      if (!userId) {
+        setUser(null);
+        return;
+      }
+      const [email, avatar, displayName] = await Promise.all([
+        storage.getItem('userEmail'),
+        storage.getItem('userAvatar'),
+        storage.getItem('displayName'),
+      ]);
+      setUser({
+        uid: userId,
+        id: userId,
+        email,
+        avatar,
+        displayName,
+      });
+    } catch {
+      setUser(null);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    refresh();
+  }, [refresh]);
+
   return (
-    <UserContext.Provider value={{ user: null, loading: false }}>
+    <UserContext.Provider value={{ user, loading, refresh }}>
       {children}
     </UserContext.Provider>
   );
@@ -32,4 +73,9 @@ export const useUser = (): AuthUser => {
 export const useAuthLoading = (): boolean => {
   const context = useContext(UserContext);
   return context?.loading ?? false;
+};
+
+export const useRefreshUser = (): (() => Promise<void>) => {
+  const context = useContext(UserContext);
+  return context?.refresh ?? (async () => {});
 };

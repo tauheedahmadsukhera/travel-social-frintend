@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useCallback } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { adminAPI } from '../services/adminService';
 import { 
   HiOutlineCheckCircle, 
@@ -9,28 +10,25 @@ import { format } from 'date-fns';
 import toast from 'react-hot-toast';
 
 const Reports = () => {
-  const [reports, setReports] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
   const [statusFilter, setStatusFilter] = useState('pending');
 
-  const fetchReports = useCallback(async () => {
-    try {
-      setLoading(true);
+  const { data, isLoading: loading } = useQuery({
+    queryKey: ['admin-reports', statusFilter],
+    queryFn: async () => {
       const res = await adminAPI.getReports(1, 50, statusFilter);
-      if (res.success) {
-        setReports(res.data);
-      }
-    } catch (err) {
-      toast.error('Failed to load reports');
-    } finally {
-      setLoading(false);
-    }
-  }, [statusFilter]);
+      if (!res.success) throw new Error('Failed to load reports');
+      return res.data || [];
+    },
+    staleTime: 30 * 1000,
+    keepPreviousData: true,
+  });
 
-  useEffect(() => {
-    fetchReports();
-  }, [fetchReports]);
+  const reports = data || [];
 
+  const fetchReports = useCallback(() => {
+    queryClient.invalidateQueries(['admin-reports']);
+  }, [queryClient]);
 
   const handleResolve = async (id, status) => {
     try {

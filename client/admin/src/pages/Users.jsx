@@ -39,8 +39,8 @@ const Users = () => {
 
   // Mutations for optimistic updates
   const toggleStatusMutation = useMutation({
-    mutationFn: async ({ userId, newStatus }) => {
-      return newStatus === 'active' ? adminAPI.unbanUser(userId) : adminAPI.banUser(userId);
+    mutationFn: async ({ userId, newStatus, reason }) => {
+      return newStatus === 'active' ? adminAPI.unbanUser(userId) : adminAPI.banUser(userId, reason || '');
     },
     onSuccess: (res, variables) => {
       toast.success(`User ${variables.newStatus === 'active' ? 'unbanned' : 'suspended'}`);
@@ -72,6 +72,47 @@ const Users = () => {
     deleteUserMutation.mutate(user._id);
   };
 
+  const handleRoleChange = (user, newRole) => {
+    if (newRole === (user.role || 'user')) return;
+    const label = user.displayName || user.email || user._id;
+    if (newRole === 'admin') {
+      const typed = window.prompt(
+        `Type CONFIRM to promote "${label}" to ADMIN. This grants full console access.`
+      );
+      if (typed !== 'CONFIRM') {
+        toast.error('Role change cancelled');
+        return;
+      }
+    } else if (!window.confirm(`Change role of "${label}" to "${newRole}"?`)) {
+      return;
+    }
+    roleChangeMutation.mutate({ userId: user._id, newRole });
+  };
+
+  const handleToggleStatus = (user) => {
+    const next = user.status === 'suspended' ? 'active' : 'suspended';
+    const label = user.displayName || user.email || user._id;
+    if (next === 'suspended') {
+      const reason = window.prompt(`Reason for suspending "${label}" (required):`);
+      if (!reason || !reason.trim()) {
+        toast.error('A suspension reason is required');
+        return;
+      }
+      toggleStatusMutation.mutate({ userId: user._id, newStatus: next, reason: reason.trim() });
+    } else if (!window.confirm(`Unsuspend "${label}"?`)) {
+      return;
+    } else {
+      toggleStatusMutation.mutate({ userId: user._id, newStatus: next });
+    }
+  };
+
+  const handleToggleVerify = (user) => {
+    const next = !user.isVerified;
+    const label = user.displayName || user.email || user._id;
+    if (!window.confirm(`${next ? 'Verify' : 'Remove verification from'} "${label}"?`)) return;
+    toggleVerifyMutation.mutate({ userId: user._id, isVerified: next });
+  };
+
   const toggleVerifyMutation = useMutation({
     mutationFn: async ({ userId, isVerified }) => adminAPI.toggleUserVerification(userId, isVerified),
     onSuccess: (res, variables) => {
@@ -99,7 +140,11 @@ const Users = () => {
               className="bg-white/5 border border-white/10 rounded-xl pl-12 pr-4 py-3 outline-none focus:border-indigo-500 transition-all w-64 text-white"
             />
           </div>
-          <button className="bg-indigo-600 hover:bg-indigo-500 text-white px-6 py-3 rounded-xl font-bold flex items-center gap-2 transition-all shadow-lg shadow-indigo-500/20">
+          <button
+            type="button"
+            onClick={() => toast('Promote an existing user to Admin using the Role dropdown. Type CONFIRM when prompted.', { icon: 'ℹ️' })}
+            className="bg-indigo-600 hover:bg-indigo-500 text-white px-6 py-3 rounded-xl font-bold flex items-center gap-2 transition-all shadow-lg shadow-indigo-500/20"
+          >
             <HiOutlineUserAdd /> Add Admin
           </button>
         </div>
@@ -166,7 +211,7 @@ const Users = () => {
                     <td className="px-6 py-4">
                       <select 
                         value={user.role || 'user'}
-                        onChange={(e) => roleChangeMutation.mutate({ userId: user._id, newRole: e.target.value })}
+                        onChange={(e) => handleRoleChange(user, e.target.value)}
                         disabled={roleChangeMutation.isPending}
                         className="bg-transparent text-slate-300 outline-none border border-white/10 rounded-lg px-2 py-1 text-sm focus:border-indigo-500"
                       >
@@ -188,7 +233,7 @@ const Users = () => {
                     <td className="px-6 py-4 text-right">
                         <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                           <button
-                            onClick={() => toggleVerifyMutation.mutate({ userId: user._id, isVerified: !user.isVerified })}
+                            onClick={() => handleToggleVerify(user)}
                             disabled={toggleVerifyMutation.isPending}
                             className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${
                               user.isVerified
@@ -199,7 +244,7 @@ const Users = () => {
                             {user.isVerified ? 'Unverify' : 'Verify'}
                           </button>
                           <button 
-                            onClick={() => toggleStatusMutation.mutate({ userId: user._id, newStatus: user.status === 'suspended' ? 'active' : 'suspended' })}
+                            onClick={() => handleToggleStatus(user)}
                             disabled={toggleStatusMutation.isPending}
                             className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${
                               user.status === 'suspended' 

@@ -25,6 +25,7 @@ import {
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { DEFAULT_AVATAR_URL, API_BASE_URL } from '../../lib/api';
+import { resolveAvatarUrl } from '../../lib/utils/avatar';
 import AsyncStorage from '@/lib/storage';
 import { deleteStory } from '../../lib/firebaseHelpers/deleteStory';
 import { addCommentReply, addStoryToHighlight } from '../../lib/firebaseHelpers/index';
@@ -178,7 +179,7 @@ interface StoryComment {
 }
 
 export default function StoriesViewer({ stories, onClose, initialIndex = 0, isHighlight = false, highlightId }: { stories: Story[]; onClose: () => void; initialIndex?: number; isHighlight?: boolean; highlightId?: string }): React.ReactElement {
-  const DEFAULT_AVATAR_SOURCE = require('../../assets/images/splash-icon.png');
+  const DEFAULT_AVATAR_SOURCE = { uri: DEFAULT_AVATAR_URL } as const;
   const normalizeRemoteUrl = (value: any): string => {
     if (typeof value !== 'string') return '';
     const trimmed = value.trim();
@@ -201,6 +202,9 @@ export default function StoriesViewer({ stories, onClose, initialIndex = 0, isHi
   const [showShareModal, setShowShareModal] = useState(false);
   const [showHighlightModal, setShowHighlightModal] = useState(false);
   const [showNewHighlightModal, setShowNewHighlightModal] = useState(false);
+  const [showViewersModal, setShowViewersModal] = useState(false);
+  const [viewersList, setViewersList] = useState<any[]>([]);
+  const [loadingViewers, setLoadingViewers] = useState(false);
 
   const {
     currentIndex,
@@ -218,7 +222,7 @@ export default function StoriesViewer({ stories, onClose, initialIndex = 0, isHi
     stories,
     initialIndex,
     onClose,
-    showComments || showHighlightModal || showNewHighlightModal || showShareModal
+    showComments || showHighlightModal || showNewHighlightModal || showShareModal || showViewersModal
   );
 
   const [isMuted, setIsMuted] = useState(true);
@@ -236,7 +240,28 @@ export default function StoriesViewer({ stories, onClose, initialIndex = 0, isHi
   const [userHighlights, setUserHighlights] = useState<any[]>([]);
   const [loadingHighlights, setLoadingHighlights] = useState(false);
 
-  // Robust date parsing for createdAt coming as number | string | Date | Firestore-like
+  const handleOpenViewersModal = async () => {
+    setIsPaused(true);
+    setShowViewersModal(true);
+    const viewIds = currentStory?.views || [];
+    if (viewIds.length === 0) {
+      setViewersList([]);
+      return;
+    }
+    setLoadingViewers(true);
+    try {
+      const res = await apiService.getBulkProfiles(viewIds);
+      if (res?.success && Array.isArray(res.data)) {
+        setViewersList(res.data);
+      } else if (Array.isArray(res)) {
+        setViewersList(res);
+      }
+    } catch (err) {
+      console.warn('[StoriesViewer] Failed to load viewers:', err);
+    } finally {
+      setLoadingViewers(false);
+    }
+  };  // Robust date parsing for createdAt coming as number | string | Date | Firestore-like
   const toDate = (input: any): Date | null => {
     try {
       if (!input) return null;
@@ -320,15 +345,17 @@ export default function StoriesViewer({ stories, onClose, initialIndex = 0, isHi
     loadCurrentUser();
   }, []);
 
-  // Aggressively preload current + next 3 stories on each index change
+  // Prefetch posters/thumbs for current + next stories (not full videos — keeps battery OK)
   useEffect(() => {
     try {
-      const toBePrefetched = localStories.slice(currentIndex, currentIndex + 4);
+      const toBePrefetched = localStories.slice(currentIndex, currentIndex + 5);
       const urls = toBePrefetched
-        .map((s: any) => String(s?.imageUrl || s?.thumbnailUrl || ''))
-        .filter((u) => typeof u === 'string' && u.startsWith('http'));
-      // expo-image prefetch writes to disk cache — subsequent loads are near-instant
-      ExpoImage.prefetch(urls).catch(() => {});
+        .flatMap((s: any) => [
+          String(s?.thumbnailUrl || s?.thumbnail || ''),
+          String(s?.imageUrl || ''),
+        ])
+        .filter((u) => typeof u === 'string' && /^https?:\/\//i.test(u));
+      ExpoImage.prefetch([...new Set(urls)]).catch(() => {});
     } catch { }
   }, [localStories, currentIndex]);
 
@@ -513,9 +540,11 @@ export default function StoriesViewer({ stories, onClose, initialIndex = 0, isHi
 
   // Navigation and progress are handled by useStories hook
 
-  const currentStoryAvatarUrl = normalizeRemoteUrl(currentStory?.userAvatar) || DEFAULT_AVATAR_URL;
+  const currentStoryAvatarUrl = resolveAvatarUrl(normalizeRemoteUrl(currentStory?.userAvatar));
   const currentStoryImageUrl = normalizeRemoteUrl(currentStory?.imageUrl);
+  const currentStoryThumbUrl = normalizeRemoteUrl((currentStory as any)?.thumbnailUrl || (currentStory as any)?.thumbnail);
   const currentStoryVideoUrl = normalizeRemoteUrl(currentStory?.videoUrl);
+  const currentStoryPosterUrl = currentStoryThumbUrl || currentStoryImageUrl || currentStoryAvatarUrl;
   const isOwnCurrentStory = String(currentStory?.userId || '') === String(currentUser?.uid || '');
   const isLiked = (currentStory?.likes || [])?.includes(currentUser?.uid || '') || false;
   const likesCount = currentStory?.likes?.length || 0;
@@ -633,10 +662,10 @@ export default function StoriesViewer({ stories, onClose, initialIndex = 0, isHi
       >
         {/* Story Media with long-press to pause */}
         <Pressable
-          disabled={showComments || showHighlightModal || showNewHighlightModal || showShareModal}
+          disabled={showComments || showHighlightModal || showNewHighlightModal || showShareModal || showViewersModal}
           onLongPress={() => setIsPaused(true)}
           onPressOut={() => {
-            if (!showComments && !showHighlightModal && !showNewHighlightModal && !showShareModal) {
+            if (!showComments && !showHighlightModal && !showNewHighlightModal && !showShareModal && !showViewersModal) {
               setIsPaused(false);
             }
           }}
@@ -650,6 +679,7 @@ export default function StoriesViewer({ stories, onClose, initialIndex = 0, isHi
                 <Image
                   source={{
                     uri:
+                      (currentStory as any)?.thumbnailUrl ||
                       currentStory?.imageUrl ||
                       currentStory?.postMetadata?.imageUrl ||
                       currentStory?.userAvatar ||
@@ -729,7 +759,7 @@ export default function StoriesViewer({ stories, onClose, initialIndex = 0, isHi
                       isMuted={isMuted}
                       isLooping={false}
                       usePoster={true}
-                      posterSource={currentStoryImageUrl ? { uri: currentStoryImageUrl } : undefined}
+                      posterSource={currentStoryPosterUrl ? { uri: currentStoryPosterUrl } : undefined}
                       posterStyle={{ resizeMode: 'contain' }}
                       onLoadStart={() => setImageLoading(true)}
                       onLoad={status => {
@@ -933,7 +963,7 @@ export default function StoriesViewer({ stories, onClose, initialIndex = 0, isHi
 
              <TouchableOpacity onPress={() => { setIsPaused(true); setShowComments(true); }} style={viewerStyles.footerIconBtnRow}>
                 <MaterialCommunityIcons name="comment-outline" size={24} color="#fff" />
-                <Text style={viewerStyles.footerIconText}>{currentStory.comments?.length || 0}</Text>
+                <Text style={viewerStyles.footerIconText}>{Number((currentStory as any).commentsCount ?? currentStory.comments?.length ?? 0)}</Text>
              </TouchableOpacity>
 
              <TouchableOpacity onPress={handleLike} style={viewerStyles.footerIconBtnRow}>

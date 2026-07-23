@@ -1457,7 +1457,7 @@ const styles = StyleSheet.create({
     },
 
     // ── Text Editor Modal ──
-    textEditorBg: { flex: 1, backgroundColor: 'rgba(0,0,0,0.78)' },
+    textEditorBg: { flex: 1, backgroundColor: '#000000' },
     textEditorHeader: {
         flexDirection: 'row',
         alignItems: 'center',

@@ -135,13 +135,11 @@ function getAxiosInstance() {
       baseURL: API_BASE,
       timeout: 20000,
       // Use standard HTTP error semantics — 4xx/5xx throw errors
-      // (previously `validateStatus: () => true` was masking all errors as success)
       headers: {
         'Content-Type': 'application/json',
-        // Prevent aggressive GET caching on iOS URLSession
-        'Cache-Control': 'no-cache, no-store, must-revalidate',
-        'Pragma': 'no-cache',
-        'Expires': '0',
+        // Allow short-lived caching for GET requests (improves speed on repeat views)
+        // Sensitive/real-time endpoints override this per-request if needed
+        'Cache-Control': 'max-age=30',
       },
     });
 
@@ -284,7 +282,8 @@ async function apiRequestWithRetry(method: string, url: string, data?: any, conf
 
       // Retry logic for network/server errors (do not increment circuit per attempt)
       if (isRetryable && attempt < retries) {
-        const delay = Math.min(1000 * Math.pow(2, attempt - 1), 10000);
+        // Flat 800ms retry delay — exponential was causing 1s+2s+4s = 7s total wait
+        const delay = 800;
         if (__DEV__) {
           console.log(`🔄 [API] Retry ${attempt}/${retries} for ${method.toUpperCase()} ${url} in ${delay}ms`);
         }

@@ -110,6 +110,10 @@ export default function NotificationsModal({ visible, onClose }: NotificationsMo
                         keyExtractor={(item) => item._id}
                         renderItem={({ item }) => renderNotificationItem(item)}
                         contentContainerStyle={styles.notificationsList}
+                        removeClippedSubviews
+                        windowSize={7}
+                        maxToRenderPerBatch={12}
+                        initialNumToRender={12}
                     />
                 ) : (
                     <View style={styles.emptyNotifications}>

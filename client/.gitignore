@@ -7,6 +7,8 @@
 .env.production
 
 # Secrets
+credentials.json
+credentials/
 serviceAccountKey.json
 serviceAccount*.json
 release.keystore.base64

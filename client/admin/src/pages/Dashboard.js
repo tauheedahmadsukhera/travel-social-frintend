@@ -1,4 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import React from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import { 
   HiOutlineUsers, 
   HiOutlinePhotograph, 
@@ -17,10 +19,18 @@ import {
 import { adminAPI } from '../services/adminService';
 import { formatDistanceToNow } from 'date-fns';
 
+const COLOR_STYLES = {
+  indigo: { box: 'bg-indigo-500/20 text-indigo-400 shadow-indigo-500/10', },
+  emerald: { box: 'bg-emerald-500/20 text-emerald-400 shadow-emerald-500/10' },
+  amber: { box: 'bg-amber-500/20 text-amber-400 shadow-amber-500/10' },
+  rose: { box: 'bg-rose-500/20 text-rose-400 shadow-rose-500/10' },
+  blue: { box: 'bg-blue-500/20 text-blue-400 shadow-blue-500/10' },
+};
+
 const StatsCard = ({ title, value, icon, trend, color, loading }) => (
   <div className="glass p-6 flex flex-col gap-4 animate-fade-in transition-all hover:scale-[1.02] cursor-default">
     <div className="flex justify-between items-start">
-      <div className={`p-3 rounded-2xl bg-${color}-500/20 text-${color}-400 text-2xl shadow-lg shadow-${color}-500/10`}>
+      <div className={`p-3 rounded-2xl text-2xl shadow-lg ${(COLOR_STYLES[color] || COLOR_STYLES.indigo).box}`}>
         {icon}
       </div>
       {!loading && (
@@ -41,29 +51,26 @@ const StatsCard = ({ title, value, icon, trend, color, loading }) => (
 );
 
 const Dashboard = () => {
-  const [stats, setStats] = useState(null);
-  const [activity, setActivity] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const navigate = useNavigate();
 
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const [statsRes, activityRes] = await Promise.all([
-          adminAPI.getDashboardAnalytics(),
-          adminAPI.getRecentActivity()
-        ]);
-        
-        if (statsRes.success) setStats(statsRes.data);
-        if (activityRes.success) setActivity(activityRes.data);
-      } catch (err) {
-        console.error('Failed to fetch dashboard data', err);
-      } finally {
-        setLoading(false);
-      }
-    };
+  const { data: dashData, isLoading: loading } = useQuery({
+    queryKey: ['admin-dashboard'],
+    queryFn: async () => {
+      const [statsRes, activityRes] = await Promise.all([
+        adminAPI.getDashboardAnalytics(),
+        adminAPI.getRecentActivity()
+      ]);
+      return {
+        stats: statsRes?.success ? statsRes.data : null,
+        activity: activityRes?.success ? (activityRes.data || []) : []
+      };
+    },
+    staleTime: 60 * 1000,
+    refetchOnWindowFocus: false,
+  });
 
-    fetchData();
-  }, []);
+  const stats = dashData?.stats ?? null;
+  const activity = dashData?.activity ?? [];
 
   return (
     <div className="space-y-10 pb-10">
@@ -221,7 +228,11 @@ const Dashboard = () => {
               </div>
             )}
           </div>
-          <button className="mt-8 w-full py-3 rounded-2xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-sm transition-all shadow-lg shadow-indigo-500/20 active:scale-95">
+          <button
+            type="button"
+            onClick={() => navigate('/logs')}
+            className="mt-8 w-full py-3 rounded-2xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-sm transition-all shadow-lg shadow-indigo-500/20 active:scale-95"
+          >
             View All Logs
           </button>
         </div>

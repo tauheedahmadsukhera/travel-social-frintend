@@ -63,7 +63,7 @@ export function subscribeToUserPresence(userId: string, callback: (presence: Use
   const start = () => {
     if (intervalId) return;
     void refreshPresence();
-    intervalId = setInterval(refreshPresence, 15000);
+    intervalId = setInterval(refreshPresence, 30000);
   };
   const stop = () => {
     if (!intervalId) return;

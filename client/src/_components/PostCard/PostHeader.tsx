@@ -3,7 +3,7 @@ import { View, Text, TouchableOpacity } from 'react-native';
 import { Image as ExpoImage } from 'expo-image';
 import { Feather } from "@expo/vector-icons";
 import { styles } from './PostCard.styles';
-import { DEFAULT_AVATAR_URL } from '../../../lib/api';
+import { resolveAvatarUrl } from '../../../lib/utils/avatar';
 import VerifiedBadge from '../VerifiedBadge';
 
 interface PostHeaderProps {
@@ -33,7 +33,7 @@ const PostHeader: React.FC<PostHeaderProps> = ({
     <View style={styles.cardHeader}>
       <TouchableOpacity onPress={onProfilePress} activeOpacity={0.7}>
         <ExpoImage
-          source={{ uri: postUserAvatar || DEFAULT_AVATAR_URL }}
+          source={{ uri: resolveAvatarUrl(postUserAvatar) }}
           style={styles.cardHeaderAvatar}
           contentFit="cover"
         />

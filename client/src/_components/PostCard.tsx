@@ -30,6 +30,8 @@ interface PostCardProps {
   onCommentPress?: (postId: string, avatar: string) => void;
   mirror?: boolean;
   containerHeight?: number;
+  /** When false, pause video buffering (off-screen feed items). */
+  isVisible?: boolean;
 }
 
 
@@ -38,9 +40,13 @@ const PostCard: React.FC<PostCardProps> = ({
   currentUser, 
   showMenu = true, 
   highlightedCommentId, 
+  highlightedCommentText,
+  showCommentsModal,
+  onCloseCommentsModal,
   onCommentPress,
   mirror = false,
-  containerHeight
+  containerHeight,
+  isVisible = true,
 }) => {
 
   const router = useRouter();
@@ -343,6 +349,7 @@ const PostCard: React.FC<PostCardProps> = ({
         <PostMedia 
           media={mediaData}
           activeIndex={activeIndex}
+          isVisible={isVisible}
           onScroll={onScroll}
           onMediaPress={(index) => {
             if (post?.taggedUsers && post.taggedUsers.length > 0) {

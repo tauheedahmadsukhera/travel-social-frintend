@@ -1,19 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?>
 <network-security-config>
-    <!-- Allow cleartext traffic for development and API calls -->
-    <base-config cleartextTrafficPermitted="true">
+    <!-- Release/default: HTTPS only, system CAs only -->
+    <base-config cleartextTrafficPermitted="false">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+
+    <!-- Debug overrides for local development only -->
+    <debug-overrides>
         <trust-anchors>
             <certificates src="system" />
             <certificates src="user" />
         </trust-anchors>
-    </base-config>
-    
-    <!-- Specific domain configurations -->
-    <domain-config cleartextTrafficPermitted="true">
-        <domain includeSubdomains="true">nominatim.openstreetmap.org</domain>
-        <domain includeSubdomains="true">maps.googleapis.com</domain>
-        <domain includeSubdomains="true">firebasestorage.googleapis.com</domain>
-        <domain includeSubdomains="true">firebase.googleapis.com</domain>
-        <domain includeSubdomains="true">firebaseio.com</domain>
-    </domain-config>
+    </debug-overrides>
 </network-security-config>

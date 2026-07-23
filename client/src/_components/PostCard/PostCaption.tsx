@@ -28,7 +28,7 @@ const PostCaption: React.FC<PostCaptionProps> = ({
 
   return (
     <View style={styles.captionWrap}>
-      {caption ? (
+      {hasCaption ? (
         <Text style={styles.caption} numberOfLines={isExpanded ? undefined : 2}>
           {caption}
         </Text>

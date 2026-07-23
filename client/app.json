@@ -78,6 +78,7 @@
             "useFrameworks": "static"
           },
           "android": {
+            "allowBackup": false,
             "manifestPlaceholders": {
               "appAuthRedirectScheme": "trave-social",
               "traveSocialScheme": "trave-social"

@@ -141,20 +141,45 @@ export function resetBackendStatus() {
  * Call this in _layout.tsx or app entry point
  */
 export async function initializeBackend() {
-  console.log('[BackendWakeup] Initializing backend...');
+  if (__DEV__) console.log('[BackendWakeup] Initializing backend...');
   
   // Try quick health check first
   const isHealthy = await checkBackendHealth();
   
   if (isHealthy) {
-    console.log('[BackendWakeup] Backend already ready');
+    if (__DEV__) console.log('[BackendWakeup] Backend already ready');
+    // Start keep-alive to prevent future cold starts
+    _startKeepAlive();
     return true;
   }
   
   // If not healthy, start wake-up process in background
-  console.log('[BackendWakeup] Backend sleeping, starting wake-up...');
-  wakeupBackend(); // Don't await - let it run in background
+  if (__DEV__) console.log('[BackendWakeup] Backend sleeping, starting wake-up...');
+  wakeupBackend().then((ready) => {
+    if (ready) _startKeepAlive();
+  });
   
   return false;
+}
+
+// Internal keep-alive timer — runs silently in background
+let _keepAliveTimer: ReturnType<typeof setInterval> | null = null;
+
+function _startKeepAlive() {
+  if (_keepAliveTimer) return; // Already running
+
+  _keepAliveTimer = setInterval(async () => {
+    try {
+      const API_BASE = getAPIBaseURL();
+      const pingUrl = `${API_BASE.replace('/api', '')}/api/ping-v2`;
+      const controller = new AbortController();
+      const tid = setTimeout(() => controller.abort(), 5000);
+      await fetch(pingUrl, { method: 'GET', signal: controller.signal });
+      clearTimeout(tid);
+      if (__DEV__) console.log('[BackendWakeup] ♻️ Keep-alive ping sent');
+    } catch (_) {
+      // Silently ignore failed pings
+    }
+  }, 13 * 60 * 1000); // Ping every 13 minutes (Render sleeps at 15 min)
 }
 

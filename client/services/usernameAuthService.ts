@@ -37,23 +37,26 @@ export async function signUpWithUsername(username: string, name: string, avatar?
 }
 
 /**
- * Login with username
- * Finds the internal email and signs in
+ * Login with username & password
+ * Finds the user and signs in securely with credentials
  */
-export async function loginWithUsername(username: string) {
+export async function loginWithUsername(username: string, password?: string) {
   try {
     if (!username || username.trim().length < 3) {
       return { success: false, error: 'Please enter a valid username' };
     }
+    if (!password) {
+      return { success: false, error: 'Password is required' };
+    }
     const res = await apiService.post('/auth/username/login', {
       username: username.toLowerCase().trim(),
+      password,
     });
     
     if (res && res.success === false) {
       return { success: false, error: res.error || 'Login failed' };
     }
     
-    // Also fail if token is missing
     if (!res || !res.token) {
        return { success: false, error: 'Invalid response from server' };
     }

@@ -186,7 +186,10 @@ const VerificationRequests = () => {
                   {req.status === 'pending' ? (
                     <div className="flex gap-2 justify-end">
                       <button 
-                        onClick={() => handleUpdateStatus(req._id, 'approved')}
+                        onClick={() => {
+                          if (!window.confirm('Approve this verification request and mark the user as verified?')) return;
+                          handleUpdateStatus(req._id, 'approved');
+                        }}
                         className="px-3 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-bold flex items-center gap-1 transition-all shadow-md shadow-emerald-500/10"
                       >
                         <HiOutlineCheck className="text-sm" />
