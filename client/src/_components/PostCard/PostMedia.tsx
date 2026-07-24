@@ -77,6 +77,16 @@ const VideoItem: React.FC<VideoItemProps> = ({
   const [isLoaded, setIsLoaded] = useState(false);
   const mediaUri = getMediaUrl(url);
   const thumbUri = thumbnailUrl ? getMediaUrl(thumbnailUrl) : undefined;
+  const [videoUri, setVideoUri] = useState(mediaUri);
+
+  useEffect(() => {
+    let active = true;
+    const { getCachedVideoUri } = require('@/lib/videoCache');
+    getCachedVideoUri(mediaUri).then((resolved: string) => {
+      if (active) setVideoUri(resolved);
+    });
+    return () => { active = false; };
+  }, [mediaUri]);
 
   return (
     <TouchableOpacity
@@ -106,7 +116,7 @@ const VideoItem: React.FC<VideoItemProps> = ({
       )}
       <Video
         ref={videoRef}
-        source={{ uri: mediaUri }}
+        source={{ uri: videoUri }}
         style={{ width: SCREEN_WIDTH, height: containerHeight }}
         resizeMode={resizeMode}
         isLooping

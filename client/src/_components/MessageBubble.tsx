@@ -136,6 +136,21 @@ function MessageBubbleInner({
   const resolvedMediaUrl = mediaUrl || imageUrl || null;
   const resolvedMediaType = inferMediaType(mediaType, resolvedMediaUrl, audioUrl, imageUrl, audioDuration, text);
 
+  const [videoPlayUrl, setVideoPlayUrl] = React.useState(resolvedMediaUrl);
+
+  React.useEffect(() => {
+    if (resolvedMediaType === 'video' && resolvedMediaUrl) {
+      let active = true;
+      const { getCachedVideoUri } = require('@/lib/videoCache');
+      getCachedVideoUri(resolvedMediaUrl).then((resolved: string) => {
+        if (active) setVideoPlayUrl(resolved);
+      });
+      return () => { active = false; };
+    } else {
+      setVideoPlayUrl(resolvedMediaUrl);
+    }
+  }, [resolvedMediaUrl, resolvedMediaType]);
+
   // DEBUG LOG
   if (sharedPost || sharedStory) {
     console.log(`[MessageBubble] Rendering shared content: id=${id}, type=${resolvedMediaType}, hasPost=${!!sharedPost}, hasStory=${!!sharedStory}`);
@@ -813,7 +828,7 @@ function MessageBubbleInner({
               )}
               
               <Video
-                source={{ uri: resolvedMediaUrl }}
+                source={{ uri: videoPlayUrl ?? '' }}
                 style={{ width: '100%', height: '80%' }}
                 resizeMode={ResizeMode.CONTAIN}
                 shouldPlay={playVideoModalVisible}

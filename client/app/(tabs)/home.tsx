@@ -228,6 +228,23 @@ export default function Home() {
     ].filter((u) => !!u && !isVideoUrl(String(u)));
   });
 
+  // Video prefetch: silently preload next 3 posts' video URLs so playback is instant
+  useEffect(() => {
+    if (!filteredRaw || filteredRaw.length === 0) return;
+    const { preloadVideos } = require('@/lib/videoCache');
+    const videoUrls: string[] = [];
+    for (const item of filteredRaw.slice(0, 5)) {
+      const media = Array.isArray(item.media) ? item.media : [];
+      for (const m of media) {
+        if (m?.type === 'video' && m?.url) videoUrls.push(m.url);
+      }
+      if (item.videoUrl) videoUrls.push(item.videoUrl);
+    }
+    if (videoUrls.length > 0) {
+      preloadVideos(videoUrls, 3);
+    }
+  }, [filteredRaw]);
+
   const [visiblePostIds, setVisiblePostIds] = useState<Set<string>>(() => new Set());
   const onViewableItemsChanged = useRef(({ viewableItems }: { viewableItems: { item?: any }[] }) => {
     const next = new Set<string>();
