@@ -65,7 +65,7 @@ export function useInboxRealtime(userId: string | null) {
 
     const run = (async () => {
       try {
-        const response = await apiService.get(`/conversations?userId=${userId}`);
+        const response = await apiService.get(`/conversations?userId=${userId}`, { params: { _t: Date.now() }, bypassDedupe: true });
         let convos = response?.data;
         if (!response?.success) convos = [];
         if (!Array.isArray(convos)) convos = [];

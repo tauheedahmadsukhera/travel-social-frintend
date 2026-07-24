@@ -22,6 +22,7 @@ import ConversationItem from '../src/_components/inbox/ConversationItem';
 import { subscribeToUserStatus } from '../src/_services/socketService';
 import { CreateGroupModal } from '@/src/_components/inbox/CreateGroupModal';
 import { ConversationActionModal } from '@/src/_components/inbox/ConversationActionModal';
+import VerifiedBadge from '@/src/_components/VerifiedBadge';
 import { resolveCanonicalUserId } from '@/lib/currentUser';
 
 const INBOX_BUILD_TAG = 'inbox-group-fix-2026-03-28-2';
@@ -397,6 +398,22 @@ function Inbox() {
   const [followingUsers, setFollowingUsers] = useState<any[]>([]);
   const [followingLoading, setFollowingLoading] = useState(false);
 
+  // Warm start followingUsers from cache so top row loads with 0ms delay
+  useEffect(() => {
+    AsyncStorage.getItem('inbox_following_cache_v1')
+      .then((raw) => {
+        if (raw) {
+          try {
+            const parsed = JSON.parse(raw);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              setFollowingUsers(parsed);
+            }
+          } catch {}
+        }
+      })
+      .catch(() => {});
+  }, []);
+
   const [activeTab, setActiveTab] = useState<'primary' | 'unread' | 'groups'>('primary');
   const [inboxSearch, setInboxSearch] = useState('');
 
@@ -410,26 +427,23 @@ function Inbox() {
   const refreshInbox = useCallback(async () => {
     if (!userId) return;
     try {
-      // 1. Refresh Conversations
-      const response = await apiService.get(`/conversations?userId=${userId}`);
-      let convos = response?.data;
-      if (!response?.success) convos = [];
-      if (!Array.isArray(convos)) convos = [];
-      setConversations(normalizeConversations(convos));
-
-      // 2. Fetch Following & Suggested for the horizontal list
       setFollowingLoading(true);
-      const [followRes, discoverRes] = await Promise.all([
+      // Run ALL requests in parallel (bypassing dedupe cache for conversations so new DMs show instantly)
+      const [convoRes, followRes, discoverRes] = await Promise.all([
+        apiService.get(`/conversations?userId=${userId}`, { params: { _t: Date.now() }, bypassDedupe: true }),
         apiService.get(`/follow/users/${userId}/following`),
         apiService.get(`/follow/discover`)
       ]);
+
+      let convos = convoRes?.data;
+      if (!convoRes?.success || !Array.isArray(convos)) convos = [];
+      setConversations(normalizeConversations(convos));
 
       let mergedUsers: any[] = [];
       if (followRes?.success && Array.isArray(followRes.data)) {
         mergedUsers = [...followRes.data];
       }
       if (discoverRes?.success && Array.isArray(discoverRes.data)) {
-        // Append suggested users who aren't already in the list
         const existingIds = new Set(mergedUsers.map(u => String(u.uid || u.id || u.firebaseUid)));
         for (const u of discoverRes.data) {
           const id = String(u.uid || u.id || u.firebaseUid);
@@ -439,14 +453,14 @@ function Inbox() {
         }
       }
       setFollowingUsers(mergedUsers);
+      AsyncStorage.setItem('inbox_following_cache_v1', JSON.stringify(mergedUsers)).catch(() => {});
     } catch (err: any) {
       console.error('❌ Inbox refresh failed:', err?.message || err);
       if (err?.response?.status === 401 || err?.status === 401) {
         Alert.alert('Session Expired', 'Please log out and back in to continue.');
         console.warn('[Inbox] Auth session expired. Please log out and back in.');
       } else {
-        // Only show alert if we don't have any conversations displayed yet
-        if (!conversations || conversations.length === 0) {
+        if (!conversationsRef.current || conversationsRef.current.length === 0) {
           Alert.alert('Error', 'Failed to load inbox.', [
             { text: 'Retry', onPress: refreshInbox },
             { text: 'Dismiss' }
@@ -877,20 +891,9 @@ function Inbox() {
     useCallback(() => {
       if (!userId) return;
 
-      const now = Date.now();
-      if (now - lastRefreshAtRef.current < MIN_FOCUS_REFRESH_MS) {
-        return;
-      }
-      lastRefreshAtRef.current = now;
-
-      (async () => {
-        await refreshInbox();
-      })();
-
-      return () => {
-        return;
-      };
-    }, [refreshInbox, userId])
+      refreshInbox();
+      forceRefresh();
+    }, [refreshInbox, forceRefresh, userId])
   );
 
   function formatTime(timestamp: any) {
@@ -990,47 +993,57 @@ function Inbox() {
           keyExtractor={(item) => String(item.uid || item.id || item.firebaseUid)}
           estimatedItemSize={70}
           contentContainerStyle={{ paddingHorizontal: 16 }}
-          renderItem={({ item }) => (
-            <TouchableOpacity 
-              style={{ alignItems: 'center', marginRight: 18, width: 66 }}
-              onPress={() => {
-                hapticLight();
-                router.push({
-                  pathname: '/dm',
-                  params: {
-                    otherUserId: item.uid || item.id || item.firebaseUid,
-                    user: item.name || item.username || 'User',
-                    avatar: item.avatar || '',
-                    isGroup: '0'
-                  }
-                });
-              }}
-            >
-              <View style={[styles.igAvatarRing, { width: 62, height: 62, borderRadius: 31, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }]}>
-                {(!item.avatar || item.avatar === DEFAULT_AVATAR_URL || item.avatar.includes('avatardefault.webp')) ? (
-                  <View style={{ width: 56, height: 56, borderRadius: 28, backgroundColor: '#788d9a', alignItems: 'center', justifyContent: 'center' }}>
-                    <Text style={{ color: '#fff', fontSize: 26, fontWeight: '700' }}>
-                      {String(item.name || item.username || 'U').trim().charAt(0).toUpperCase()}
-                    </Text>
-                  </View>
-                ) : (
-                  <ExpoImage 
-                    source={{ uri: item.avatar }} 
-                    style={{ width: 56, height: 56, borderRadius: 28 }}
-                    contentFit="cover"
-                    cachePolicy="memory-disk"
-                    transition={150}
-                  />
-                )}
-              </View>
-              <Text 
-                style={{ fontSize: 11, color: '#262626', marginTop: 4, textAlign: 'center' }} 
-                numberOfLines={1}
+          renderItem={({ item }) => {
+            const isVerifiedUser = !!(item.verified || item.isVerified || item.badge || item.user?.verified || item.user?.isVerified);
+            return (
+              <TouchableOpacity 
+                style={{ alignItems: 'center', marginRight: 18, width: 66 }}
+                onPress={() => {
+                  hapticLight();
+                  router.push({
+                    pathname: '/dm',
+                    params: {
+                      otherUserId: item.uid || item.id || item.firebaseUid,
+                      user: item.name || item.username || 'User',
+                      avatar: item.avatar || '',
+                      isGroup: '0'
+                    }
+                  });
+                }}
               >
-                {item.username || item.name}
-              </Text>
-            </TouchableOpacity>
-          )}
+                <View style={[styles.igAvatarRing, { width: 62, height: 62, borderRadius: 31, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }]}>
+                  {(!item.avatar || item.avatar === DEFAULT_AVATAR_URL || item.avatar.includes('avatardefault.webp')) ? (
+                    <View style={{ width: 56, height: 56, borderRadius: 28, backgroundColor: '#788d9a', alignItems: 'center', justifyContent: 'center' }}>
+                      <Text style={{ color: '#fff', fontSize: 26, fontWeight: '700' }}>
+                        {String(item.name || item.username || 'U').trim().charAt(0).toUpperCase()}
+                      </Text>
+                    </View>
+                  ) : (
+                    <ExpoImage 
+                      source={{ uri: item.avatar }} 
+                      style={{ width: 56, height: 56, borderRadius: 28 }}
+                      contentFit="cover"
+                      cachePolicy="memory-disk"
+                      transition={150}
+                    />
+                  )}
+                </View>
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginTop: 4, maxWidth: 66 }}>
+                  <Text 
+                    style={{ fontSize: 11, color: '#262626', textAlign: 'center' }} 
+                    numberOfLines={1}
+                  >
+                    {item.username || item.name}
+                  </Text>
+                  {isVerifiedUser && (
+                    <View style={{ marginLeft: 2 }}>
+                      <VerifiedBadge size={11} />
+                    </View>
+                  )}
+                </View>
+              </TouchableOpacity>
+            );
+          }}
           ListEmptyComponent={null}
         />
       </View>
