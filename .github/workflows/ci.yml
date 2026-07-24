@@ -1,5 +1,4 @@
 name: "Client CI Build Check"
-
 on:
   push:
     branches:
@@ -9,25 +8,21 @@ on:
     branches:
       - main
       - master
-
 jobs:
   build-and-verify:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
       - name: "Setup Node.js"
         uses: actions/setup-node@v4
         with:
           node-version: "18"
           cache: "npm"
           cache-dependency-path: "client/package-lock.json"
-
       - name: "Install Dependencies"
         run: |
           cd client
           npm ci --legacy-peer-deps
-
       - name: "TypeScript Type Check"
         run: |
           cd client
