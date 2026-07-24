@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import AsyncStorage from '@/lib/storage';
 import { 
   fetchMessages, 
@@ -29,7 +29,25 @@ import { useAppStore } from '@/store/useAppStore';
 export function useDM(conversationIdParam: string | null, otherUserId: string | null, currentUserId: string | null, onMessageReceived?: (msg: any) => void) {
   const { messageCache, setCachedMessages, convoMap } = useAppStore();
   
-  // Resolve conversationId from param or global map (for instant profile-to-chat navigation)
+  // Canonical & Pair Key Aliases
+  const canonicalPairKey = useMemo(() => {
+    if (currentUserId && otherUserId) {
+      return [String(currentUserId), String(otherUserId)].sort().join('_');
+    }
+    return null;
+  }, [currentUserId, otherUserId]);
+
+  const directPairKey = useMemo(() => {
+    if (currentUserId && otherUserId) return `${currentUserId}_${otherUserId}`;
+    return null;
+  }, [currentUserId, otherUserId]);
+
+  const reversePairKey = useMemo(() => {
+    if (currentUserId && otherUserId) return `${otherUserId}_${currentUserId}`;
+    return null;
+  }, [currentUserId, otherUserId]);
+
+  // Resolve conversationId from param or global map
   const resolvedConvoId = conversationIdParam || (otherUserId ? convoMap[otherUserId] : null);
   
   const [conversationId, setConversationId] = useState<string | null>(resolvedConvoId);
@@ -39,10 +57,34 @@ export function useDM(conversationIdParam: string | null, otherUserId: string | 
     conversationIdRef.current = conversationId;
   }, [conversationId]);
 
-  // Initialize from memory cache for instant UI
+  // Helper to get all valid cache key aliases
+  const getAllCacheKeys = useCallback(() => {
+    return Array.from(new Set([
+      conversationIdRef.current,
+      conversationId,
+      resolvedConvoId,
+      canonicalPairKey,
+      directPairKey,
+      reversePairKey,
+      otherUserId ? convoMap[otherUserId] : null
+    ].filter(Boolean) as string[]));
+  }, [conversationId, resolvedConvoId, canonicalPairKey, directPairKey, reversePairKey, otherUserId, convoMap]);
+
+  // Initialize from memory cache across ALL key aliases for 0ms instant UI
   const [messages, setMessagesRaw] = useState<any[]>(() => {
-    if (resolvedConvoId && messageCache[resolvedConvoId]) {
-      return messageCache[resolvedConvoId];
+    const keysToTry = [
+      conversationIdParam,
+      resolvedConvoId,
+      canonicalPairKey,
+      directPairKey,
+      reversePairKey,
+      otherUserId ? convoMap[otherUserId] : null
+    ].filter(Boolean) as string[];
+
+    for (const k of keysToTry) {
+      if (Array.isArray(messageCache[k]) && messageCache[k].length > 0) {
+        return messageCache[k];
+      }
     }
     return [];
   });
@@ -51,19 +93,20 @@ export function useDM(conversationIdParam: string | null, otherUserId: string | 
     setMessagesRaw((prev) => {
       const next = typeof val === 'function' ? val(prev) : val;
       if (Array.isArray(next)) {
-        const cid = conversationIdRef.current || resolvedConvoId;
-        if (cid) {
-          setCachedMessages(cid, next.slice(0, 40));
-          AsyncStorage.setItem(`messages_cache_${cid}`, JSON.stringify(next.slice(0, 50))).catch(() => {});
-        }
+        const keys = getAllCacheKeys();
+        keys.forEach((k) => {
+          setCachedMessages(k, next.slice(0, 40));
+          AsyncStorage.setItem(`messages_cache_${k}`, JSON.stringify(next.slice(0, 50))).catch(() => {});
+        });
       }
       return next;
     });
-  }, [resolvedConvoId, setCachedMessages]);
+  }, [getAllCacheKeys, setCachedMessages]);
 
   const [loading, setLoading] = useState(() => {
-    if (!resolvedConvoId) return true;
-    return messageCache[resolvedConvoId] === undefined;
+    const keysToTry = [resolvedConvoId, canonicalPairKey, directPairKey, reversePairKey].filter(Boolean) as string[];
+    const hasAnyMemoryCache = keysToTry.some(k => messageCache[k] !== undefined);
+    return !hasAnyMemoryCache;
   });
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(true);
@@ -110,32 +153,29 @@ export function useDM(conversationIdParam: string | null, otherUserId: string | 
     return () => clearTimeout(t);
   }, [loading]);
 
-  // Warm Start Cache Loading
+  // Warm Start Cache Loading from Disk Across All Key Aliases
   useEffect(() => {
-    if (!conversationId) return;
+    const keysToTry = getAllCacheKeys();
+    if (keysToTry.length === 0) return;
     
     let mounted = true;
-    const cacheKey = `messages_cache_${conversationId}`;
 
     const loadCache = async () => {
       try {
-        const raw = await AsyncStorage.getItem(cacheKey);
-        if (!mounted) return;
-        
-        if (raw) {
-          const parsed = JSON.parse(raw);
-          if (Array.isArray(parsed)) {
-            setMessages(prev => mergeMessages(prev, parsed));
-            if (messageCache[conversationId] === undefined) {
-              setCachedMessages(conversationId, parsed.map((m: any) => normalizeMessage(m)));
+        for (const k of keysToTry) {
+          const raw = await AsyncStorage.getItem(`messages_cache_${k}`);
+          if (!mounted) return;
+          if (raw) {
+            const parsed = JSON.parse(raw);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              setMessages(prev => mergeMessages(prev, parsed));
+              break;
             }
           }
         }
         hasPreloadedMessagesRef.current = true;
         setLoading(false);
-        if (__DEV__) console.log(`⚡ [useDM] Cache loading finished. rawExists: ${!!raw}`);
       } catch (e) {
-        if (__DEV__) console.warn('[useDM] Cache load error:', e);
         hasPreloadedMessagesRef.current = true;
         setLoading(false);
       }
@@ -143,99 +183,45 @@ export function useDM(conversationIdParam: string | null, otherUserId: string | 
 
     loadCache();
     return () => { mounted = false; };
-  }, [conversationId]);
+  }, [conversationId, getAllCacheKeys, setMessages]);
 
-  // Load Messages & Setup Socket
+  // Load Messages & Setup Socket — Parallel Multi-Strategy Fetching
   useEffect(() => {
-    if (!conversationId || !currentUserId) return;
+    if (!conversationId && !otherUserId) return;
+    if (!currentUserId) return;
     
     let cancelled = false;
-    const cid = conversationId;
-    const cacheKey = `messages_cache_${conversationId}`;
-
-    // If we have preloaded messages (either in memory or loaded from disk), don't show the initial spinner
-    const hasCache = (messageCache[cid] !== undefined) || hasPreloadedMessagesRef.current;
-    if (!hasCache) {
-      setLoading(true);
-    }
+    const extractMessages = (res: any): any[] => {
+      if (!res) return [];
+      const raw = res?.data || res?.messages || (Array.isArray(res) ? res : []);
+      return Array.isArray(raw) ? raw : [];
+    };
     
     const fetchAll = async () => {
-      if (!conversationId && !otherUserId) return;
-      
-      const extractMessages = (res: any): any[] => {
-        if (!res) return [];
-        const raw = res?.data || res?.messages || (Array.isArray(res) ? res : []);
-        return Array.isArray(raw) ? raw : [];
-      };
-      
       try {
-        // Strategy 1: Fetch by conversationId (if valid)
-        const validId = (conversationId && conversationId !== 'null' && conversationId !== 'undefined') ? conversationId : null;
-        let msgRes = validId ? await fetchMessages(validId) : null;
-        let msgList = extractMessages(msgRes);
-        if (__DEV__) console.log(`[DM] Strategy 1 (${validId}): ${msgList.length} messages`);
-        
-        // Strategy 2: Try concatenated ID format (backend stores messages under "userId1_userId2")
-        if (msgList.length === 0 && currentUserId && otherUserId) {
-          const concatId1 = `${currentUserId}_${otherUserId}`;
-          const concatId2 = `${otherUserId}_${currentUserId}`;
-          try {
-            const concatRes1 = await fetchMessages(concatId1);
-            const concatList1 = extractMessages(concatRes1);
-            if (concatList1.length > 0) {
-              msgRes = concatRes1;
-              msgList = concatList1;
-            } else {
-              const concatRes2 = await fetchMessages(concatId2);
-              const concatList2 = extractMessages(concatRes2);
-              if (concatList2.length > 0) {
-                msgRes = concatRes2;
-                msgList = concatList2;
-              }
+        const keysToFetch = getAllCacheKeys();
+        if (keysToFetch.length === 0) return;
+
+        // PARALLEL FETCH: Fetch all possible ID aliases at once instead of sequential 300ms delays
+        const results = await Promise.allSettled(
+          keysToFetch.map(k => fetchMessages(k))
+        );
+
+        if (cancelled) return;
+
+        let fetchedList: any[] = [];
+        for (const r of results) {
+          if (r.status === 'fulfilled' && r.value) {
+            const list = extractMessages(r.value);
+            if (list.length > 0) {
+              fetchedList = mergeMessages(fetchedList, list);
             }
-          } catch {}
-        }
-        
-        // Strategy 3: Participant-based fallback from conversation list
-        if (msgList.length === 0 && otherUserId && currentUserId) {
-           try {
-             const convosRes = await apiService.get(`/conversations?userId=${currentUserId}`);
-             const convos = convosRes?.data || convosRes?.conversations || (Array.isArray(convosRes) ? convosRes : []);
-             if (Array.isArray(convos)) {
-                const matchingConvos = convos.filter((c: any) => {
-                 if (c.isGroup) return false;
-                 const pRaw = c.participants ?? c.participantIds ?? c.members;
-                 const mP = Array.isArray(pRaw) && pRaw.some((p: any) => String(p.id || p._id || p) === String(otherUserId));
-                 const mO = (c.otherUser && String(c.otherUser.id || c.otherUser._id) === String(otherUserId)) || String(c.otherUserId) === String(otherUserId);
-                 return mP || mO;
-               });
-               matchingConvos.sort((a: any, b: any) => new Date(b.lastMessageAt || 0).getTime() - new Date(a.lastMessageAt || 0).getTime());
-               for (const convo of matchingConvos) {
-                 const tryId = convo?.id || convo?._id || convo?.conversationId;
-                 if (!tryId || String(tryId) === String(conversationId)) continue;
-                 const altRes = await fetchMessages(tryId);
-                 const altList = extractMessages(altRes);
-                 if (altList.length > 0) {
-                   msgRes = altRes;
-                   msgList = altList;
-                   setConversationId(tryId);
-                   break;
-                 }
-               }
-             }
-           } catch {}
+          }
         }
 
-        if (!cancelled) {
-          const normalized = msgList.map((m: any) => normalizeMessage(m));
-          setMessages(prev => {
-            const merged = mergeMessages(prev, normalized);
-            if (merged.length > 0) {
-              setCachedMessages(cid, merged.slice(0, 40));
-              AsyncStorage.setItem(cacheKey, JSON.stringify(merged.slice(0, 50))).catch(() => {});
-            }
-            return merged;
-          });
+        if (!cancelled && fetchedList.length > 0) {
+          const normalized = fetchedList.map((m: any) => normalizeMessage(m));
+          setMessages(prev => mergeMessages(prev, normalized));
         }
       } catch (error) {
         console.error('[DM] Fetch error:', error);
@@ -252,14 +238,11 @@ export function useDM(conversationIdParam: string | null, otherUserId: string | 
 
     fetchAll();
 
+    if (!conversationId) return;
+
     const unsub = subscribeToMessages(conversationId, (msg) => {
       const incoming = normalizeMessage(msg);
-      setMessages(prev => {
-        const merged = mergeMessages(prev, [incoming]);
-        setCachedMessages(cid, merged.slice(0, 30));
-        AsyncStorage.setItem(cacheKey, JSON.stringify(merged.slice(0, 50))).catch(() => {});
-        return merged;
-      });
+      setMessages(prev => mergeMessages(prev, [incoming]));
       if (onMessageReceived) onMessageReceived(incoming);
     });
 
