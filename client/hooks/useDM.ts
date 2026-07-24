@@ -125,14 +125,9 @@ export function useDM(conversationIdParam: string | null, otherUserId: string | 
         if (raw) {
           const parsed = JSON.parse(raw);
           if (Array.isArray(parsed)) {
-            // If we already have messages from a faster fetch, don't overwrite with stale cache
-            setMessages(prev => {
-              if (prev.length > 0) return prev;
-              return parsed.map(m => normalizeMessage(m));
-            });
-            // Update memory cache if not set
+            setMessages(prev => mergeMessages(prev, parsed));
             if (messageCache[conversationId] === undefined) {
-              setCachedMessages(conversationId, parsed.map(m => normalizeMessage(m)));
+              setCachedMessages(conversationId, parsed.map((m: any) => normalizeMessage(m)));
             }
           }
         }
@@ -233,12 +228,14 @@ export function useDM(conversationIdParam: string | null, otherUserId: string | 
 
         if (!cancelled) {
           const normalized = msgList.map((m: any) => normalizeMessage(m));
-          setMessages(normalized);
-          // Update memory and disk cache
-          if (normalized.length > 0) {
-            setCachedMessages(cid, normalized.slice(0, 30));
-            AsyncStorage.setItem(cacheKey, JSON.stringify(normalized.slice(0, 50))).catch(() => {});
-          }
+          setMessages(prev => {
+            const merged = mergeMessages(prev, normalized);
+            if (merged.length > 0) {
+              setCachedMessages(cid, merged.slice(0, 40));
+              AsyncStorage.setItem(cacheKey, JSON.stringify(merged.slice(0, 50))).catch(() => {});
+            }
+            return merged;
+          });
         }
       } catch (error) {
         console.error('[DM] Fetch error:', error);
