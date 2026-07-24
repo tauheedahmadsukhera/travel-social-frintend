@@ -702,7 +702,7 @@ async function compressVideoIfNeeded(uri: string, maxSizeBytes: number = 2 * 102
 
 export async function uploadMedia(
   uri: string,
-  mediaType: 'image' | 'video' = 'image',
+  mediaType: 'image' | 'video' | 'audio' = 'image',
   path?: string
 ): Promise<{ success: boolean; url?: string; error?: string; width?: number; height?: number; aspectRatio?: number; thumbnailUrl?: string }> {
   try {
@@ -842,18 +842,21 @@ export async function uploadMedia(
 
 async function uploadWithMultipart(
   uri: string,
-  mediaType: 'image' | 'video',
+  mediaType: 'image' | 'video' | 'audio',
   path?: string
 ): Promise<{ success: boolean; url?: string; error?: string; width?: number; height?: number; aspectRatio?: number; thumbnailUrl?: string }> {
   try {
     const token = await AsyncStorage.getItem('token');
     const endpointUrl = `${API_BASE_URL}/upload/upload`;
 
-    const safeType = mediaType === 'video' ? 'video' : 'image';
-    const contentType = safeType === 'video' ? 'video/mp4' : 'image/jpeg';
-    const fileName = safeType === 'video'
-      ? `video-${Date.now()}.mp4`
-      : `image-${Date.now()}.jpg`;
+    const rawType = String(mediaType || '').toLowerCase();
+    const safeType = rawType === 'audio' ? 'audio' : (rawType === 'video' ? 'video' : 'image');
+    const contentType = safeType === 'audio' ? 'audio/mp4' : (safeType === 'video' ? 'video/mp4' : 'image/jpeg');
+    const fileName = safeType === 'audio'
+      ? `audio-${Date.now()}.m4a`
+      : safeType === 'video'
+        ? `video-${Date.now()}.mp4`
+        : `image-${Date.now()}.jpg`;
 
     const formData = new FormData();
     formData.append('mediaType', safeType);

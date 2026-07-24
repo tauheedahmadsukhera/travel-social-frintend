@@ -623,12 +623,6 @@ export default function DM() {
   ), [currentUserId, displayName, avatarUri, activeSoundId, formatTimeForBubble]);
 
   const renderContent = () => {
-    // Only show global loader if we have NO messages and are loading.
-    // This allows cached messages to show instantly like Instagram.
-    if (loading && messages.length === 0) {
-      return <View style={styles.centered}><ActivityIndicator size="large" color="#FF8D00" /></View>;
-    }
-    
     if (!conversationId && !loading) {
        return (
          <View style={styles.centered}>
@@ -659,6 +653,13 @@ export default function DM() {
         windowSize={7}
         initialNumToRender={16}
         updateCellsBatchingPeriod={50}
+        ListEmptyComponent={
+          loading ? (
+            <View style={{ paddingVertical: 30, alignItems: 'center', justifyContent: 'center' }}>
+              <ActivityIndicator size="small" color="#FF8D00" />
+            </View>
+          ) : null
+        }
       />
     );
   };

@@ -27,6 +27,9 @@ import { resolveCanonicalUserId } from '@/lib/currentUser';
 
 const INBOX_BUILD_TAG = 'inbox-group-fix-2026-03-28-2';
 
+let globalInboxCache: any[] | null = null;
+let globalFollowingCache: any[] | null = null;
+
 function Inbox() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -81,23 +84,23 @@ function Inbox() {
       }
 
       const { uploadMedia, sendMediaMessage } = require('../lib/firebaseHelpers/messages');
-      
       const uploadRes = await uploadMedia(finalUri, mType);
-      if (!uploadRes?.success || !uploadRes?.url) {
-        throw new Error(uploadRes?.error || 'Media upload failed');
+      
+      const mediaUrl = uploadRes?.url || uploadRes?.secureUrl || uploadRes?.data?.url;
+      if (!uploadRes?.success || !mediaUrl) {
+        throw new Error(uploadRes?.error || 'Failed to upload media');
       }
 
       const sendRes = await sendMediaMessage(
         conversationId,
         userId,
-        uploadRes.url,
+        mediaUrl,
         mType,
-        convo.otherUserId 
-          ? { 
-              recipientId: convo.otherUserId,
-              thumbnailUrl: uploadRes?.thumbnailUrl || uploadRes?.data?.thumbnailUrl
-            } 
-          : {
+        undefined,
+        mType === 'image' 
+          ? { imageUrl: mediaUrl } 
+          : { 
+              videoUrl: mediaUrl, 
               thumbnailUrl: uploadRes?.thumbnailUrl || uploadRes?.data?.thumbnailUrl
             }
       );
@@ -118,17 +121,11 @@ function Inbox() {
 
   const coerceToEpochMs = useCallback((value: any): number => {
     if (!value) return 0;
-
-    // If it's a Date object
     if (value instanceof Date) return value.getTime();
-
-    // If it's a number
     if (typeof value === 'number' && Number.isFinite(value)) {
       if (value > 0 && value < 10_000_000_000) return value * 1000;
       return value;
     }
-
-    // If it's a string
     if (typeof value === 'string') {
       const trimmed = value.trim();
       if (!trimmed) return 0;
@@ -140,11 +137,8 @@ function Inbox() {
       const parsed = Date.parse(trimmed);
       return Number.isFinite(parsed) ? parsed : 0;
     }
-
-    // Firestore/Mongoose Timestamp
     if (typeof value?.toDate === 'function') return value.toDate().getTime();
     if (typeof value?.getTime === 'function') return value.getTime();
-
     return 0;
   }, []);
 
@@ -153,11 +147,9 @@ function Inbox() {
       safeRouterBack();
       return;
     }
-
     router.replace('/(tabs)/home');
   };
 
-  // Get userId from Zustand Global Store
   const storeUserId = useAppStore((state) => state.userId);
   const [resolvedUserId, setResolvedUserId] = useState<string | null>(null);
   const [userLoading, setUserLoading] = useState(true);
@@ -166,7 +158,6 @@ function Inbox() {
   const [userVariants, setUserVariants] = useState<string[]>([]);
   const [inFocus, setInFocus] = useState(false);
   const lastRefreshAtRef = useRef(0);
-  const MIN_FOCUS_REFRESH_MS = 4000;
 
   useFocusEffect(
     useCallback(() => {
@@ -175,12 +166,17 @@ function Inbox() {
     }, [])
   );
 
-  // Use Real-time WebSocket connection instead of heavy polling
   const { conversations: polledConversations, loading: polledLoading, ready: polledReady, refresh: forceRefresh } = useInboxRealtime(userId || null);
 
-  // Avoid noisy logs in hot render path (hurts perf on Android).
+  const [conversations, setConversationsState] = useState<any[] | null>(() => globalInboxCache);
+  const setConversations = useCallback((val: any[] | null | ((prev: any[] | null) => any[] | null)) => {
+    setConversationsState((prev) => {
+      const next = typeof val === 'function' ? val(prev) : val;
+      globalInboxCache = next;
+      return next;
+    });
+  }, []);
 
-  const [conversations, setConversations] = useState<any[] | null>(null);
   useEffect(() => {
     const loadVariants = async () => {
       try {
@@ -910,21 +906,14 @@ function Inbox() {
     return date.toLocaleDateString();
   }
 
-  if (!userId) {
-    // If we have cached conversations, allow UI to render; userId will hydrate in background.
-    if (!Array.isArray(conversations) || conversations.length === 0) {
-      return (
-        <SafeAreaView style={[styles.container, { alignItems: 'center', justifyContent: 'center' }]}>
-          {userLoading ? (
-            <ActivityIndicator size="large" color="#FF8D00" />
-          ) : (
-            <Text style={{ color: '#999', fontSize: 18, marginTop: 40 }}>
-              Please sign in to view your messages.
-            </Text>
-          )}
-        </SafeAreaView>
-      );
-    }
+  if (!userId && !userLoading) {
+    return (
+      <SafeAreaView style={[styles.container, { alignItems: 'center', justifyContent: 'center' }]}>
+        <Text style={{ color: '#999', fontSize: 18, marginTop: 40 }}>
+          Please sign in to view your messages.
+        </Text>
+      </SafeAreaView>
+    );
   }
 
   // Show loading only if still loading AND no conversations yet.
