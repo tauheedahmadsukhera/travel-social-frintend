@@ -345,17 +345,26 @@ export default function StoriesViewer({ stories, onClose, initialIndex = 0, isHi
     loadCurrentUser();
   }, []);
 
-  // Prefetch posters/thumbs for current + next stories (not full videos — keeps battery OK)
+  // Prefetch posters & background video preloading for next 3 stories (0ms transition)
   useEffect(() => {
     try {
-      const toBePrefetched = localStories.slice(currentIndex, currentIndex + 5);
-      const urls = toBePrefetched
+      const upcoming = localStories.slice(currentIndex, currentIndex + 3);
+      const imageUrls = upcoming
         .flatMap((s: any) => [
           String(s?.thumbnailUrl || s?.thumbnail || ''),
-          String(s?.imageUrl || ''),
+          String(s?.imageUrl || s?.image || ''),
         ])
         .filter((u) => typeof u === 'string' && /^https?:\/\//i.test(u));
-      ExpoImage.prefetch([...new Set(urls)]).catch(() => {});
+      ExpoImage.prefetch([...new Set(imageUrls)]).catch(() => {});
+
+      const videoUrls = upcoming
+        .map((s: any) => String(s?.videoUrl || s?.video || ''))
+        .filter((u) => typeof u === 'string' && /^https?:\/\//i.test(u));
+
+      if (videoUrls.length > 0) {
+        const { preloadVideos } = require('../../lib/videoCache');
+        preloadVideos(videoUrls).catch(() => {});
+      }
     } catch { }
   }, [localStories, currentIndex]);
 
