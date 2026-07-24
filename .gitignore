@@ -131,6 +131,10 @@ verify_*.js
 resolved_ips.txt
 users_log.txt
 
+# Archives and zip files
+*.zip
+website.zip
+
 # Ignore the entire backend directory (tracked in its own separate repository)
 /backend/
 

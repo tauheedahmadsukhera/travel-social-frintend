@@ -4,7 +4,7 @@ import { Feather } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import AsyncStorage from '@/lib/storage';
 import { useNotifications } from '../../hooks/useNotifications';
-import { notificationService } from '../../lib/notificationService';
+import { notificationService } from '../../services/notificationService';
 import { getNotificationDisplayText } from '../../lib/notificationText';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');

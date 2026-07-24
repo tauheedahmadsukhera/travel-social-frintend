@@ -4,8 +4,7 @@ import React, { createContext, useCallback, useContext, useEffect, useMemo, useR
 import { ActivityIndicator, Alert, Animated, Dimensions, StyleSheet, Text, TouchableOpacity, View, FlatList, Modal, ScrollView, Platform } from 'react-native';
 import AsyncStorage from '@/lib/storage';
 import { useNotifications } from '../../hooks/useNotifications';
-import { notificationService } from '../../lib/notificationService';
-import { getPushNotificationToken, requestNotificationPermissions, savePushToken } from '../../services/notificationService';
+import { notificationService, getPushNotificationToken, requestNotificationPermissions, savePushToken } from '../../services/notificationService';
 import { getAllStoriesForFeed, getUserProfile } from "../../lib/firebaseHelpers/index";
 import { DEFAULT_AVATAR_URL } from "../../lib/api";
 import { useLocalSearchParams } from "expo-router";

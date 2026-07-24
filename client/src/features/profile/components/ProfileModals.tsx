@@ -5,7 +5,7 @@ import { Ionicons, Feather } from '@expo/vector-icons';
 import HighlightViewer from '@/src/_components/HighlightViewer';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import CommentSection from '@/src/_components/CommentSection';
-import { CollectionsModal, UserMenuModal } from '@/src/_components/profile/ProfileModals';
+import { CollectionsModal, UserMenuModal } from '@/src/_components/profile/ProfileSubModals';
 import PostViewerModal from '@/src/_components/PostViewerModal';
 import EditSectionsModal from '@/src/_components/EditSectionsModal';
 import { UploadStoryModal } from '@/src/_components/profile/UploadStoryModal';
