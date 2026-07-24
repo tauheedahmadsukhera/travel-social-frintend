@@ -19,7 +19,7 @@ export default function PhoneOTPScreen() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   
-  const inputRefs = useRef<Array<TextInput | null>>([]);
+  const inputRefs = useRef<(TextInput | null)[]>([]);
 
   useEffect(() => {
     logAnalyticsEvent('auth_phone_otp_open', { flow });

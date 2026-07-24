@@ -56,7 +56,7 @@ const PostCard: React.FC<PostCardProps> = ({
     if (post?.isLiked !== undefined) return post.isLiked;
 
     // 2. Fallback to local calculation (Standard MongoDB _id only)
-    const myId = String(currentUser?._id || currentUser?.id || currentUser?.uid || currentUser?.firebaseUid || (typeof currentUser === 'string' ? currentUser : '') || user?._id || user?.id || user?.uid || '');
+    const myId = String((currentUser as any)?._id || currentUser?.id || currentUser?.uid || currentUser?.firebaseUid || (typeof currentUser === 'string' ? currentUser : '') || (user as any)?._id || user?.id || user?.uid || '');
     if (myId && Array.isArray(post?.likes)) {
       return post.likes.some((id: any) => {
         const lid = String(id?._id || id?.id || id?.uid || id?.firebaseUid || id || '');
@@ -91,7 +91,7 @@ const PostCard: React.FC<PostCardProps> = ({
     }
 
     // 2. Fallback to local calculation (Standard MongoDB _id only)
-    const myId = String(currentUser?._id || currentUser?.id || currentUser?.uid || currentUser?.firebaseUid || (typeof currentUser === 'string' ? currentUser : '') || user?._id || user?.id || user?.uid || '');
+    const myId = String((currentUser as any)?._id || currentUser?.id || currentUser?.uid || currentUser?.firebaseUid || (typeof currentUser === 'string' ? currentUser : '') || (user as any)?._id || user?.id || user?.uid || '');
     if (myId && Array.isArray(post?.likes)) {
       const liked = post.likes.some((id: any) => {
         const lid = String(id?._id || id?.id || id?.uid || id?.firebaseUid || id || '');
@@ -236,8 +236,8 @@ const PostCard: React.FC<PostCardProps> = ({
 
   const handleLike = useCallback(async () => {
     const activeUserId = 
-      (typeof currentUser === 'string' ? currentUser : (currentUser?._id || currentUser?.id || currentUser?.uid || currentUser?.firebaseUid)) || 
-      user?._id || user?.id || user?.uid;
+      (typeof currentUser === 'string' ? currentUser : ((currentUser as any)?._id || currentUser?.id || currentUser?.uid || currentUser?.firebaseUid)) || 
+      (user as any)?._id || user?.id || user?.uid;
     
     if (!activeUserId) {
       if (__DEV__) {
@@ -454,7 +454,7 @@ const PostCard: React.FC<PostCardProps> = ({
           likeCount={likeCount}
           commentCount={localCommentCount}
           reactions={localReactions}
-          currentUserId={currentUser?._id || currentUser?.id || currentUser?.uid || (typeof currentUser === 'string' ? currentUser : '') || user?._id || user?.id || user?.uid}
+          currentUserId={(currentUser as any)?._id || currentUser?.id || currentUser?.uid || (typeof currentUser === 'string' ? currentUser : '') || (user as any)?._id || user?.id || user?.uid}
         />
 
         <PostCaption 
@@ -588,7 +588,7 @@ const PostCard: React.FC<PostCardProps> = ({
                           style: "destructive", 
                           onPress: async () => {
                             try {
-                              const myId = currentUser?._id || currentUser?.id || currentUser?.uid || (typeof currentUser === 'string' ? currentUser : '') || user?._id || user?.id || user?.uid;
+                              const myId = (currentUser as any)?._id || currentUser?.id || currentUser?.uid || (typeof currentUser === 'string' ? currentUser : '') || (user as any)?._id || user?.id || user?.uid;
                               const targetId = post?.userId?._id || post?.userId;
                               if (myId && targetId) {
                                 await apiService.blockUser(String(myId), String(targetId));
@@ -716,7 +716,7 @@ const PostCard: React.FC<PostCardProps> = ({
           onSend={async (userIds) => {
             setShowShare(false);
           }}
-          currentUserId={currentUser?._id || currentUser?.id || currentUser?.uid || (typeof currentUser === 'string' ? currentUser : '') || user?._id || user?.id || user?.uid}
+          currentUserId={(currentUser as any)?._id || currentUser?.id || currentUser?.uid || (typeof currentUser === 'string' ? currentUser : '') || (user as any)?._id || user?.id || user?.uid}
           sharePayload={post}
           modalVariant="home"
           onAddToStory={() => {

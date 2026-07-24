@@ -229,7 +229,7 @@ export default function Home() {
   });
 
   const [visiblePostIds, setVisiblePostIds] = useState<Set<string>>(() => new Set());
-  const onViewableItemsChanged = useRef(({ viewableItems }: { viewableItems: Array<{ item?: any }> }) => {
+  const onViewableItemsChanged = useRef(({ viewableItems }: { viewableItems: { item?: any }[] }) => {
     const next = new Set<string>();
     for (const v of viewableItems || []) {
       const id = String(v?.item?.id || v?.item?._id || '');

@@ -137,7 +137,7 @@ export async function createThumbnail(imageUri: string, size: number = 200): Pro
  */
 export async function optimizeImagesForUpload(
   imageUris: string[]
-): Promise<Array<{ compressed: CompressedImage; thumbnail: CompressedImage }>> {
+): Promise<{ compressed: CompressedImage; thumbnail: CompressedImage }[]> {
   try {
     const results = await Promise.all(
       imageUris.map(async (uri) => ({

@@ -134,7 +134,7 @@ async function resolveViewerProfile(userId: string): Promise<{ id: string; name:
 
 export function subscribeToLiveViewers(
   streamId: string,
-  callback: (viewers: Array<{ id: string; name: string; avatar: string }>) => void,
+  callback: (viewers: { id: string; name: string; avatar: string }[]) => void,
   onViewerCount?: (count: number) => void
 ) {
   const pollInterval = setInterval(async () => {

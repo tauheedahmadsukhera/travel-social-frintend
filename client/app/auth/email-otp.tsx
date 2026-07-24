@@ -21,7 +21,7 @@ export default function EmailOTPScreen() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  const inputRefs = useRef<Array<TextInput | null>>([]);
+  const inputRefs = useRef<(TextInput | null)[]>([]);
 
   useEffect(() => {
     logAnalyticsEvent('auth_email_otp_open', { flow });

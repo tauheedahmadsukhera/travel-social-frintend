@@ -66,7 +66,7 @@ export interface GroupMessage {
     url: string;
     size: number;
   };
-  reactions?: Array<{ emoji: string; userIds: string[] }>;
+  reactions?: { emoji: string; userIds: string[] }[];
   createdAt?: Date;
   editedAt?: Date;
   deletedAt?: Date;

@@ -55,6 +55,16 @@ import MessageBubble from '../src/_components/MessageBubble';
 import ShareModal from '../src/_components/ShareModal';
 import StoriesViewer from '../src/_components/StoriesViewer';
 import EmojiPicker from 'rn-emoji-keyboard';
+// Missing exports from messaging helpers that were used in dm.tsx
+import { 
+  sendMediaMessage as sendMediaMessageApi,
+  extensionFromFileUri 
+} from '../lib/firebaseHelpers/messages';
+import { uploadMedia } from '../lib/firebaseHelpers/core';
+import { 
+  subscribeToUserStatus as socketSubscribeToUserStatus,
+  requestUserStatus
+} from '../src/_services/socketService';
 
 const REACTIONS = ['❤️', '🙌', '🔥', '👏', '😢', '😍', '😮'];
 
@@ -71,18 +81,6 @@ function useUserProfile(uid: string | null) {
   }, [uid]);
   return { profile, loading };
 }
-
-// Missing exports from messaging helpers that were used in dm.tsx
-import { 
-  uploadMedia, 
-  sendMediaMessage as sendMediaMessageApi,
-  extensionFromFileUri 
-} from '../lib/firebaseHelpers/messages';
-
-import { 
-  subscribeToUserStatus as socketSubscribeToUserStatus,
-  requestUserStatus
-} from '../src/_services/socketService';
 
 const subscribeToUserPresence = (uid: string, callback: (presence: any) => void) => {
   if (!uid) return () => {};
@@ -374,7 +372,13 @@ export default function DM() {
         );
         if (res?.success) {
           const finalMsg = normalizeMessage((res as any).data || (res as any).message);
-          setMessages(prev => prev.map(m => m.id === tempId ? { ...finalMsg, sent: true } : m));
+          setMessages(prev => {
+            const alreadyFinalized = prev.some(m => String(m.id) === String(finalMsg.id) && m.tempOrigin !== true);
+            if (alreadyFinalized) {
+              return prev.filter(m => String(m.id) !== String(tempId));
+            }
+            return prev.map(m => String(m.id) === String(tempId) ? { ...finalMsg, sent: true } : m);
+          });
           return;
         }
       }
@@ -446,7 +450,10 @@ export default function DM() {
 
         
         setMessages(prev => {
-          // Remove temp, add final, then dedupe and sort
+          const alreadyFinalized = prev.some(m => String(m.id) === String(finalized.id) && m.tempOrigin !== true);
+          if (alreadyFinalized) {
+            return prev.filter(m => String(m.id) !== String(tempId));
+          }
           const filtered = prev.filter(m => String(m.id) !== String(tempId) && String(m.id) !== String(finalized.id));
           return mergeMessages(filtered, [finalized]);
         });
@@ -469,14 +476,23 @@ export default function DM() {
   const handlePickImageWrapper = async () => {
     const res = await handlePickImage();
     if (res) {
-      const mType = (res.type === 'video' || (res as any).mediaType === 'video') ? 'video' : 'image';
+      const isVideo = String(res.type).toLowerCase() === 'video' || 
+                      String((res as any).mediaType).toLowerCase() === 'video' ||
+                      /\.(mp4|mov|m4v|webm|3gp)(\?|$)/i.test(res.uri);
+      const mType = isVideo ? 'video' : 'image';
       await sendMediaMessage(mType, res.uri);
     }
   };
 
   const handleLaunchCameraWrapper = async () => {
     const res = await handleLaunchCamera();
-    if (res) await sendMediaMessage('image', res.uri);
+    if (res) {
+      const isVideo = String(res.type).toLowerCase() === 'video' || 
+                      String((res as any).mediaType).toLowerCase() === 'video' ||
+                      /\.(mp4|mov|m4v|webm|3gp)(\?|$)/i.test(res.uri);
+      const mType = isVideo ? 'video' : 'image';
+      await sendMediaMessage(mType, res.uri);
+    }
   };
 
   const handleReaction = async (itemOrEmoji: any, emojiStr?: string) => {
@@ -629,7 +645,7 @@ export default function DM() {
         ref={flatListRef}
         style={{ flex: 1 }}
         data={messagesWithSeparators}
-        keyExtractor={(item) => String(item.id)}
+        keyExtractor={(item) => String(item.tempId || item.id)}
         renderItem={renderChatItem}
         inverted
         onEndReached={loadMore}

@@ -733,17 +733,42 @@ export async function uploadMedia(
 
       if (mediaType === 'image') {
         try {
-          const ImageManipulator = require('expo-image-manipulator');
-          console.log('[uploadMedia] 🔄 Compressing image before upload...');
-          const manipResult = await ImageManipulator.manipulateAsync(
-            finalUri,
-            [{ resize: { width: 1080 } }], // Resize to 1080px width (Instagram standard)
-            { compress: 0.7, format: ImageManipulator.SaveFormat.JPEG }
-          );
-          finalUri = manipResult.uri;
-          console.log('[uploadMedia] ✅ Image compressed successfully.');
-        } catch (manipErr) {
-          console.warn('[uploadMedia] Image compression failed, using original:', manipErr);
+          if (typeof finalUri === 'string' && /\.(mp4|mov|m4v|webm|3gp)(\?|$)/i.test(finalUri)) {
+            console.warn('[uploadMedia] Skipping image compression because file is a video:', finalUri);
+          } else {
+            console.log('[uploadMedia] 🔄 Compressing image using react-native-compressor...');
+            const { Image } = require('react-native-compressor');
+            if (Image) {
+              const compressed = await Image.compress(finalUri, {
+                maxWidth: 1080,
+                quality: 0.7,
+                input: 'uri'
+              });
+              if (compressed) {
+                finalUri = compressed;
+                console.log('[uploadMedia] ✅ Image compressed successfully using react-native-compressor:', finalUri);
+              }
+            }
+          }
+        } catch (compressorErr) {
+          console.warn('[uploadMedia] react-native-compressor failed, falling back to expo-image-manipulator...');
+          try {
+            if (typeof finalUri === 'string' && /\.(mp4|mov|m4v|webm|3gp)(\?|$)/i.test(finalUri)) {
+              console.warn('[uploadMedia] Skipping fallback image manipulation because file is a video:', finalUri);
+            } else {
+              const ImageManipulator = require('expo-image-manipulator');
+              console.log('[uploadMedia] 🔄 Compressing image using expo-image-manipulator...');
+              const manipResult = await ImageManipulator.manipulateAsync(
+                finalUri,
+                [{ resize: { width: 1080 } }], // Resize to 1080px width (Instagram standard)
+                { compress: 0.7, format: ImageManipulator.SaveFormat.JPEG }
+              );
+              finalUri = manipResult.uri;
+              console.log('[uploadMedia] ✅ Image compressed successfully using expo-image-manipulator.');
+            }
+          } catch (manipErr) {
+            console.warn('[uploadMedia] Image compression failed entirely, using original:', manipErr);
+          }
         }
       }
 
@@ -929,17 +954,42 @@ async function uploadStoryMedia(uri: string, userId: string, mediaType: 'image' 
 
     if (mediaType === 'image') {
       try {
-        const ImageManipulator = require('expo-image-manipulator');
-        console.log('[uploadStoryMedia] 🔄 Compressing story image before upload...');
-        const manipResult = await ImageManipulator.manipulateAsync(
-          finalUri,
-          [{ resize: { width: 1080 } }], // Resize to 1080px width
-          { compress: 0.7, format: ImageManipulator.SaveFormat.JPEG }
-        );
-        finalUri = manipResult.uri;
-        console.log('[uploadStoryMedia] ✅ Story image compressed successfully.');
-      } catch (manipErr) {
-        console.warn('[uploadStoryMedia] Story image compression failed, using original:', manipErr);
+        if (typeof finalUri === 'string' && /\.(mp4|mov|m4v|webm|3gp)(\?|$)/i.test(finalUri)) {
+          console.warn('[uploadStoryMedia] Skipping image compression because story file is a video:', finalUri);
+        } else {
+          console.log('[uploadStoryMedia] 🔄 Compressing story image using react-native-compressor...');
+          const { Image } = require('react-native-compressor');
+          if (Image) {
+            const compressed = await Image.compress(finalUri, {
+              maxWidth: 1080,
+              quality: 0.7,
+              input: 'uri'
+            });
+            if (compressed) {
+              finalUri = compressed;
+              console.log('[uploadStoryMedia] ✅ Story image compressed successfully using react-native-compressor:', finalUri);
+            }
+          }
+        }
+      } catch (compressorErr) {
+        console.warn('[uploadStoryMedia] react-native-compressor failed, falling back to expo-image-manipulator...');
+        try {
+          if (typeof finalUri === 'string' && /\.(mp4|mov|m4v|webm|3gp)(\?|$)/i.test(finalUri)) {
+            console.warn('[uploadStoryMedia] Skipping fallback story image manipulation because file is a video:', finalUri);
+          } else {
+            const ImageManipulator = require('expo-image-manipulator');
+            console.log('[uploadStoryMedia] 🔄 Compressing story image using expo-image-manipulator...');
+            const manipResult = await ImageManipulator.manipulateAsync(
+              finalUri,
+              [{ resize: { width: 1080 } }], // Resize to 1080px width
+              { compress: 0.7, format: ImageManipulator.SaveFormat.JPEG }
+            );
+            finalUri = manipResult.uri;
+            console.log('[uploadStoryMedia] ✅ Story image compressed successfully using expo-image-manipulator.');
+          }
+        } catch (manipErr) {
+          console.warn('[uploadStoryMedia] Story image compression failed entirely, using original:', manipErr);
+        }
       }
     }
 

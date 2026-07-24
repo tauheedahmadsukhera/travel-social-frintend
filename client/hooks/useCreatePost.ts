@@ -313,7 +313,7 @@ export const useCreatePost = (params: any = {}) => {
         return;
       }
       const result = await ImagePicker.launchCameraAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.All,
+        mediaTypes: ['images', 'videos'],
         allowsEditing: false,
         quality: 1,
         videoMaxDuration: 2520, // 42 minutes in seconds

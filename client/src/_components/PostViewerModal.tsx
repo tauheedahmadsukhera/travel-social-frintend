@@ -3,11 +3,11 @@ import * as Haptics from 'expo-haptics';
 import React, { useEffect, useRef } from 'react';
 import { Dimensions, Modal, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
-
-const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import PostCard from './PostCard';
 import { feedEventEmitter } from '../../lib/feedEventEmitter';
+
+const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 interface Post {
   id: string;

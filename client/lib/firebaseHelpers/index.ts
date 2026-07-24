@@ -1,4 +1,6 @@
 // Export all helpers from individual modules
+import firebaseHelpersDefault from './core';
+
 export * from './archive';
 export * from './comments';
 export * from './conversation';
@@ -13,8 +15,6 @@ export * from './post';
 export { updateUserSectionsOrder } from './updateUserSectionsOrder';
 export * from './getUserSectionsSorted';
 export * from './user';
-
-import firebaseHelpersDefault from './core';
 
 export default firebaseHelpersDefault;
 

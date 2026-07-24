@@ -6,7 +6,7 @@ export type Highlight = {
   id: string;
   title: string;
   coverImage: string;
-  stories: Array<{ id: string; image: string; }>; // Minimal story type
+  stories: { id: string; image: string; }[]; // Minimal story type
 };
 
 interface HighlightCarouselProps {

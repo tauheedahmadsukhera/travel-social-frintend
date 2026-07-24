@@ -19,7 +19,7 @@ export default function ResetOTPScreen() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   
-  const inputRefs = useRef<Array<TextInput | null>>([]);
+  const inputRefs = useRef<(TextInput | null)[]>([]);
 
   const handleOtpChange = (value: string, index: number) => {
     if (value.length > 1) {

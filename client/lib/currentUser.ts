@@ -1,7 +1,7 @@
 import AsyncStorage from '@/lib/storage';
 import { apiService } from '@/src/_services/apiService';
 
-function uniqueNonEmpty(values: Array<string | null | undefined>): string[] {
+function uniqueNonEmpty(values: (string | null | undefined)[]): string[] {
   const seen = new Set<string>();
   for (const v of values) {
     const value = typeof v === 'string' ? v.trim() : '';
@@ -73,7 +73,7 @@ async function persistCanonicalIds(canonicalId: string, firebaseUid?: string | n
     ? firebaseUid.trim()
     : null;
 
-  const ops: Array<[string, string]> = [
+  const ops: [string, string][] = [
     ['userId', canonicalId],
     ['uid', normalizedFirebaseUid || canonicalId],
   ];

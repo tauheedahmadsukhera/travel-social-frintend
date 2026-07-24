@@ -32,9 +32,6 @@ import { mapService } from '../services';
 import { getCachedData, setCachedData, useNetworkStatus, useOfflineBanner } from '../hooks/useOffline';
 import { OfflineBanner } from '@/src/_components/OfflineBanner';
 
-const { width } = Dimensions.get('window');
-const STAMP_SIZE = Math.min(220, width - 72);
-
 import { PassportStamp } from '@/src/_components/PassportStamp';
 import { toDate, formatDisplayDate, getRelativeTime } from '../lib/utils/date';
 import { StampDeleteModal } from '@/src/_components/passport/StampDeleteModal';
@@ -49,6 +46,9 @@ import {
   isReadableLocationLabel,
   getSuggestionLocationLabel,
 } from '@/src/utils/passportUtils';
+
+const { width } = Dimensions.get('window');
+const STAMP_SIZE = Math.min(220, width - 72);
 
 const STAMP_W = width - 48;
 const STAMP_H = STAMP_W * 0.76;

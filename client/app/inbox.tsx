@@ -50,7 +50,7 @@ function Inbox() {
       }
 
       const result = await ImagePicker.launchCameraAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.All,
+        mediaTypes: ['images', 'videos'],
         allowsEditing: false,
         quality: 0.7,
       });
@@ -522,7 +522,7 @@ function Inbox() {
             cachedMap = raw ? (JSON.parse(raw) || {}) : {};
           } catch { }
 
-          const fromCache: Array<readonly [string, any]> = [];
+          const fromCache: (readonly [string, any])[] = [];
           const stillMissing: string[] = [];
           for (const id of missing) {
             const cached = cachedMap?.[String(id)];
@@ -539,7 +539,7 @@ function Inbox() {
           }
 
           // 2) Fetch remaining (cap concurrency by chunking)
-          const results: Array<readonly [string, any]> = [];
+          const results: (readonly [string, any])[] = [];
           const chunkSize = 12;
           for (let i = 0; i < stillMissing.length; i += chunkSize) {
             const chunk = stillMissing.slice(i, i + chunkSize);

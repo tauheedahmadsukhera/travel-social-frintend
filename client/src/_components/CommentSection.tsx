@@ -112,7 +112,7 @@ export const CommentSection: React.FC<CommentSectionProps> = ({
     const resolveUser = async () => {
       try {
         const uidFromAuth = await getAuthenticatedUserId();
-        const resolvedId = uidFromAuth || (typeof userProp === 'string' ? userProp : (userProp?.uid || userProp?._id || userFromContext?.uid || userFromContext?._id || ''));
+        const resolvedId = uidFromAuth || (typeof userProp === 'string' ? userProp : ((userProp as any)?.uid || (userProp as any)?._id || (userFromContext as any)?.uid || (userFromContext as any)?._id || ''));
         setResolvedUserId(resolvedId);
 
         if (resolvedId) {

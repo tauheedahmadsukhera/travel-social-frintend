@@ -35,7 +35,7 @@ export function useDMMedia() {
       return null;
     }
     const res = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.All,
+      mediaTypes: ['images', 'videos'],
       allowsEditing: false,
       quality: 0.7,
       videoExportPreset: ImagePicker.VideoExportPreset.H264_1280x720,
@@ -56,7 +56,7 @@ export function useDMMedia() {
       return null;
     }
     const res = await ImagePicker.launchCameraAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.All,
+      mediaTypes: ['images', 'videos'],
       allowsEditing: false,
       quality: 0.7,
       videoExportPreset: ImagePicker.VideoExportPreset.H264_1280x720,

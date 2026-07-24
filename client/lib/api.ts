@@ -1,11 +1,11 @@
 import Constants from 'expo-constants';
 
+import { getAPIBaseURL as getBaseUrl } from '../config/environment';
+
 function normalizeApiBase(url: string): string {
   const trimmed = url.replace(/\/+$/, '');
   return trimmed.endsWith('/api') ? trimmed : `${trimmed}/api`;
 }
-
-import { getAPIBaseURL as getBaseUrl } from '../config/environment';
 
 function getAPIBaseURL(): string {
   return getBaseUrl();

@@ -13,13 +13,15 @@ import { PostLocationModal } from '@/src/_components/PostLocationModal';
 import { useUser } from '@/src/_components/UserContext';
 import PostCard from '@/src/_components/PostCard';
 
-const MapView = Platform.OS === 'web' ? null : require('react-native-maps').default;
-const Marker = Platform.OS === 'web' ? null : require('react-native-maps').Marker;
-
 
 import { getAllPosts } from '../lib/firebaseHelpers';
 import { apiService } from '@/src/_services/apiService';
 import { getOptimizedImageUrl } from '../lib/imageHelpers';
+
+import { PostMarker, LiveStreamMarker } from '@/src/_components/map/MapMarkers';
+
+const MapView = Platform.OS === 'web' ? null : require('react-native-maps').default;
+const Marker = Platform.OS === 'web' ? null : require('react-native-maps').Marker;
 
 type Region = {
   latitude: number;
@@ -27,8 +29,6 @@ type Region = {
   latitudeDelta: number;
   longitudeDelta: number;
 };
-
-import { PostMarker, LiveStreamMarker } from '@/src/_components/map/MapMarkers';
 
 const IMAGE_PLACEHOLDER = 'L5H2EC=PM+yV0g-mq.wG9c010J}I';
 
@@ -507,13 +507,13 @@ export default function MapScreen() {
     // Dynamic clustering threshold based on zoom level
     const clusterRadius = delta * 0.12; // group items within 12% of vertical screen span
 
-    const clusters: Array<{
+    const clusters: {
       id: string;
       latitude: number;
       longitude: number;
       posts: PostType[];
       count: number;
-    }> = [];
+    }[] = [];
 
     list.forEach((item) => {
       let matchedCluster = clusters.find((c) => {

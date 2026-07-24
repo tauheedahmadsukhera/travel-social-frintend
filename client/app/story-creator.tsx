@@ -467,7 +467,7 @@ export default function StoryCreatorScreen() {
             const perm = await ImagePicker.requestCameraPermissionsAsync();
             if (!perm.granted) return;
             const result = await ImagePicker.launchCameraAsync({
-                mediaTypes: ImagePicker.MediaTypeOptions.All,
+                mediaTypes: ['images', 'videos'],
                 allowsEditing: false,
                 quality: 0.9,
                 videoMaxDuration: 720,

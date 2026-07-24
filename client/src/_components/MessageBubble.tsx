@@ -820,7 +820,6 @@ function MessageBubbleInner({
                 useNativeControls
                 isLooping={false}
                 onLoad={() => setVideoLoaded(true)}
-                status={{ shouldPlay: true }}
               />
             </View>
           </Modal>

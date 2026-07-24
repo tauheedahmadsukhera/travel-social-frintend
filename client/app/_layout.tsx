@@ -1,13 +1,4 @@
 // WeakRef Polyfill for Hermes
-if (typeof global === 'object' && typeof global.WeakRef === 'undefined') {
-  // @ts-ignore
-  global.WeakRef = class WeakRef {
-    target: any;
-    constructor(target: any) { this.target = target; }
-    deref() { return this.target; }
-  };
-}
-
 import { Ionicons } from '@expo/vector-icons';
 import * as Font from 'expo-font';
 import { StatusBar } from 'expo-status-bar';
@@ -29,6 +20,15 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useAppStore } from '@/store/useAppStore';
 // Load location service (foreground passport checks + optional TaskManager shim)
 import '../services/locationService';
+
+if (typeof global === 'object' && typeof global.WeakRef === 'undefined') {
+  // @ts-ignore
+  global.WeakRef = class WeakRef {
+    target: any;
+    constructor(target: any) { this.target = target; }
+    deref() { return this.target; }
+  };
+}
 
 let setupNotificationListeners: any = () => {};
 let initializeBackend: any = () => Promise.resolve();

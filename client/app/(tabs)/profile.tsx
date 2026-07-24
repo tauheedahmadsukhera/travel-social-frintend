@@ -68,6 +68,9 @@ import ProfileGrid from '@/src/features/profile/components/ProfileGrid';
 import { useProfileActions } from '@/hooks/useProfileActions';
 import { useProfileData } from '@/src/features/profile/hooks/useProfileData';
 
+// Default avatar URL
+import { DEFAULT_AVATAR_URL } from '@/lib/api';
+
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const isSmallDevice = SCREEN_HEIGHT < 700;
 
@@ -84,9 +87,6 @@ const responsiveValues = {
 
 const MapView = Platform.OS === 'web' ? null : require('react-native-maps').default;
 const Marker = Platform.OS === 'web' ? null : require('react-native-maps').Marker;
-
-// Default avatar URL
-import { DEFAULT_AVATAR_URL } from '@/lib/api';
 const DEFAULT_IMAGE_URL = DEFAULT_AVATAR_URL;
 const DEFAULT_AVATAR_SOURCE = { uri: DEFAULT_AVATAR_URL };
 
@@ -580,7 +580,7 @@ export default function Profile({ userIdProp }: any) {
       // Pick image
       const picker = require('expo-image-picker');
       const result = await picker.launchImageLibraryAsync({
-        mediaTypes: picker.MediaTypeOptions.Images,
+        mediaTypes: ['images'],
         allowsEditing: true,
         aspect: [1, 1],
         quality: 0.8,

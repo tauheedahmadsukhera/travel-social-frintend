@@ -4,10 +4,10 @@
  */
 
 import AsyncStorage from '@/lib/storage';
+import { setCachedData as _setCachedData } from '../hooks/useOffline';
 
 export type { CacheEntry as _DeprecatedCacheEntry } from '../hooks/useOffline';
 export { getCachedData, setCachedData, fetchWithCache } from '../hooks/useOffline';
-import { setCachedData as _setCachedData } from '../hooks/useOffline';
 
 export interface CacheOptions {
   ttl?: number;

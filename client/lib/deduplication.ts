@@ -77,7 +77,7 @@ export async function deduplicatedFetch<T>(
  * Batch fetch multiple items, deduplicating within the batch
  */
 export async function batchFetch<T>(
-  items: Array<{ key: string; fetchFn: () => Promise<T> }>,
+  items: { key: string; fetchFn: () => Promise<T> }[],
   options: { dedupeWindow?: number; cacheDuration?: number } = {}
 ): Promise<T[]> {
   const results = await Promise.all(

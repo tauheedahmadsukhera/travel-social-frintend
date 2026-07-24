@@ -1,5 +1,7 @@
 import { DEFAULT_AVATAR_URL } from '@/lib/api';
 import { normalizeAvatarUrl } from '../utils/media';
+
+import { getUserHighlights as getUserHighlightsCore, getHighlightStories as getHighlightStoriesCore } from './core';
 /**
  * Check if a user is an approved follower
  */
@@ -12,8 +14,6 @@ export async function isApprovedFollower(userId: string, checkUserId: string) {
     return false;
   }
 }
-
-import { getUserHighlights as getUserHighlightsCore, getHighlightStories as getHighlightStoriesCore } from './core';
 
 export { getUserHighlightsCore as getUserHighlights, getHighlightStoriesCore as getHighlightStories };
 

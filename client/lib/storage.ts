@@ -217,7 +217,7 @@ const storage = {
     }
   },
 
-  multiSet: async (keyValuePairs: Array<[string, string]>): Promise<void> => {
+  multiSet: async (keyValuePairs: [string, string][]): Promise<void> => {
     const securePairs = keyValuePairs.filter(([k]) => SECURE_KEYS.has(k));
     const normalPairs = keyValuePairs.filter(([k]) => !SECURE_KEYS.has(k));
     await Promise.all(securePairs.map(([k, v]) => secureSet(k, v)));
@@ -235,8 +235,8 @@ const storage = {
     }
   },
 
-  multiGet: async (keys: string[]): Promise<Array<[string, string | null]>> => {
-    const results: Array<[string, string | null]> = [];
+  multiGet: async (keys: string[]): Promise<[string, string | null][]> => {
+    const results: [string, string | null][] = [];
     for (const key of keys) {
       results.push([key, await storage.getItem(key)]);
     }
@@ -247,7 +247,7 @@ const storage = {
     await Promise.all(keys.map((k) => storage.removeItem(k)));
   },
 
-  multiMerge: async (keyValuePairs: Array<[string, string]>): Promise<void> => {
+  multiMerge: async (keyValuePairs: [string, string][]): Promise<void> => {
     try {
       await AsyncStorage.multiMerge(keyValuePairs);
     } catch (e) {

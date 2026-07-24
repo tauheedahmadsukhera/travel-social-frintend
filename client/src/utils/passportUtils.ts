@@ -59,7 +59,7 @@ export const getSuggestionLocationLabel = (suggestion: any): string => {
   if (!suggestion) return 'this location';
 
   const main = suggestion?.mainSuggestion || {};
-  const candidates: Array<string | undefined> = [
+  const candidates: (string | undefined)[] = [
     main?.name,
     main?.place,
     main?.placeName,
