@@ -34,13 +34,32 @@ export function useDM(conversationIdParam: string | null, otherUserId: string | 
   
   const [conversationId, setConversationId] = useState<string | null>(resolvedConvoId);
   
+  const conversationIdRef = useRef<string | null>(resolvedConvoId);
+  useEffect(() => {
+    conversationIdRef.current = conversationId;
+  }, [conversationId]);
+
   // Initialize from memory cache for instant UI
-  const [messages, setMessages] = useState<any[]>(() => {
+  const [messages, setMessagesRaw] = useState<any[]>(() => {
     if (resolvedConvoId && messageCache[resolvedConvoId]) {
       return messageCache[resolvedConvoId];
     }
     return [];
   });
+
+  const setMessages = useCallback((val: any[] | ((prev: any[]) => any[])) => {
+    setMessagesRaw((prev) => {
+      const next = typeof val === 'function' ? val(prev) : val;
+      if (Array.isArray(next)) {
+        const cid = conversationIdRef.current || resolvedConvoId;
+        if (cid) {
+          setCachedMessages(cid, next.slice(0, 40));
+          AsyncStorage.setItem(`messages_cache_${cid}`, JSON.stringify(next.slice(0, 50))).catch(() => {});
+        }
+      }
+      return next;
+    });
+  }, [resolvedConvoId, setCachedMessages]);
 
   const [loading, setLoading] = useState(() => {
     if (!resolvedConvoId) return true;

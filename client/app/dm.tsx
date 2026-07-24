@@ -396,7 +396,6 @@ export default function DM() {
       Alert.alert('Error', 'User ID not found. Please log in again.');
       return;
     }
-    if (sending) return;
     
     // We can proceed even if conversationId is null
     const msgText = input.trim();
