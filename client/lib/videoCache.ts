@@ -2,10 +2,10 @@ import * as FileSystem from 'expo-file-system';
 import CryptoJS from 'crypto-js';
 
 const CACHE_FOLDER = FileSystem.cacheDirectory + 'video_cache/';
+const MAX_CACHE_BYTES = 200 * 1024 * 1024; // 200 MB hard limit
 
-/**
- * Ensures that the video cache folder exists in the filesystem.
- */
+// ─── Helpers ────────────────────────────────────────────────────────────────
+
 async function ensureCacheFolderExists() {
   const info = await FileSystem.getInfoAsync(CACHE_FOLDER);
   if (!info.exists) {
@@ -13,95 +13,115 @@ async function ensureCacheFolderExists() {
   }
 }
 
-/**
- * Returns a unique local path for a cached video URL.
- */
 export function getLocalCachePath(url: string): string {
   const hash = CryptoJS.SHA1(url).toString();
-  // Keep original extension if possible
   const ext = url.split('.').pop()?.split('?')[0] || 'mp4';
   return `${CACHE_FOLDER}${hash}.${ext}`;
 }
 
+// ─── LRU Eviction ───────────────────────────────────────────────────────────
+
 /**
- * Safely resolves a remote video URL to a cached local file URI.
- * If the file is not cached yet, it returns the original URL and triggers a background download.
+ * Deletes oldest cached files when total size exceeds MAX_CACHE_BYTES.
+ * Keeps 80% headroom after eviction to avoid constant thrashing.
+ */
+async function evictIfNeeded() {
+  try {
+    const dirInfo = await FileSystem.readDirectoryAsync(CACHE_FOLDER);
+    const fileInfos: { uri: string; size: number; modificationTime: number }[] = [];
+
+    for (const name of dirInfo) {
+      const uri = CACHE_FOLDER + name;
+      const info = await FileSystem.getInfoAsync(uri, { size: true, md5: false });
+      if (info.exists && !info.isDirectory) {
+        fileInfos.push({
+          uri,
+          size: (info as any).size || 0,
+          modificationTime: (info as any).modificationTime || 0,
+        });
+      }
+    }
+
+    const totalBytes = fileInfos.reduce((sum, f) => sum + f.size, 0);
+    if (totalBytes <= MAX_CACHE_BYTES) return;
+
+    fileInfos.sort((a, b) => a.modificationTime - b.modificationTime); // oldest first
+    let currentBytes = totalBytes;
+    for (const file of fileInfos) {
+      if (currentBytes <= MAX_CACHE_BYTES * 0.8) break;
+      await FileSystem.deleteAsync(file.uri, { idempotent: true });
+      currentBytes -= file.size;
+      if (__DEV__) {
+        console.log(`[videoCache] 🗑️ Evicted: ${file.uri} (${(file.size / 1024 / 1024).toFixed(1)}MB)`);
+      }
+    }
+  } catch {
+    // Non-critical — eviction failure must not block playback
+  }
+}
+
+// ─── Public API ─────────────────────────────────────────────────────────────
+
+/**
+ * Resolves a remote URL to a cached local file URI.
+ * Returns the original URL immediately; caching happens in the background.
  */
 export async function getCachedVideoUri(url: string): Promise<string> {
-  if (!url || typeof url !== 'string' || !url.startsWith('http')) {
-    return url;
-  }
-
+  if (!url || !url.startsWith('http')) return url;
   try {
     await ensureCacheFolderExists();
     const localUri = getLocalCachePath(url);
     const fileInfo = await FileSystem.getInfoAsync(localUri);
-
-    if (fileInfo.exists) {
-      return localUri;
-    }
-
-    // Trigger background prefetch without blocking the current play action
+    if (fileInfo.exists) return localUri;
     prefetchVideo(url).catch(() => {});
     return url;
-  } catch (err) {
-    console.warn('[videoCache] Failed resolving cached URI, using original:', err);
+  } catch {
     return url;
   }
 }
 
 /**
- * Downloads a video to the local cache directory.
+ * Downloads a video file to local cache and respects the 200 MB size limit.
  */
 export async function prefetchVideo(url: string): Promise<string | null> {
-  if (!url || typeof url !== 'string' || !url.startsWith('http')) {
-    return null;
-  }
-
+  if (!url || !url.startsWith('http')) return null;
   try {
     await ensureCacheFolderExists();
     const localUri = getLocalCachePath(url);
     const fileInfo = await FileSystem.getInfoAsync(localUri);
+    if (fileInfo.exists) return localUri;
 
-    if (fileInfo.exists) {
-      return localUri;
-    }
-
-    console.log(`[videoCache] 📥 Prefetching video: ${url}`);
-    const downloadResult = await FileSystem.downloadAsync(url, localUri);
-    console.log(`[videoCache] ✅ Prefetch finished: ${downloadResult.uri}`);
-    return downloadResult.uri;
+    await evictIfNeeded();
+    if (__DEV__) console.log(`[videoCache] 📥 Prefetching: ${url}`);
+    const result = await FileSystem.downloadAsync(url, localUri);
+    if (__DEV__) console.log(`[videoCache] ✅ Cached: ${result.uri}`);
+    return result.uri;
   } catch (err) {
-    console.warn(`[videoCache] ❌ Failed to prefetch video ${url}:`, err);
+    if (__DEV__) console.warn(`[videoCache] ❌ Prefetch failed ${url}:`, err);
     return null;
   }
 }
 
 /**
- * Pre-downloads a list of video URLs sequentially.
+ * Silently pre-downloads the first N video URLs from a list.
  */
-export async function preloadVideos(urls: string[], limit: number = 3) {
-  const targets = urls.filter(Boolean).slice(0, limit);
-  for (const url of targets) {
-    try {
-      await prefetchVideo(url);
-    } catch (err) {
-      // Continue next prefetch even if one fails
-    }
+export async function preloadVideos(urls: string[], limit = 3) {
+  for (const url of urls.filter(Boolean).slice(0, limit)) {
+    await prefetchVideo(url).catch(() => {});
   }
 }
 
 /**
- * Clears the video cache directory.
+ * Deletes the entire video cache directory.
  */
 export async function clearVideoCache() {
   try {
     const info = await FileSystem.getInfoAsync(CACHE_FOLDER);
     if (info.exists) {
       await FileSystem.deleteAsync(CACHE_FOLDER, { idempotent: true });
-      console.log('[videoCache] Cache folder cleared successfully.');
+      if (__DEV__) console.log('[videoCache] Cache cleared.');
     }
   } catch (err) {
-    console.warn('[videoCache] Failed to clear video cache:', err);
+    if (__DEV__) console.warn('[videoCache] Failed to clear cache:', err);
   }
 }

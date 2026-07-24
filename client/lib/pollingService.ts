@@ -9,6 +9,16 @@
  */
 
 import { apiService } from '@/src/_services/apiService';
+import { AppState, AppStateStatus } from 'react-native';
+
+// ─── AppState-aware pause/resume ─────────────────────────────────────────────
+let _isAppActive = true;
+
+AppState.addEventListener('change', (nextState: AppStateStatus) => {
+  _isAppActive = nextState === 'active';
+});
+
+const activePollers = new Map<string, PollingService>();
 
 export interface PollingConfig {
   interval: number; // milliseconds
@@ -27,7 +37,7 @@ export interface PollingService {
   retries: number;
 }
 
-const activePollers = new Map<string, PollingService>();
+
 
 /**
  * Start polling for conversations (replace onSnapshot)
@@ -41,6 +51,7 @@ export async function startConversationsPolling(
   const pollerId = `conversations-${userId}`;
 
   const poll = async () => {
+    if (!_isAppActive) return; // ⏸ Skip polling when app is in background
     try {
       if (__DEV__) console.log(`🔄 Polling conversations for userId: ${userId}`);
       
@@ -130,6 +141,7 @@ export async function startMessagesPolling(
   const pollerId = `messages-${conversationId}`;
 
   const poll = async () => {
+    if (!_isAppActive) return; // ⏸ Skip polling when app is in background
     try {
       const response = await apiService.get(`/conversations/${conversationId}/messages`);
       

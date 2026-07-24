@@ -472,9 +472,9 @@ export default function StoriesViewer({ stories, onClose, initialIndex = 0, isHi
   }, [currentUser?.uid, currentUser?.photoURL]);
 
   useEffect(() => {
-    console.log('[StoriesViewer] 🚀 Component MOUNTED! stories count:', stories?.length, 'initialIndex:', initialIndex);
+    if (__DEV__) console.log('[StoriesViewer] 🚀 Component MOUNTED! stories count:', stories?.length, 'initialIndex:', initialIndex);
     return () => {
-      console.log('[StoriesViewer] 💀 Component UNMOUNTED!');
+      if (__DEV__) console.log('[StoriesViewer] 💀 Component UNMOUNTED!');
     };
   }, []);
 

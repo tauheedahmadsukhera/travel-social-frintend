@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { View, Dimensions, StyleSheet, InteractionManager, Alert, Modal, Pressable, Platform, Text, Animated, PanResponder, TouchableOpacity, Keyboard, ScrollView } from "react-native";
+import AppErrorBoundary from './AppErrorBoundary';
 import { Ionicons, Feather } from "@expo/vector-icons";
 import { useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
@@ -734,4 +735,11 @@ const PostCard: React.FC<PostCardProps> = ({
   );
 };
 
-export default React.memo(PostCard);
+const PostCardWithBoundary = (props: any) => (
+  <AppErrorBoundary fallback={<View style={{ height: 8, backgroundColor: '#f8f8f8' }} />}>
+    <PostCardMemo {...props} />
+  </AppErrorBoundary>
+);
+
+const PostCardMemo = React.memo(PostCard);
+export default PostCardWithBoundary;

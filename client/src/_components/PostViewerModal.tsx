@@ -151,7 +151,7 @@ export default function PostViewerModal({
               post={item}
               currentUser={authUser}
               showMenu={true}
-              onCommentPress={(pid, avatar) => {
+              onCommentPress={(pid: string, avatar: string) => {
                 setCommentModalPostId(pid);
                 setCommentModalAvatar(avatar);
                 setCommentModalVisible(true);

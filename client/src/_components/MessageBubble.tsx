@@ -151,8 +151,8 @@ function MessageBubbleInner({
     }
   }, [resolvedMediaUrl, resolvedMediaType]);
 
-  // DEBUG LOG
-  if (sharedPost || sharedStory) {
+  // DEBUG LOG — dev only
+  if (__DEV__ && (sharedPost || sharedStory)) {
     console.log(`[MessageBubble] Rendering shared content: id=${id}, type=${resolvedMediaType}, hasPost=${!!sharedPost}, hasStory=${!!sharedStory}`);
   }
 
