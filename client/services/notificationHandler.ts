@@ -109,7 +109,9 @@ export function setupNotificationListeners() {
           console.warn('[NotificationHandler] No EAS Project ID found, using legacy token fetch');
         }
 
-        const tokenData = await Notifications.getExpoPushTokenAsync({ projectId });
+        const tokenData = projectId
+          ? await Notifications.getExpoPushTokenAsync({ projectId })
+          : await Notifications.getExpoPushTokenAsync();
         const token = tokenData.data;
         
         console.log('🎫 Expo Push Token:', token);
