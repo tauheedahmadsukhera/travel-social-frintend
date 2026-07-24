@@ -199,28 +199,24 @@ export function useDM(conversationIdParam: string | null, otherUserId: string | 
     
     const fetchAll = async () => {
       try {
-        const keysToFetch = getAllCacheKeys();
-        if (keysToFetch.length === 0) return;
+        const primaryKey = conversationId || canonicalPairKey || resolvedConvoId || directPairKey;
+        if (!primaryKey) return;
 
-        // PARALLEL FETCH: Fetch all possible ID aliases at once instead of sequential 300ms delays
-        const results = await Promise.allSettled(
-          keysToFetch.map(k => fetchMessages(k))
-        );
+        // SINGLE DB QUERY: Query primary key first to keep DB load minimal
+        let res = await fetchMessages(primaryKey).catch(() => null);
+        let list = extractMessages(res);
 
-        if (cancelled) return;
-
-        let fetchedList: any[] = [];
-        for (const r of results) {
-          if (r.status === 'fulfilled' && r.value) {
-            const list = extractMessages(r.value);
-            if (list.length > 0) {
-              fetchedList = mergeMessages(fetchedList, list);
-            }
+        // Fallback to canonical pair key only if primary key returned empty
+        if (list.length === 0 && canonicalPairKey && primaryKey !== canonicalPairKey) {
+          const fallbackRes = await fetchMessages(canonicalPairKey).catch(() => null);
+          const fallbackList = extractMessages(fallbackRes);
+          if (fallbackList.length > 0) {
+            list = fallbackList;
           }
         }
 
-        if (!cancelled && fetchedList.length > 0) {
-          const normalized = fetchedList.map((m: any) => normalizeMessage(m));
+        if (!cancelled && list.length > 0) {
+          const normalized = list.map((m: any) => normalizeMessage(m));
           setMessages(prev => mergeMessages(prev, normalized));
         }
       } catch (error) {
