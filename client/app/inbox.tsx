@@ -8,21 +8,21 @@ import AsyncStorage from '@/lib/storage';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Image } from 'react-native';
 import { Image as ExpoImage } from 'expo-image';
-// import { useAuthLoading, useUser } from '@/src/_components/UserContext';
+// import { useAuthLoading, useUser } from '@/src/components/UserContext';
 // import {} from '../lib/firebaseHelpers';
 // @ts-ignore
 import { useInboxRealtime } from '../hooks/useInboxRealtime';
 import { useAppStore } from '@/store/useAppStore';
 import { deleteConversation } from '../lib/firebaseHelpers/archive';
-import { apiService } from '@/src/_services/apiService';
+import { apiService } from '@/src/services/apiService';
 import { DEFAULT_AVATAR_URL } from '@/lib/api';
 import { hapticLight } from '@/lib/haptics';
 import { safeRouterBack } from '@/lib/safeRouterBack';
-import ConversationItem from '../src/_components/inbox/ConversationItem';
-import { subscribeToUserStatus } from '../src/_services/socketService';
-import { CreateGroupModal } from '@/src/_components/inbox/CreateGroupModal';
-import { ConversationActionModal } from '@/src/_components/inbox/ConversationActionModal';
-import VerifiedBadge from '@/src/_components/VerifiedBadge';
+import ConversationItem from '../src/components/inbox/ConversationItem';
+import { subscribeToUserStatus } from '../src/services/socketService';
+import { CreateGroupModal } from '@/src/components/inbox/CreateGroupModal';
+import { ConversationActionModal } from '@/src/components/inbox/ConversationActionModal';
+import VerifiedBadge from '@/src/components/VerifiedBadge';
 import { resolveCanonicalUserId } from '@/lib/currentUser';
 
 const INBOX_BUILD_TAG = 'inbox-group-fix-2026-03-28-2';

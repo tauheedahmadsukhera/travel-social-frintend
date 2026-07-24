@@ -16,7 +16,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather, Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import AsyncStorage from '@/lib/storage';
-import { apiService } from '@/src/_services/apiService';
+import { apiService } from '@/src/services/apiService';
 import { createGroupConversation } from '@/lib/firebaseHelpers/conversation';
 import { DEFAULT_AVATAR_URL } from '@/lib/api';
 

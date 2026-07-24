@@ -1,9 +1,9 @@
 import { renderHook, act } from '@testing-library/react-native';
 import { useCollectionLogic } from '../useCollectionLogic';
-import { apiService } from '../../src/_services/apiService';
+import { apiService } from '../../src/services/apiService';
 import { feedEventEmitter } from '../../lib/feedEventEmitter';
 
-jest.mock('../../src/_services/apiService');
+jest.mock('../../src/services/apiService');
 jest.mock('../../lib/feedEventEmitter');
 
 describe('useCollectionLogic', () => {

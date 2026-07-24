@@ -7,7 +7,7 @@ import { getUserHighlights as getUserHighlightsCore, getHighlightStories as getH
  */
 export async function isApprovedFollower(userId: string, checkUserId: string) {
   try {
-    const { apiService } = await import('@/src/_services/apiService');
+    const { apiService } = await import('@/src/services/apiService');
     const res = await apiService.get(`/follow/status?followerId=${checkUserId}&followingId=${userId}`);
     return res?.isFollowing || false;
   } catch (error: any) {
@@ -25,7 +25,7 @@ export async function getAllStoriesForFeed() {
     console.log('[getAllStoriesForFeed] Fetching stories feed...');
 
     // Use apiService so baseURL is resolved correctly on real devices (no localhost/relative issues)
-    const { apiService } = await import('@/src/_services/apiService');
+    const { apiService } = await import('@/src/services/apiService');
     const res = await apiService.get('/stories');
     const stories = res?.data || [];
     return { success: res?.success !== false, data: Array.isArray(stories) ? stories : [] };
@@ -42,7 +42,7 @@ export async function getAllStoriesForFeed() {
  */
 export async function getUserProfile(uid: string) {
   try {
-    const { apiService } = await import('@/src/_services/apiService');
+    const { apiService } = await import('@/src/services/apiService');
     const res = await apiService.get(`/users/${uid}`);
 
     if (!res.success) {
@@ -103,7 +103,7 @@ export async function getUserProfile(uid: string) {
 export async function updateUserProfile(uid: string, data: any) {
   try {
     // Import apiService dynamically to avoid circular dependencies
-    const { apiService } = await import('@/src/_services/apiService');
+    const { apiService } = await import('@/src/services/apiService');
 
     const safeData = {
       ...data,
@@ -131,7 +131,7 @@ export async function updateUserProfile(uid: string, data: any) {
  */
 export async function searchUsers(queryText: string, resultLimit: number = 20) {
   try {
-    const { apiService } = await import('@/src/_services/apiService');
+    const { apiService } = await import('@/src/services/apiService');
     const res = await apiService.get('/users/search', { params: { q: queryText, limit: Math.min(50, resultLimit) } });
     let results = Array.isArray(res) ? res : (res?.data || []);
 
@@ -166,7 +166,7 @@ export async function searchUsers(queryText: string, resultLimit: number = 20) {
  */
 export async function getUserPosts(userId: string, requesterUserId?: string) {
   try {
-    const { apiService } = await import('@/src/_services/apiService');
+    const { apiService } = await import('@/src/services/apiService');
     const params = requesterUserId ? { requesterUserId } : {};
     const res = await apiService.get(`/users/${userId}/posts`, params);
     return { success: res.success !== false, data: res.data || [] };
@@ -180,7 +180,7 @@ export async function getUserPosts(userId: string, requesterUserId?: string) {
  */
 export async function getUserSections(userId: string, requesterUserId?: string) {
   try {
-    const { apiService } = await import('@/src/_services/apiService');
+    const { apiService } = await import('@/src/services/apiService');
     const params = requesterUserId ? { requesterUserId } : {};
     const res = await apiService.get(`/users/${userId}/sections`, params);
     return { success: res.success !== false, data: res.data || [] };
@@ -194,7 +194,7 @@ export async function getUserSections(userId: string, requesterUserId?: string) 
  */
 export async function getUserStories(userId: string, requesterUserId?: string) {
   try {
-    const { apiService } = await import('@/src/_services/apiService');
+    const { apiService } = await import('@/src/services/apiService');
     const params = requesterUserId ? { requesterUserId } : {};
     const res = await apiService.get(`/users/${userId}/stories`, params);
     const stories = res.data || [];
@@ -209,7 +209,7 @@ export async function getUserStories(userId: string, requesterUserId?: string) {
  */
 export async function registerPushToken(userId: string, pushToken: string) {
   try {
-    const { apiService } = await import('@/src/_services/apiService');
+    const { apiService } = await import('@/src/services/apiService');
     const res = await apiService.put(`/users/${userId}/push-token`, { pushToken });
     return res;
   } catch (error: any) {

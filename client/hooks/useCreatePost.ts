@@ -5,9 +5,9 @@ import * as Location from 'expo-location';
     import * as MediaLibrary from 'expo-media-library';
     import * as ImagePicker from 'expo-image-picker';
     import * as VideoThumbnails from 'expo-video-thumbnails';
-import { useUser } from '@/src/_components/UserContext';
-import { useAppDialog } from '@/src/_components/AppDialogProvider';
-import { apiService } from '@/src/_services/apiService';
+import { useUser } from '@/src/components/UserContext';
+import { useAppDialog } from '@/src/components/AppDialogProvider';
+import { apiService } from '@/src/services/apiService';
 import { getAuthenticatedUserId } from '../lib/currentUser';
 import { extractHashtags, trackHashtag } from '../lib/mentions';
 import { createPost, updatePost, createStory, searchUsers, getCategories, DEFAULT_CATEGORIES, getPassportTickets } from '../lib/firebaseHelpers/index';
@@ -17,7 +17,7 @@ import { hapticLight, hapticMedium, hapticSuccess } from '../lib/haptics';
 import { getCachedData, setCachedData } from '../hooks/useOffline';
 import { startTrace } from '../lib/perf';
 import { GOOGLE_MAPS_CONFIG } from '../config/environment';
-import { mapService } from '../services';
+import { mapService } from '@/src/services';
 
 const { width } = Dimensions.get('window');
 

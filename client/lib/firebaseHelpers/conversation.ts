@@ -1,6 +1,6 @@
 // Conversation and DM helpers
 
-import { apiService } from '@/src/_services/apiService';
+import { apiService } from '@/src/services/apiService';
 import { clearConversation } from './archive';
 
 // Get or create a conversation between two users

@@ -1,8 +1,8 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { AppState, AppStateStatus } from 'react-native';
 import AsyncStorage from '@/lib/storage';
-import { apiService } from '@/src/_services/apiService';
-import { getSocket, initializeSocket } from '@/src/_services/socketService';
+import { apiService } from '@/src/services/apiService';
+import { getSocket, initializeSocket } from '@/src/services/socketService';
 import { useNetworkStatus } from './useOffline';
 import { useAppStore } from '@/store/useAppStore';
 

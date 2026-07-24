@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { InteractionManager, Platform } from 'react-native';
-import { apiService } from '../src/_services/apiService';
+import { apiService } from '../src/services/apiService';
 import { getUserProfile } from '../lib/firebaseHelpers/index';
 import { getCachedData, setCachedData } from '../hooks/useOffline';
 
@@ -132,9 +132,9 @@ export function useHomeFeed(currentUserId: string | null, isOnline: boolean, cat
       // Redundant safety filter for blocked users
       const blockedSet = new Set<string>();
       try {
-        const { fetchBlockedUserIds } = await import('../services/moderation');
+        const { fetchBlockedUserIds } = await import('@/src/services/moderation');
         const ids = await fetchBlockedUserIds(currentUserId || '');
-        ids.forEach(id => blockedSet.add(String(id)));
+        ids.forEach((id: string) => blockedSet.add(String(id)));
       } catch {}
 
       const filteredPosts = normalizedPosts.filter(p => {

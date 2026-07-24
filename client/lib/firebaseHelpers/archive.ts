@@ -1,6 +1,6 @@
 // Archive conversation helpers
 
-import { apiService } from '@/src/_services/apiService';
+import { apiService } from '@/src/services/apiService';
 
 export async function archiveConversation(conversationId: string, userId: string) {
   try {

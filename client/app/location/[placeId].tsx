@@ -4,11 +4,11 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, Animated, Dimensions, FlatList, Image, Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import PostCard from '@/src/_components/PostCard';
-import NotificationsModal from '@/src/_components/NotificationsModal';
-import StoriesViewer from '@/src/_components/StoriesViewer';
-import VerifiedBadge from '@/src/_components/VerifiedBadge';
-import { apiService } from '@/src/_services/apiService';
+import PostCard from '@/src/components/PostCard';
+import NotificationsModal from '@/src/components/NotificationsModal';
+import StoriesViewer from '@/src/components/StoriesViewer';
+import VerifiedBadge from '@/src/components/VerifiedBadge';
+import { apiService } from '@/src/services/apiService';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { feedEventEmitter } from '../../lib/feedEventEmitter';
 import { hapticLight } from '../../lib/haptics';
@@ -18,7 +18,7 @@ import {
   storyForStoriesViewer,
 } from '../../lib/storyViewer';
 import { safeRouterBack } from '@/lib/safeRouterBack';
-import { mapService } from '../../services/implementations/GoogleMapsService';
+import { mapService } from '@/src/services/implementations/GoogleMapsService';
 import { countries, continents } from 'countries-list';
 
 

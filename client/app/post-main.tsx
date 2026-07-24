@@ -2,8 +2,8 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import ErrorBoundary from '@/src/_components/ErrorBoundary';
-import PostCard from '@/src/_components/PostCard';
+import ErrorBoundary from '@/src/components/ErrorBoundary';
+import PostCard from '@/src/components/PostCard';
 
 export default function PostScreen() {
   const router = useRouter();

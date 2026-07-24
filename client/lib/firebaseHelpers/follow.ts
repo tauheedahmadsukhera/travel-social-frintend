@@ -1,4 +1,4 @@
-import { apiService } from '@/src/_services/apiService';
+import { apiService } from '@/src/services/apiService';
 
 // Check if user is following another user
 export async function checkFollowStatus(followerId: string, followingId: string) {

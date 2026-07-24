@@ -7,7 +7,7 @@ import { FlatList, StyleSheet, Text, TouchableOpacity, View } from 'react-native
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@/lib/storage';
 import { useNotifications } from '../hooks/useNotifications';
-import AcceptDeclineButtons from '@/src/_components/AcceptDeclineButtons';
+import AcceptDeclineButtons from '@/src/components/AcceptDeclineButtons';
 import { getNotificationActionText } from '../lib/notificationText';
 import { hapticLight, hapticMedium } from '@/lib/haptics';
 import { safeRouterBack } from '@/lib/safeRouterBack';

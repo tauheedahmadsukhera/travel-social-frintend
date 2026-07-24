@@ -3,7 +3,7 @@ import { ActivityIndicator, Alert, Image, SafeAreaView, ScrollView, StyleSheet, 
 import { ResizeMode, Video } from 'expo-av';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import AsyncStorage from '@/lib/storage';
-import { apiService } from '@/src/_services/apiService';
+import { apiService } from '@/src/services/apiService';
 import { feedEventEmitter } from '@/lib/feedEventEmitter';
 import { getCachedData, setCachedData } from '../hooks/useOffline';
 import { safeRouterBack } from '@/lib/safeRouterBack';

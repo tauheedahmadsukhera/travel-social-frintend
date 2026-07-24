@@ -56,7 +56,7 @@ async function testReverseGeocode(lat, lng) {
       console.log(`   Formatted Address: ${result.formatted_address}`);
       
       // Find city and country
-      const components = result.address_components || [];
+      const components = result.addresscomponents || [];
       const city = components.find(c => c.types.includes('locality'))?.long_name;
       const country = components.find(c => c.types.includes('country'))?.long_name;
       console.log(`   City: ${city || 'Not found'}`);

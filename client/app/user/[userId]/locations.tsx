@@ -5,8 +5,8 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, FlatList, RefreshControl, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { getPassportData, Stamp } from '../../../lib/firebaseHelpers/passport';
-import { getUserProfile as getUserProfileAPI } from '../../../src/_services/firebaseService';
-import CountryFlag from '../../../src/_components/CountryFlag';
+import { getUserProfile as getUserProfileAPI } from '../../../src/services/firebaseService';
+import CountryFlag from '../../../src/components/CountryFlag';
 import { LinearGradient } from 'expo-linear-gradient';
 import { safeRouterBack } from '@/lib/safeRouterBack';
 

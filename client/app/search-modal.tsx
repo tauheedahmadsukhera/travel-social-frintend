@@ -26,10 +26,10 @@ import { getOrCreateConversation, getRegions, searchUsers } from "../lib/firebas
 import { followUser, sendFollowRequest, unfollowUser } from "../lib/firebaseHelpers/follow";
 import { CITY_CARD_IMAGES, COUNTRY_CARD_IMAGES, DEFAULT_CARD_IMAGE, REGION_CARD_IMAGES } from "../src/assets/searchCardAssets.generated";
 import { getCachedData, setCachedData, useNetworkStatus, useOfflineBanner } from '../hooks/useOffline';
-import { OfflineBanner } from '@/src/_components/OfflineBanner';
+import { OfflineBanner } from '@/src/components/OfflineBanner';
 import { safeRouterBack } from '@/lib/safeRouterBack';
-import { apiService, getAPIBaseURL } from '@/src/_services/apiService';
-import { mapService } from '../services';
+import { apiService, getAPIBaseURL } from '@/src/services/apiService';
+import { mapService } from '@/src/services';
 
 // Type definitions
 type Region = {

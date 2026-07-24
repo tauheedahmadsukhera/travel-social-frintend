@@ -7,7 +7,7 @@ import AsyncStorage from '@/lib/storage';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { API_BASE_URL } from '../lib/api';
-import { useAppDialog } from '@/src/_components/AppDialogProvider';
+import { useAppDialog } from '@/src/components/AppDialogProvider';
 import { safeRouterBack } from '@/lib/safeRouterBack';
 
 export default function SavedPostsScreen() {

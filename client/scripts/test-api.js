@@ -1,5 +1,5 @@
 // ✅ API TESTING SCRIPT - Test all critical endpoints
-import apiService from './app/_services/apiService';
+import apiService from './app/services/apiService';
 
 const testAPI = async () => {
   console.log('🚀 Starting API Tests...\n');

@@ -3,12 +3,12 @@ import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, KeyboardAvoidingView, Modal, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import PostViewerModal from '@/src/_components/PostViewerModal';
-import CommentSection from '@/src/_components/CommentSection';
+import PostViewerModal from '@/src/components/PostViewerModal';
+import CommentSection from '@/src/components/CommentSection';
 import { sharePost } from '../lib/postShare';
 import { hapticLight } from '@/lib/haptics';
 import { getCachedData, setCachedData, useOfflineBanner, useNetworkStatus } from '../hooks/useOffline';
-import { OfflineBanner } from '@/src/_components/OfflineBanner';
+import { OfflineBanner } from '@/src/components/OfflineBanner';
 import { safeRouterBack } from '@/lib/safeRouterBack';
 import { resolveCanonicalUserId } from '../lib/currentUser';
 

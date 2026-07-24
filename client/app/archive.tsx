@@ -5,7 +5,7 @@ import { ActivityIndicator, FlatList, Image, StyleSheet, Text, TouchableOpacity,
 import Swipeable from 'react-native-gesture-handler/Swipeable';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@/lib/storage';
-import { useUser } from '@/src/_components/UserContext';
+import { useUser } from '@/src/components/UserContext';
 import { DEFAULT_AVATAR_URL } from '@/lib/api';
 import { hapticLight, hapticMedium } from '@/lib/haptics';
 import { safeRouterBack } from '@/lib/safeRouterBack';

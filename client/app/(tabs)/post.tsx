@@ -7,11 +7,11 @@ import { ActivityIndicator, Alert, FlatList, Image, KeyboardAvoidingView, Modal,
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { createPost, searchUsers } from '../../lib/firebaseHelpers/index';
 import { getAuthenticatedUserId } from '@/lib/currentUser';
-import VerifiedBadge from '@/src/_components/VerifiedBadge';
+import VerifiedBadge from '@/src/components/VerifiedBadge';
 import { hapticLight, hapticMedium, hapticSuccess } from '../../lib/haptics';
-import { useAppDialog } from '@/src/_components/AppDialogProvider';
+import { useAppDialog } from '@/src/components/AppDialogProvider';
 import { safeRouterBack } from '@/lib/safeRouterBack';
-import { apiService } from '@/src/_services/apiService';
+import { apiService } from '@/src/services/apiService';
 
 // Runtime import of ImagePicker with graceful fallback
 let ImagePicker: any = null;

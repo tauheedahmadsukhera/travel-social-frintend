@@ -1,6 +1,6 @@
 
 import AsyncStorage from '@/lib/storage';
-import { apiService } from '@/src/_services/apiService';
+import { apiService } from '@/src/services/apiService';
 
 export async function deleteStory(storyId: string) {
   try {

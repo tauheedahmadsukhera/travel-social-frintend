@@ -1,5 +1,5 @@
 const fs = require('fs');
-let src = fs.readFileSync('app/_components/CommentSection.tsx', 'utf8');
+let src = fs.readFileSync('app/components/CommentSection.tsx', 'utf8');
 
 // Fix 1: The renderComment function is missing the `);` and closing `}` before `};`
 // Current broken end:
@@ -43,7 +43,7 @@ if (lastClose !== -1) {
     console.log('Added heart styles');
 }
 
-fs.writeFileSync('app/_components/CommentSection.tsx', src, 'utf8');
+fs.writeFileSync('app/components/CommentSection.tsx', src, 'utf8');
 console.log('Done! Lines:', src.split('\n').length);
 
 // Quick syntax check

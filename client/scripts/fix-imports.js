@@ -12,10 +12,10 @@ function walkDir(dir) {
       let content = fs.readFileSync(filePath, 'utf8');
       const original = content;
       
-      // Replace imports from components to _components
-      content = content.replace(/from ['"]\.\.\/components\//g, "from '../_components/");
+      // Replace imports from components to components
+      content = content.replace(/from ['"]\.\.\/components\//g, "from '../components/");
       content = content.replace(/from ['"]\.\.\/hooks\//g, "from '../_hooks/");
-      content = content.replace(/from ['"]\.\.\/services\//g, "from '../_services/");
+      content = content.replace(/from ['"]\.\.\/services\//g, "from '../services/");
       
       if (content !== original) {
         fs.writeFileSync(filePath, content);

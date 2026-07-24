@@ -1,4 +1,4 @@
-import { apiService } from '@/src/_services/apiService';
+import { apiService } from '@/src/services/apiService';
 
 // Get notifications for a user
 export async function getUserNotifications(userId: string) {

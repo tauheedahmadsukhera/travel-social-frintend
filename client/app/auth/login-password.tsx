@@ -6,11 +6,11 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@/lib/storage';
 import { getUserErrorMessage } from '../../lib/errorHandler';
 import { signInUser } from '../../lib/firebaseHelpers';
-import { AuthBrandHeader } from '@/src/_components/auth/AuthBrandHeader';
-import { AuthKeyboardScroll } from '@/src/_components/auth/AuthKeyboardScroll';
-import CustomButton from '@/src/_components/auth/CustomButton';
+import { AuthBrandHeader } from '@/src/components/auth/AuthBrandHeader';
+import { AuthKeyboardScroll } from '@/src/components/auth/AuthKeyboardScroll';
+import CustomButton from '@/src/components/auth/CustomButton';
 import { safeRouterBack } from '@/lib/safeRouterBack';
-import { apiService } from '@/src/_services/apiService';
+import { apiService } from '@/src/services/apiService';
 
 export default function LoginPasswordScreen() {
   const router = useRouter();

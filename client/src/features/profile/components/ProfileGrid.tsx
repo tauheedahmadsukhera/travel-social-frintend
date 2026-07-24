@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, ActivityIndicator, TouchableOpacity, Dimensions, Platform } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
 import { Ionicons } from '@expo/vector-icons';
-import ProfileGridItem from '@/src/_components/profile/ProfileGridItem';
+import ProfileGridItem from '@/src/components/profile/ProfileGridItem';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 

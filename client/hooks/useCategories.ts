@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { apiService } from '../src/_services/apiService';
+import { apiService } from '../src/services/apiService';
 import { DEFAULT_CATEGORIES } from '../lib/firebaseHelpers/index';
 
 export function useCategories() {

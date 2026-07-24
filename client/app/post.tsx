@@ -2,7 +2,7 @@ import { useLocalSearchParams } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import ErrorBoundary from '@/src/_components/ErrorBoundary';
+import ErrorBoundary from '@/src/components/ErrorBoundary';
 
 export default function PostScreen() {
   const { postId, commentId, mentionId, tagId } = useLocalSearchParams();

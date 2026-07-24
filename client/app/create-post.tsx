@@ -6,16 +6,16 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 
 // Hook & Components
 import { useCreatePost, isVideoUri } from '../hooks/useCreatePost';
-import MediaPicker from '@/src/_components/CreatePost/MediaPicker';
-import MediaPreview from '@/src/_components/CreatePost/MediaPreview';
-import PostDetailsForm from '@/src/_components/CreatePost/PostDetailsForm';
+import MediaPicker from '@/src/components/CreatePost/MediaPicker';
+import MediaPreview from '@/src/components/CreatePost/MediaPreview';
+import PostDetailsForm from '@/src/components/CreatePost/PostDetailsForm';
 
 // Modals
-import CategoryModal from '@/src/_components/CreatePost/CategoryModal';
-import LocationModal from '@/src/_components/CreatePost/LocationModal';
-import VerifiedLocationModal from '@/src/_components/CreatePost/VerifiedLocationModal';
-import TagPeopleModal from '@/src/_components/CreatePost/TagPeopleModal';
-import VisibilityModal from '@/src/_components/CreatePost/VisibilityModal';
+import CategoryModal from '@/src/components/CreatePost/CategoryModal';
+import LocationModal from '@/src/components/CreatePost/LocationModal';
+import VerifiedLocationModal from '@/src/components/CreatePost/VerifiedLocationModal';
+import TagPeopleModal from '@/src/components/CreatePost/TagPeopleModal';
+import VisibilityModal from '@/src/components/CreatePost/VisibilityModal';
 
 import { DEFAULT_CATEGORIES } from '../lib/firebaseHelpers/index';
 import { hapticLight } from '../lib/haptics';

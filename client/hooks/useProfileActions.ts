@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Alert } from 'react-native';
 import { useQueryClient } from '@tanstack/react-query';
 import { followUser, sendFollowRequest, unfollowUser } from '@/lib/firebaseHelpers/follow';
-import { apiService } from '@/src/_services/apiService';
+import { apiService } from '@/src/services/apiService';
 import { hapticMedium, hapticLight } from '@/lib/haptics';
 import { userService } from '@/lib/userService';
 import { safeRouterBack } from '@/lib/safeRouterBack';

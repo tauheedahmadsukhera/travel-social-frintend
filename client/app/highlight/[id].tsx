@@ -3,7 +3,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Modal, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import StoriesViewer from '@/src/_components/StoriesViewer';
+import StoriesViewer from '@/src/components/StoriesViewer';
 import { getHighlightStories } from '../../lib/firebaseHelpers/core';
 import { getCachedHighlightStories, storyForStoriesViewer } from '../../lib/storyViewer';
 import { safeRouterBack } from '@/lib/safeRouterBack';

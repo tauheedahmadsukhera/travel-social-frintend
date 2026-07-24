@@ -6,11 +6,11 @@ import AsyncStorage from '@/lib/storage';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { getUserErrorMessage } from '../../lib/errorHandler';
 import { signInUser } from '../../lib/firebaseHelpers';
-import { handleSocialAuthResult, signInWithApple, signInWithGoogle, signInWithSnapchat, signInWithTikTok } from '../../services/socialAuthService';
-import { AuthBrandHeader } from '@/src/_components/auth/AuthBrandHeader';
-import { AuthKeyboardScroll } from '@/src/_components/auth/AuthKeyboardScroll';
-import CustomButton from '@/src/_components/auth/CustomButton';
-import SocialButton from '@/src/_components/auth/SocialButton';
+import { handleSocialAuthResult, signInWithApple, signInWithGoogle, signInWithSnapchat, signInWithTikTok } from '@/src/services/socialAuthService';
+import { AuthBrandHeader } from '@/src/components/auth/AuthBrandHeader';
+import { AuthKeyboardScroll } from '@/src/components/auth/AuthKeyboardScroll';
+import CustomButton from '@/src/components/auth/CustomButton';
+import SocialButton from '@/src/components/auth/SocialButton';
 import { safeRouterBack } from '@/lib/safeRouterBack';
 
 export default function EmailLoginScreen() {

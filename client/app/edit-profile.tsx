@@ -8,10 +8,10 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { uploadImage } from '../lib/firebaseHelpers';
 import { updateUserProfile, toggleUserPrivacy } from '../lib/firebaseHelpers/index';
-import { getUserProfile } from '@/src/_services/firebaseService';
-import { useAuthLoading } from '@/src/_components/UserContext';
+import { getUserProfile } from '@/src/services/firebaseService';
+import { useAuthLoading } from '@/src/components/UserContext';
 import { hapticLight, hapticMedium, hapticSuccess } from '../lib/haptics';
-import { useAppDialog } from '@/src/_components/AppDialogProvider';
+import { useAppDialog } from '@/src/components/AppDialogProvider';
 import { safeRouterBack } from '@/lib/safeRouterBack';
 
 // Runtime import with fallback
@@ -417,7 +417,7 @@ export default function EditProfile() {
                     onPress: async () => {
                       try {
                         console.log('[Logout] Starting logout process...');
-                        const { logoutUser } = await import('@/src/_services/firebaseAuthService');
+                        const { logoutUser } = await import('@/src/services/firebaseAuthService');
                         const result = await logoutUser();
 
                         if (result.success) {

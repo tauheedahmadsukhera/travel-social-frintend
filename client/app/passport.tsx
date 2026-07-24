@@ -25,18 +25,18 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { hapticLight } from '../lib/haptics';
 import { addPassportStamp, deletePassportStamp, getPassportData, Stamp } from '../lib/firebaseHelpers/passport';
 import { BACKEND_URL } from '../lib/api';
-import { reverseGeocode } from '../services/locationService';
+import { reverseGeocode } from '@/src/services/locationService';
 import * as Location from 'expo-location';
-import CountryFlag from '@/src/_components/CountryFlag';
-import { mapService } from '../services';
+import CountryFlag from '@/src/components/CountryFlag';
+import { mapService } from '@/src/services';
 import { getCachedData, setCachedData, useNetworkStatus, useOfflineBanner } from '../hooks/useOffline';
-import { OfflineBanner } from '@/src/_components/OfflineBanner';
+import { OfflineBanner } from '@/src/components/OfflineBanner';
 
-import { PassportStamp } from '@/src/_components/PassportStamp';
+import { PassportStamp } from '@/src/components/PassportStamp';
 import { toDate, formatDisplayDate, getRelativeTime } from '../lib/utils/date';
-import { StampDeleteModal } from '@/src/_components/passport/StampDeleteModal';
-import { StampSearchModal } from '@/src/_components/passport/StampSearchModal';
-import { LocationPickerModal } from '@/src/_components/passport/LocationPickerModal';
+import { StampDeleteModal } from '@/src/components/passport/StampDeleteModal';
+import { StampSearchModal } from '@/src/components/passport/StampSearchModal';
+import { LocationPickerModal } from '@/src/components/passport/LocationPickerModal';
 
 import {
   normalizeCountryName,
@@ -134,7 +134,7 @@ export default function PassportScreen() {
           setSuggestion(sugg);
         }
       }
- 
+
       // Check if location permission is already granted
       try {
         const { getForegroundPermissionsAsync } = await import('expo-location');
@@ -142,7 +142,7 @@ export default function PassportScreen() {
         if (status === 'granted') {
           setShowTravelHint(false);
         }
-      } catch (e) {}
+      } catch (e) { }
     };
     init();
 
@@ -155,7 +155,7 @@ export default function PassportScreen() {
           if (status === 'granted') {
             setShowTravelHint(false);
           }
-        } catch (e) {}
+        } catch (e) { }
       }
     });
     return () => subscription.remove();
@@ -461,7 +461,7 @@ export default function PassportScreen() {
       } else if (activeFilter === 'Places') {
         list = list.filter(s => s.type === 'place');
       }
-      
+
       // Group by name and add count for duplicates, keeping the latest stamp
       const grouped: { [key: string]: any } = {};
       list.forEach(stamp => {
@@ -480,7 +480,7 @@ export default function PassportScreen() {
       });
       return Object.values(grouped);
     }
-    
+
     if (activeFilter === 'Countries') return list.filter(s => s.type === 'country');
     if (activeFilter === 'Cities') return list.filter(s => s.type === 'city');
     if (activeFilter === 'Places') return list.filter(s => s.type === 'place');
@@ -598,7 +598,7 @@ export default function PassportScreen() {
         const cachedStamps = Array.isArray(cached?.stamps) ? cached.stamps : [];
         const next = cachedStamps.filter((s: any) => String(s?._id) !== stampId);
         await setCachedData(PASSPORT_CACHE_KEY, { stamps: next }, { ttl: 24 * 60 * 60 * 1000 });
-      } catch {}
+      } catch { }
 
       closeDeleteSheet();
     } catch (e: any) {
@@ -619,7 +619,7 @@ export default function PassportScreen() {
         <TouchableOpacity style={styles.headerBtn} onPress={handleBack} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
           <Feather name="arrow-left" size={20} color="#000" />
         </TouchableOpacity>
-        
+
         <View style={styles.headerTitleContainer}>
           <Text style={styles.headerSubtitle}>{selectedCountry || ''}</Text>
           <Text style={styles.headerTitle}>{selectedCountry ? selectedCountry : (isOwner ? 'My stamps' : 'Stamps')}</Text>
@@ -656,11 +656,11 @@ export default function PassportScreen() {
               <Text style={styles.travelHintText}>
                 Turn on location access while using Trips and optional notifications to unlock automatic travel stamps whenever you arrive in a new country while the app is open. After signing in, just open the Home screen once so we can refresh your location and keep your journey up to date.
               </Text>
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={styles.enableLocBtn}
                 onPress={async () => {
                   hapticLight();
-                  const { requestLocationPermissions } = await import('../services/locationService');
+                  const { requestLocationPermissions } = await import('@/src/services/locationService');
                   const granted = await requestLocationPermissions();
                   if (granted) {
                     setShowTravelHint(false);
@@ -672,7 +672,7 @@ export default function PassportScreen() {
                 <Text style={styles.enableLocBtnText}>Enable location services</Text>
               </TouchableOpacity>
             </View>
-            <TouchableOpacity 
+            <TouchableOpacity
               onPress={() => { hapticLight(); setShowTravelHint(false); }}
               style={{ marginLeft: 8, padding: 4 }}
             >
@@ -710,23 +710,23 @@ export default function PassportScreen() {
         {/* Tabs */}
         {!loading && (
           <View>
-            <ScrollView 
-              horizontal 
-              showsHorizontalScrollIndicator={false} 
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
               style={styles.tabBar}
               contentContainerStyle={styles.tabBarContent}
             >
               {(['All', 'Countries', 'Cities', 'Places'] as FilterTab[])
                 .filter(tab => !selectedCountry || tab !== 'Countries')
                 .map(tab => (
-                <TouchableOpacity
-                  key={tab}
-                  style={[styles.tabItem, activeFilter === tab && styles.tabItemActive]}
-                  onPress={() => setActiveFilter(tab)}
-                >
-                  <Text style={[styles.tabText, activeFilter === tab && styles.tabTextActive]}>{tab}</Text>
-                </TouchableOpacity>
-              ))}
+                  <TouchableOpacity
+                    key={tab}
+                    style={[styles.tabItem, activeFilter === tab && styles.tabItemActive]}
+                    onPress={() => setActiveFilter(tab)}
+                  >
+                    <Text style={[styles.tabText, activeFilter === tab && styles.tabTextActive]}>{tab}</Text>
+                  </TouchableOpacity>
+                ))}
             </ScrollView>
           </View>
         )}
@@ -741,41 +741,42 @@ export default function PassportScreen() {
               const displayStamp: Stamp = { ...stamp, type: displayType };
 
               return (
-              <TouchableOpacity 
-                key={stamp._id || stamp.id || `stamp-${i}`} 
-                style={styles.stampOuter}
-                onPress={() => {
-                  if (displayType === 'country') setSelectedCountry(stamp.name);
-                }}
-                onLongPress={() => openDeleteSheet(stamp)}
-                delayLongPress={350}
-              >
-                <>
-                  <PassportStamp 
-                    stamp={displayStamp} 
-                    type="circular"
-                    size={STAMP_SIZE}
-                  />
-                  
-                  {/* Metadata Pills */}
-                  <View style={[styles.pillsRow, selectedCountry && { marginTop: 15 }]}>
-                    <View style={styles.pill}>
-                      <Feather name="map-pin" size={10} color="#666" />
-                      <Text style={styles.pillText}>{stamp.parentCountry || stamp.name}</Text>
+                <TouchableOpacity
+                  key={stamp._id || stamp.id || `stamp-${i}`}
+                  style={styles.stampOuter}
+                  onPress={() => {
+                    if (displayType === 'country') setSelectedCountry(stamp.name);
+                  }}
+                  onLongPress={() => openDeleteSheet(stamp)}
+                  delayLongPress={350}
+                >
+                  <>
+                    <PassportStamp
+                      stamp={displayStamp}
+                      type="circular"
+                      size={STAMP_SIZE}
+                    />
+
+                    {/* Metadata Pills */}
+                    <View style={[styles.pillsRow, selectedCountry && { marginTop: 15 }]}>
+                      <View style={styles.pill}>
+                        <Feather name="map-pin" size={10} color="#666" />
+                        <Text style={styles.pillText}>{stamp.parentCountry || stamp.name}</Text>
+                      </View>
+                      <View style={styles.pill}>
+                        <Feather name="calendar" size={10} color="#000" />
+                        <Text style={styles.pillText}>
+                          {formatDisplayDate(stamp.createdAt, 'dd MMM yyyy')}
+                        </Text>
+                      </View>
+                      <View style={styles.pill}>
+                        <Text style={styles.pillText}>{stamp.postCount || 0} posts</Text>
+                      </View>
                     </View>
-                    <View style={styles.pill}>
-                      <Feather name="calendar" size={10} color="#000" />
-                      <Text style={styles.pillText}>
-                        {formatDisplayDate(stamp.createdAt, 'dd MMM yyyy')}
-                      </Text>
-                    </View>
-                    <View style={styles.pill}>
-                      <Text style={styles.pillText}>{stamp.postCount || 0} posts</Text>
-                    </View>
-                  </View>
-                </>
-              </TouchableOpacity>
-            )})}
+                  </>
+                </TouchableOpacity>
+              )
+            })}
 
             {filtered.length === 0 && (
               <View style={styles.emptyState}>
@@ -809,8 +810,8 @@ export default function PassportScreen() {
       {/* Manual Add FAB - Redesigned to Pill Center */}
       {isOwner && (
         <View style={styles.fabContainer} pointerEvents="box-none">
-          <TouchableOpacity 
-            style={styles.fabPillShadow} 
+          <TouchableOpacity
+            style={styles.fabPillShadow}
             onPress={handleOpenLocationPicker}
             activeOpacity={0.85}
           >
@@ -942,8 +943,8 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     backgroundColor: '#f5f5f5',
   },
-  tabItemActive: { 
-    backgroundColor: 'rgba(255, 141, 0, 0.15)', 
+  tabItemActive: {
+    backgroundColor: 'rgba(255, 141, 0, 0.15)',
   },
   tabText: { fontSize: 14, fontWeight: '600', color: '#666' },
   tabTextActive: { color: '#FF8D00' },

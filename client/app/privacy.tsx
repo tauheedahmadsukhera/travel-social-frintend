@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, StyleSheet, Switch, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { toggleUserPrivacy } from '../lib/firebaseHelpers';
-import { useUser } from '@/src/_components/UserContext';
+import { useUser } from '@/src/components/UserContext';
 import AsyncStorage from '@/lib/storage';
 
 

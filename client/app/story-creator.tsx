@@ -31,7 +31,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Video, ResizeMode } from 'expo-av';
 import { createStory } from '@/lib/firebaseHelpers/index';
 import { getAuthenticatedUserId } from '@/lib/currentUser';
-import { apiService } from '@/src/_services/apiService';
+import { apiService } from '@/src/services/apiService';
 import { hapticLight, hapticMedium, hapticSuccess } from '@/lib/haptics';
 // Safely import captureRef — react-native-view-shot requires a custom dev build.
 // In Expo Go this native module is unavailable, so we fall back to a no-op.
@@ -414,7 +414,7 @@ export default function StoryCreatorScreen() {
         setLoadingLocations(true);
         const timer = setTimeout(async () => {
             try {
-                const { mapService } = require('../services');
+                const { mapService } = require('@/src/services');
                 const suggestions = await mapService.getAutocompleteSuggestions(locationQuery);
                 const predictions = suggestions.map((s: any) => ({
                     placeId: s.placeId,

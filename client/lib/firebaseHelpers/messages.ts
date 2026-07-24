@@ -1,5 +1,5 @@
 
-import { apiService } from '@/src/_services/apiService';
+import { apiService } from '@/src/services/apiService';
 import AsyncStorage from '@/lib/storage';
 import { API_BASE_URL } from '@/lib/api';
 import * as FileSystem from 'expo-file-system';

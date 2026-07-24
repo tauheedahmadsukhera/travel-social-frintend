@@ -9,16 +9,16 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@/lib/storage';
 
-import { PostLocationModal } from '@/src/_components/PostLocationModal';
-import { useUser } from '@/src/_components/UserContext';
-import PostCard from '@/src/_components/PostCard';
+import { PostLocationModal } from '@/src/components/PostLocationModal';
+import { useUser } from '@/src/components/UserContext';
+import PostCard from '@/src/components/PostCard';
 
 
 import { getAllPosts } from '../lib/firebaseHelpers';
-import { apiService } from '@/src/_services/apiService';
+import { apiService } from '@/src/services/apiService';
 import { getOptimizedImageUrl } from '../lib/imageHelpers';
 
-import { PostMarker, LiveStreamMarker } from '@/src/_components/map/MapMarkers';
+import { PostMarker, LiveStreamMarker } from '@/src/components/map/MapMarkers';
 
 const MapView = Platform.OS === 'web' ? null : require('react-native-maps').default;
 const Marker = Platform.OS === 'web' ? null : require('react-native-maps').Marker;

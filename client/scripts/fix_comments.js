@@ -1,5 +1,5 @@
 const fs = require('fs');
-let src = fs.readFileSync('app/_components/CommentSection.tsx', 'utf8');
+let src = fs.readFileSync('app/components/CommentSection.tsx', 'utf8');
 
 // Find start and end of renderComment function
 const startMarker = '  const renderComment = (comment: Comment, isReply: boolean = false, parentId?: string) => {';
@@ -175,5 +175,5 @@ if (src.includes(oldCommentActions)) {
     }
 }
 
-fs.writeFileSync('app/_components/CommentSection.tsx', src, 'utf8');
+fs.writeFileSync('app/components/CommentSection.tsx', src, 'utf8');
 console.log('Done! Lines:', src.split('\n').length);

@@ -4,9 +4,9 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Alert, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { logAnalyticsEvent } from '../../lib/analytics';
-import { AuthBrandHeader } from '@/src/_components/auth/AuthBrandHeader';
-import { AuthKeyboardScroll } from '@/src/_components/auth/AuthKeyboardScroll';
-import CustomButton from '@/src/_components/auth/CustomButton';
+import { AuthBrandHeader } from '@/src/components/auth/AuthBrandHeader';
+import { AuthKeyboardScroll } from '@/src/components/auth/AuthKeyboardScroll';
+import CustomButton from '@/src/components/auth/CustomButton';
 import { safeRouterBack } from '@/lib/safeRouterBack';
 
 export default function PhoneOTPScreen() {
@@ -74,7 +74,7 @@ export default function PhoneOTPScreen() {
     setError('');
 
     try {
-      const { apiService } = await import('@/src/_services/apiService');
+      const { apiService } = await import('@/src/services/apiService');
       const verifyRes = await apiService.post('/auth/verify-otp', {
         email: target.includes('@') ? target : undefined,
         phone: !target.includes('@') ? target : undefined,
@@ -114,7 +114,7 @@ export default function PhoneOTPScreen() {
   const handleResend = async () => {
     logAnalyticsEvent('auth_phone_otp_resend');
     try {
-      const { apiService } = await import('@/src/_services/apiService');
+      const { apiService } = await import('@/src/services/apiService');
       const res = await apiService.post('/auth/send-otp', {
         email: target.includes('@') ? target : undefined,
         phone: !target.includes('@') ? target : undefined

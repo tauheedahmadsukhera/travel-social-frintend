@@ -2,13 +2,13 @@ import React from 'react';
 import { Modal, Pressable, TouchableOpacity, View, Text, ActivityIndicator, KeyboardAvoidingView, Platform, StyleSheet, Dimensions } from 'react-native';
 import { Image as ExpoImage } from 'expo-image';
 import { Ionicons, Feather } from '@expo/vector-icons';
-import HighlightViewer from '@/src/_components/HighlightViewer';
+import HighlightViewer from '@/src/components/HighlightViewer';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import CommentSection from '@/src/_components/CommentSection';
-import { CollectionsModal, UserMenuModal } from '@/src/_components/profile/ProfileSubModals';
-import PostViewerModal from '@/src/_components/PostViewerModal';
-import EditSectionsModal from '@/src/_components/EditSectionsModal';
-import { UploadStoryModal } from '@/src/_components/profile/UploadStoryModal';
+import CommentSection from '@/src/components/CommentSection';
+import { CollectionsModal, UserMenuModal } from '@/src/components/profile/ProfileSubModals';
+import PostViewerModal from '@/src/components/PostViewerModal';
+import EditSectionsModal from '@/src/components/EditSectionsModal';
+import { UploadStoryModal } from '@/src/components/profile/UploadStoryModal';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 

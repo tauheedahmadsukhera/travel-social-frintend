@@ -1,7 +1,7 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useMemo, useState } from 'react';
-import { apiService } from '@/src/_services/apiService';
-import { fetchBlockedUserIds } from '@/services/moderation';
+import { apiService } from '@/src/services/apiService';
+import { fetchBlockedUserIds } from '@/src/services/moderation';
 import { getCachedData, setCachedData } from '@/hooks/useOffline';
 
 interface UseProfileDataParams {

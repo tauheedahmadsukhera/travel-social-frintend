@@ -15,14 +15,14 @@ import {
   stopTypingIndicator, 
   subscribeToTyping,
   initializeSocket
-} from '../src/_services/socketService';
+} from '../src/services/socketService';
 import { 
   normalizeMessage, 
   mergeMessages, 
   createTempId, 
   getMessageId 
-} from '../src/_services/dmHelpers';
-import { apiService } from '../src/_services/apiService';
+} from '../src/services/dmHelpers';
+import { apiService } from '../src/services/apiService';
 
 import { useAppStore } from '@/store/useAppStore';
 

@@ -1,6 +1,6 @@
 // Live streaming helpers
 
-import { apiService } from '@/src/_services/apiService';
+import { apiService } from '@/src/services/apiService';
 import { userProfileCache } from '../userProfileCache';
 
 export async function getActiveLiveStreams() {

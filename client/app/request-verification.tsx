@@ -18,7 +18,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
 import { hapticLight, hapticSuccess, hapticWarning } from '@/lib/haptics';
 import { useThemeColors } from '@/lib/theme';
-import { apiService } from '@/src/_services/apiService';
+import { apiService } from '@/src/services/apiService';
 import { uploadMedia } from '@/lib/firebaseHelpers/core';
 
 const CATEGORIES = ['Travel Blogger', 'Influencer', 'Photographer', 'Journalist', 'Business', 'Other'];

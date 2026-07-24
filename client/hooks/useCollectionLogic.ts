@@ -1,6 +1,6 @@
 import { useCallback, useState, useRef } from 'react';
 import { Alert } from 'react-native';
-import { apiService } from '../src/_services/apiService';
+import { apiService } from '../src/services/apiService';
 import { feedEventEmitter } from '../lib/feedEventEmitter';
 
 export interface Collection {

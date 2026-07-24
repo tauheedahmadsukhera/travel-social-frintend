@@ -8,10 +8,24 @@
         "./*"
       ],
       "@/lib/*": [
+        "./src/lib/*",
+        "./src/utils/*",
         "./lib/*"
+      ],
+      "@/store/*": [
+        "./src/store/*",
+        "./store/*"
       ],
       "@/src/*": [
         "./src/*"
+      ],
+      "@/utils/*": [
+        "./src/utils/*",
+        "./utils/*"
+      ],
+      "@/services/*": [
+        "./src/services/*",
+        "./services/*"
       ]
     },
     "types": [

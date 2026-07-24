@@ -3,12 +3,12 @@ import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import { ActivityIndicator, Alert, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { handleSocialAuthResult, signInWithApple, signInWithGoogle, signInWithSnapchat, signInWithTikTok } from '../../services/socialAuthService';
-import { loginWithUsername } from '../../services/usernameAuthService';
-import { AuthBrandHeader } from '@/src/_components/auth/AuthBrandHeader';
-import { AuthKeyboardScroll } from '@/src/_components/auth/AuthKeyboardScroll';
-import CustomButton from '@/src/_components/auth/CustomButton';
-import SocialButton from '@/src/_components/auth/SocialButton';
+import { handleSocialAuthResult, signInWithApple, signInWithGoogle, signInWithSnapchat, signInWithTikTok } from '@/src/services/socialAuthService';
+import { loginWithUsername } from '@/src/services/usernameAuthService';
+import { AuthBrandHeader } from '@/src/components/auth/AuthBrandHeader';
+import { AuthKeyboardScroll } from '@/src/components/auth/AuthKeyboardScroll';
+import CustomButton from '@/src/components/auth/CustomButton';
+import SocialButton from '@/src/components/auth/SocialButton';
 import { safeRouterBack } from '@/lib/safeRouterBack';
 
 export default function UsernameLoginScreen() {

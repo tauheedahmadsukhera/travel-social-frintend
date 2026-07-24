@@ -1,4 +1,4 @@
-import { apiService } from '@/src/_services/apiService';
+import { apiService } from '@/src/services/apiService';
 
 // Timeout wrapper to prevent indefinite hanging
 const withTimeout = <T>(promise: Promise<T>, timeoutMs: number = 15000): Promise<T> => {

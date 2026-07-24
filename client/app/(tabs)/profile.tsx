@@ -23,7 +23,7 @@ import {
 } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
 import { safeRouterBack } from '@/lib/safeRouterBack';
-import { useAppDialog } from '@/src/_components/AppDialogProvider';
+import { useAppDialog } from '@/src/components/AppDialogProvider';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { API_BASE_URL, BACKEND_URL } from '../../lib/api';
 import { useCurrentLocation } from '../../hooks/useCurrentLocation';
@@ -34,15 +34,15 @@ import { getOptimizedImageUrl } from '../../lib/imageHelpers';
 import { buildProfileDeepLink, buildProfileWebLink, sharePost, shareProfile } from '../../lib/postShare';
 
 import { userService } from '../../lib/userService';
-import { fetchBlockedUserIds, filterOutBlocked } from '../../services/moderation';
-import HighlightCarousel from '@/src/_components/HighlightCarousel';
-import StoriesViewer from '@/src/_components/StoriesViewer';
+import { fetchBlockedUserIds, filterOutBlocked } from '@/src/services/moderation';
+import HighlightCarousel from '@/src/components/HighlightCarousel';
+import StoriesViewer from '@/src/components/StoriesViewer';
 import * as Clipboard from 'expo-clipboard';
 import { useHeaderVisibility, useHeaderHeight } from './_layout';
 
-import { getTaggedPosts, getUserHighlights as getUserHighlightsAPI, getUserPosts as getUserPostsAPI, getUserProfile as getUserProfileAPI, getUserSections as getUserSectionsAPI } from '@/src/_services/firebaseService';
-import { apiService } from '@/src/_services/apiService';
-import { getKeyboardOffset, getModalHeight } from '@/utils/responsive';
+import { getTaggedPosts, getUserHighlights as getUserHighlightsAPI, getUserPosts as getUserPostsAPI, getUserProfile as getUserProfileAPI, getUserSections as getUserSectionsAPI } from '@/src/services/firebaseService';
+import { apiService } from '@/src/services/apiService';
+import { getKeyboardOffset, getModalHeight } from '@/src/utils/responsive';
 import { getPassportData } from '../../lib/firebaseHelpers/passport';
 import { feedEventEmitter } from '@/lib/feedEventEmitter';
 import { useAssetPreloader } from '@/hooks/useAssetPreloader';
@@ -56,13 +56,13 @@ import { getCachedData, setCachedData, useNetworkStatus, useOfflineBanner } from
 // Shared Utilities & Components
 import { normalizeMediaUrl, normalizeAvatarUrl, isVideoUrl } from '../../lib/utils/media';
 import { toDate, getRelativeTime } from '../../lib/utils/date';
-import ProfileGridItem from '@/src/_components/profile/ProfileGridItem';
-import { ProfilePostMarker } from '@/src/_components/profile/ProfilePostMarker';
+import ProfileGridItem from '@/src/components/profile/ProfileGridItem';
+import { ProfilePostMarker } from '@/src/components/profile/ProfilePostMarker';
 
-import ProfileHeader from '@/src/_components/profile/ProfileHeader';
-import ProfileStats from '@/src/_components/profile/ProfileStats';
+import ProfileHeader from '@/src/components/profile/ProfileHeader';
+import ProfileStats from '@/src/components/profile/ProfileStats';
 
-import ProfileSections from '@/src/_components/profile/ProfileSections';
+import ProfileSections from '@/src/components/profile/ProfileSections';
 import ProfileModals from '@/src/features/profile/components/ProfileModals';
 import ProfileGrid from '@/src/features/profile/components/ProfileGrid';
 import { useProfileActions } from '@/hooks/useProfileActions';
@@ -401,7 +401,7 @@ export default function Profile({ userIdProp }: any) {
     setLoadingLocations(true);
     const timer = setTimeout(async () => {
       try {
-        const { mapService } = require('../../services');
+        const { mapService } = require('@/src/services');
         const suggestions = await mapService.getAutocompleteSuggestions(locationQuery);
         const predictions = suggestions.map((s: any) => ({
           placeId: s.placeId,

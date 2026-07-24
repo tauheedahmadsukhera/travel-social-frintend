@@ -4,22 +4,22 @@ import React, { createContext, useCallback, useContext, useEffect, useMemo, useR
 import { ActivityIndicator, Alert, Animated, Dimensions, StyleSheet, Text, TouchableOpacity, View, FlatList, Modal, ScrollView, Platform } from 'react-native';
 import AsyncStorage from '@/lib/storage';
 import { useNotifications } from '../../hooks/useNotifications';
-import { notificationService, getPushNotificationToken, requestNotificationPermissions, savePushToken } from '../../services/notificationService';
+import { notificationService, getPushNotificationToken, requestNotificationPermissions, savePushToken } from '@/src/services/notificationService';
 import { getAllStoriesForFeed, getUserProfile } from "../../lib/firebaseHelpers/index";
 import { DEFAULT_AVATAR_URL } from "../../lib/api";
 import { useLocalSearchParams } from "expo-router";
-import { AppBrandMark } from '@/src/_components/AppBrandMark';
-import GroupsDrawer from '@/src/_components/GroupsDrawer';
-import NotificationsModal from '@/src/_components/NotificationsModal';
-import StoriesRow from '@/src/_components/StoriesRow';
-import StoriesViewer from '@/src/_components/StoriesViewer';
+import { AppBrandMark } from '@/src/components/AppBrandMark';
+import GroupsDrawer from '@/src/components/GroupsDrawer';
+import NotificationsModal from '@/src/components/NotificationsModal';
+import StoriesRow from '@/src/components/StoriesRow';
+import StoriesViewer from '@/src/components/StoriesViewer';
 import { LinearGradient } from 'expo-linear-gradient';
 
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { logAnalyticsEvent, setAnalyticsUserId } from '../../lib/analytics';
 import { getUserConversations } from '../../lib/firebaseHelpers/conversation';
 import { getUserNotifications } from '../../lib/firebaseHelpers/notification';
-import { logoutUser } from '@/src/_services/firebaseAuthService';
+import { logoutUser } from '@/src/services/firebaseAuthService';
 import { getNotificationDisplayText } from '../../lib/notificationText';
 
 

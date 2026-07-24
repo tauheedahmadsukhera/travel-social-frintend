@@ -7,7 +7,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@/lib/storage';
 import { userService } from '../lib/userService';
 import { DEFAULT_AVATAR_URL } from '@/lib/api';
-import { useAppDialog } from '@/src/_components/AppDialogProvider';
+import { useAppDialog } from '@/src/components/AppDialogProvider';
 import { safeRouterBack } from '@/lib/safeRouterBack';
 import { resolveCanonicalUserId } from '../lib/currentUser';
 

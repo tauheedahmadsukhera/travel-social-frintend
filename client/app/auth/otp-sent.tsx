@@ -3,8 +3,8 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import React from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { AuthBrandHeader } from '@/src/_components/auth/AuthBrandHeader';
-import CustomButton from '@/src/_components/auth/CustomButton';
+import { AuthBrandHeader } from '@/src/components/auth/AuthBrandHeader';
+import CustomButton from '@/src/components/auth/CustomButton';
 import { safeRouterBack } from '@/lib/safeRouterBack';
 
 export default function OTPSentScreen() {

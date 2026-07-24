@@ -1,6 +1,6 @@
 import React from 'react';
 import { render } from '@testing-library/react-native';
-import { OfflineBanner } from '../src/_components/OfflineBanner';
+import { OfflineBanner } from '../src/components/OfflineBanner';
 import { useOfflineBanner } from '../hooks/useOffline';
 
 // Mock the hook

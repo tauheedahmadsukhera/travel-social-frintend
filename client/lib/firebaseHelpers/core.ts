@@ -1,13 +1,13 @@
 import AsyncStorage from '@/lib/storage';
 import * as MediaLibrary from 'expo-media-library';
 import { compressVideoSafe } from '../mediaUtils';
-import { apiService } from '@/src/_services/apiService';
+import { apiService } from '@/src/services/apiService';
 import { API_BASE_URL } from '../api';
 import {
   sendLiveComment as socketSendLiveComment,
   subscribeToLiveStream as socketSubscribeToLiveStream,
   subscribeToMessages as socketSubscribeToMessages
-} from '@/src/_services/socketService';
+} from '@/src/services/socketService';
 
 import { getApps, initializeApp } from 'firebase/app';
 import {

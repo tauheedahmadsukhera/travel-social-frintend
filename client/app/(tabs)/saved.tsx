@@ -32,19 +32,19 @@ import {
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@/lib/storage';
-import CollectionDeleteModal from '@/src/_components/CollectionDeleteModal';
-import SaveToCollectionModal from '@/src/_components/SaveToCollectionModal';
-import PostViewerModal from '@/src/_components/PostViewerModal';
-import CommentSection from '@/src/_components/CommentSection';
-import ProfileGridItem from '@/src/_components/profile/ProfileGridItem';
-import { apiService } from '@/src/_services/apiService';
+import CollectionDeleteModal from '@/src/components/CollectionDeleteModal';
+import SaveToCollectionModal from '@/src/components/SaveToCollectionModal';
+import PostViewerModal from '@/src/components/PostViewerModal';
+import CommentSection from '@/src/components/CommentSection';
+import ProfileGridItem from '@/src/components/profile/ProfileGridItem';
+import { apiService } from '@/src/services/apiService';
 import { feedEventEmitter } from '../../lib/feedEventEmitter';
 import { sharePost } from '../../lib/postShare';
 import { useHeaderHeight } from './_layout';
 import { resolveCanonicalUserId, getAuthenticatedUserId } from '../../lib/currentUser';
 import { hapticLight } from '../../lib/haptics';
 import { getCachedData, setCachedData, useOfflineBanner, useNetworkStatus } from '../../hooks/useOffline';
-import { OfflineBanner } from '@/src/_components/OfflineBanner';
+import { OfflineBanner } from '@/src/components/OfflineBanner';
 import { normalizeMediaUrl, isVideoUrl } from '../../lib/utils/media';
 import { getVideoThumbnailUrl } from '../../lib/imageHelpers';
 
@@ -296,7 +296,7 @@ export default function SavedScreen() {
     if (!currentUserId) return;
     setLoadingGroups(true);
     try {
-      const { apiService } = await import('@/src/_services/apiService');
+      const { apiService } = await import('@/src/services/apiService');
       const res = await apiService.get(`/groups?userId=${currentUserId}`);
       if (res?.success && Array.isArray(res.data)) setGroups(res.data);
     } catch (e) { console.error('loadGroups error', e); }
@@ -307,7 +307,7 @@ export default function SavedScreen() {
     if (!currentUserId) return;
     setLoadingFollowers(true);
     try {
-      const { apiService } = await import('@/src/_services/apiService');
+      const { apiService } = await import('@/src/services/apiService');
       const res = await apiService.get(`/follow/users/${currentUserId}/followers`);
       const list = res?.data || res || [];
       setFollowers(Array.isArray(list) ? list : []);
@@ -320,7 +320,7 @@ export default function SavedScreen() {
       if (followerSearch.trim().length > 1) {
         setSearching(true);
         try {
-          const { apiService } = await import('@/src/_services/apiService');
+          const { apiService } = await import('@/src/services/apiService');
           const res = await apiService.get(`/users/search?q=${encodeURIComponent(followerSearch)}&requesterUserId=${currentUserId}`);
           if (res?.success && Array.isArray(res.data)) {
             const normalized = res.data.map((u: any) => ({

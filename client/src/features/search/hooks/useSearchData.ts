@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { getAllPosts, searchUsers } from '@/lib/firebaseHelpers/index';
 import { getPostsByHashtag, getTrendingHashtags } from '@/lib/mentions';
-import { apiService } from '@/src/_services/apiService';
+import { apiService } from '@/src/services/apiService';
 
 interface UseSearchDataParams {
   query: string;

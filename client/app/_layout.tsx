@@ -9,17 +9,17 @@ import AsyncStorage from '@/lib/storage';
 import * as SystemUI from 'expo-system-ui';
 import 'react-native-gesture-handler';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import { ErrorBoundary } from "@/src/_components/ErrorBoundary";
+import { ErrorBoundary } from "@/src/components/ErrorBoundary";
 import { initSentry } from "../lib/sentry";
-import { UserProvider } from "../src/_components/UserContext";
+import { UserProvider } from "../src/components/UserContext";
 import { Audio } from 'expo-av';
 import { ThemeProvider } from '../lib/theme';
-import { disconnectSocket, getSocket, initializeSocket } from '@/src/_services/socketService';
-import { AppDialogProvider } from '@/src/_components/AppDialogProvider';
+import { disconnectSocket, getSocket, initializeSocket } from '@/src/services/socketService';
+import { AppDialogProvider } from '@/src/components/AppDialogProvider';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useAppStore } from '@/store/useAppStore';
 // Load location service (foreground passport checks + optional TaskManager shim)
-import '../services/locationService';
+import '@/src/services/locationService';
 
 if (typeof global === 'object' && typeof global.WeakRef === 'undefined') {
   // @ts-ignore
@@ -35,14 +35,14 @@ let initializeBackend: any = () => Promise.resolve();
 
 // Safely load services with error handling
 try {
-  const notificationModule = require("../services/notificationHandler");
+  const notificationModule = require("@/src/services/notificationHandler");
   setupNotificationListeners = notificationModule.setupNotificationListeners || (() => {});
 } catch (e) {
   console.warn('[RootLayout] Failed to load notification handler:', e);
 }
 
 try {
-  const backendModule = require("@/src/_services/backendWakeup");
+  const backendModule = require("@/src/services/backendWakeup");
   initializeBackend = backendModule.initializeBackend || (() => Promise.resolve());
 } catch (e) {
   console.warn('[RootLayout] Failed to load backend wakeup:', e);

@@ -28,32 +28,32 @@ import {
   createTempId,
   dedupeById,
   getMessageId,
-} from '../src/_services/dmHelpers';
-import { apiService } from '../src/_services/apiService';
+} from '../src/services/dmHelpers';
+import { apiService } from '../src/services/apiService';
 import { useAppStore } from '@/store/useAppStore';
-import DMHeader from '../src/_components/dm/DMHeader';
-import DMInput from '../src/_components/dm/DMInput';
+import DMHeader from '../src/components/dm/DMHeader';
+import DMInput from '../src/components/dm/DMInput';
 
 import * as ImagePicker from 'expo-image-picker';
 import { DEFAULT_AVATAR_URL } from '@/lib/api';
-import { useAppDialog } from '@/src/_components/AppDialogProvider';
+import { useAppDialog } from '@/src/components/AppDialogProvider';
 import { useOfflineBanner } from '../hooks/useOffline';
 import { useDM } from '../hooks/useDM';
 import { useDMMedia } from '../hooks/useDMMedia';
 import { normalizeMediaUrl, normalizeAvatarUrl } from '../lib/utils/media';
 import { toDate, getRelativeTime } from '../lib/utils/date';
-import { OfflineBanner } from '@/src/_components/OfflineBanner';
+import { OfflineBanner } from '@/src/components/OfflineBanner';
 import { 
   subscribeToMessages as socketSubscribeToMessages,
   initializeSocket,
   sendTypingIndicator,
   stopTypingIndicator,
   subscribeToTyping
-} from '../src/_services/socketService';
+} from '../src/services/socketService';
 
-import MessageBubble from '../src/_components/MessageBubble';
-import ShareModal from '../src/_components/ShareModal';
-import StoriesViewer from '../src/_components/StoriesViewer';
+import MessageBubble from '../src/components/MessageBubble';
+import ShareModal from '../src/components/ShareModal';
+import StoriesViewer from '../src/components/StoriesViewer';
 import EmojiPicker from 'rn-emoji-keyboard';
 // Missing exports from messaging helpers that were used in dm.tsx
 import { 
@@ -64,7 +64,7 @@ import { uploadMedia } from '../lib/firebaseHelpers/core';
 import { 
   subscribeToUserStatus as socketSubscribeToUserStatus,
   requestUserStatus
-} from '../src/_services/socketService';
+} from '../src/services/socketService';
 
 const REACTIONS = ['❤️', '🙌', '🔥', '👏', '😢', '😍', '😮'];
 

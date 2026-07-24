@@ -10,7 +10,7 @@ import { resolveCanonicalUserId } from '@/lib/currentUser';
 import { auth } from '@/config/firebase';
 import AsyncStorage from '@/lib/storage';
 import { useThemeColors } from '@/lib/theme';
-import { apiService } from '@/src/_services/apiService';
+import { apiService } from '@/src/services/apiService';
 
 export default function SettingsScreen() {
   const router = useRouter();

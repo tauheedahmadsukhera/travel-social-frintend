@@ -3,10 +3,10 @@ import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import { ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { handleSocialAuthResult, signInWithApple, signInWithGoogle, signInWithSnapchat, signInWithTikTok } from '../../services/socialAuthService';
-import { AuthBrandHeader } from '@/src/_components/auth/AuthBrandHeader';
-import CustomButton from '@/src/_components/auth/CustomButton';
-import SocialButton from '@/src/_components/auth/SocialButton';
+import { handleSocialAuthResult, signInWithApple, signInWithGoogle, signInWithSnapchat, signInWithTikTok } from '@/src/services/socialAuthService';
+import { AuthBrandHeader } from '@/src/components/auth/AuthBrandHeader';
+import CustomButton from '@/src/components/auth/CustomButton';
+import SocialButton from '@/src/components/auth/SocialButton';
 import { safeRouterBack } from '@/lib/safeRouterBack';
 
 export default function SignUpOptionsScreen() {

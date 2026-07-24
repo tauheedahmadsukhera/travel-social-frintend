@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { AppState } from 'react-native';
-import { notificationService, Notification } from '@/services/notificationService';
+import { notificationService, Notification } from '@/src/services/notificationService';
 
 export const useNotifications = (userId: string, pollInterval = 60000) => {
   const [notifications, setNotifications] = useState<Notification[]>([]);

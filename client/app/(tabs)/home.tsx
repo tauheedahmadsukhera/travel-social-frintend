@@ -19,18 +19,18 @@ import {
 } from "react-native";
 import AsyncStorage from '@/lib/storage';
 import { FlashList } from '@shopify/flash-list';
-import PostCard from '@/src/_components/PostCard';
-import { Skeleton } from '@/src/_components/SkeletonLoader';
+import PostCard from '@/src/components/PostCard';
+import { Skeleton } from '@/src/components/SkeletonLoader';
 import { useHeaderVisibility } from './_layout';
 import { useTabEvent } from './_layout';
 
 import { getCategoryImageSource } from '../../lib/categoryImages';
-import { apiService } from '@/src/_services/apiService';
-import { startLocationTracking } from '../../services/locationService';
+import { apiService } from '@/src/services/apiService';
+import { startLocationTracking } from '@/src/services/locationService';
 import { resolveCanonicalUserId } from '../../lib/currentUser';
 import { useNetworkStatus, useOfflineBanner } from '../../hooks/useOffline';
-import { OfflineBanner } from '@/src/_components/OfflineBanner';
-import { getDisplayRatio } from '@/src/_components/PostCard/PostMedia';
+import { OfflineBanner } from '@/src/components/OfflineBanner';
+import { getDisplayRatio } from '@/src/components/PostCard/PostMedia';
 
 // New Custom Hooks
 import { useHomeFeed } from '@/hooks/useHomeFeed';
