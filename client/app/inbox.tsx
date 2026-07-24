@@ -1,7 +1,7 @@
 import { Feather } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ActivityIndicator, Alert, KeyboardAvoidingView, Modal, Platform, Pressable, RefreshControl, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { ActivityIndicator, Alert, KeyboardAvoidingView, Modal, Platform, Pressable, RefreshControl, StatusBar, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import * as ImagePicker from 'expo-image-picker';
 import { FlashList } from "@shopify/flash-list";
 import AsyncStorage from '@/lib/storage';
@@ -928,8 +928,11 @@ function Inbox() {
     }
     // Fall through to normal UI; FlatList will just render empty.
   }
+  const topInset = insets.top > 0 ? insets.top : (Platform.OS === 'ios' ? 47 : (StatusBar.currentHeight || 24));
+  const bottomInset = insets.bottom > 0 ? insets.bottom : (Platform.OS === 'ios' ? 34 : 0);
+
   return (
-    <SafeAreaView style={styles.container} edges={["top", "bottom"]}>
+    <View style={[styles.container, { paddingTop: topInset, paddingBottom: bottomInset }]}>
       <View testID="inbox-header" style={styles.headerRow}>
         <TouchableOpacity
           onPress={() => {
@@ -972,71 +975,80 @@ function Inbox() {
         </View>
       </View>
 
-      {/* Horizontal Following/Friends List */}
-      {followingUsers.length > 0 && (
-        <View style={{ height: 110, paddingVertical: 10 }}>
-        <FlashList
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          data={followingUsers}
-          keyExtractor={(item) => String(item.uid || item.id || item.firebaseUid)}
-          estimatedItemSize={70}
-          contentContainerStyle={{ paddingHorizontal: 16 }}
-          renderItem={({ item }) => {
-            const isVerifiedUser = !!(item.verified || item.isVerified || item.badge || item.user?.verified || item.user?.isVerified);
-            return (
-              <TouchableOpacity 
-                style={{ alignItems: 'center', marginRight: 18, width: 66 }}
-                onPress={() => {
-                  hapticLight();
-                  router.push({
-                    pathname: '/dm',
-                    params: {
-                      otherUserId: item.uid || item.id || item.firebaseUid,
-                      user: item.name || item.username || 'User',
-                      avatar: item.avatar || '',
-                      isGroup: '0'
-                    }
-                  });
-                }}
-              >
-                <View style={[styles.igAvatarRing, { width: 62, height: 62, borderRadius: 31, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }]}>
-                  {(!item.avatar || item.avatar === DEFAULT_AVATAR_URL || item.avatar.includes('avatardefault.webp')) ? (
-                    <View style={{ width: 56, height: 56, borderRadius: 28, backgroundColor: '#788d9a', alignItems: 'center', justifyContent: 'center' }}>
-                      <Text style={{ color: '#fff', fontSize: 26, fontWeight: '700' }}>
-                        {String(item.name || item.username || 'U').trim().charAt(0).toUpperCase()}
-                      </Text>
-                    </View>
-                  ) : (
-                    <ExpoImage 
-                      source={{ uri: item.avatar }} 
-                      style={{ width: 56, height: 56, borderRadius: 28 }}
-                      contentFit="cover"
-                      cachePolicy="memory-disk"
-                      transition={150}
-                    />
-                  )}
-                </View>
-                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginTop: 4, maxWidth: 66 }}>
-                  <Text 
-                    style={{ fontSize: 11, color: '#262626', textAlign: 'center' }} 
-                    numberOfLines={1}
-                  >
-                    {item.username || item.name}
-                  </Text>
-                  {isVerifiedUser && (
-                    <View style={{ marginLeft: 2 }}>
-                      <VerifiedBadge size={11} />
-                    </View>
-                  )}
-                </View>
-              </TouchableOpacity>
-            );
-          }}
-          ListEmptyComponent={null}
-        />
+      {/* Horizontal Following/Friends List — Reserved 110px height to prevent Cumulative Layout Shift */}
+      <View style={{ height: 110, paddingVertical: 10 }}>
+        {followingUsers.length === 0 ? (
+          <View style={{ flexDirection: 'row', paddingHorizontal: 16 }}>
+            {[1, 2, 3, 4, 5].map((key) => (
+              <View key={key} style={{ alignItems: 'center', marginRight: 18, width: 66 }}>
+                <View style={{ width: 58, height: 58, borderRadius: 29, backgroundColor: '#f3f4f6' }} />
+                <View style={{ width: 42, height: 7, borderRadius: 3.5, backgroundColor: '#f3f4f6', marginTop: 8 }} />
+              </View>
+            ))}
+          </View>
+        ) : (
+          <FlashList
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            data={followingUsers}
+            keyExtractor={(item) => String(item.uid || item.id || item.firebaseUid)}
+            estimatedItemSize={70}
+            contentContainerStyle={{ paddingHorizontal: 16 }}
+            renderItem={({ item }) => {
+              const isVerifiedUser = !!(item.verified || item.isVerified || item.badge || item.user?.verified || item.user?.isVerified);
+              return (
+                <TouchableOpacity 
+                  style={{ alignItems: 'center', marginRight: 18, width: 66 }}
+                  onPress={() => {
+                    hapticLight();
+                    router.push({
+                      pathname: '/dm',
+                      params: {
+                        otherUserId: item.uid || item.id || item.firebaseUid,
+                        user: item.name || item.username || 'User',
+                        avatar: item.avatar || '',
+                        isGroup: '0'
+                      }
+                    });
+                  }}
+                >
+                  <View style={[styles.igAvatarRing, { width: 62, height: 62, borderRadius: 31, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }]}>
+                    {(!item.avatar || item.avatar === DEFAULT_AVATAR_URL || item.avatar.includes('avatardefault.webp')) ? (
+                      <View style={{ width: 56, height: 56, borderRadius: 28, backgroundColor: '#788d9a', alignItems: 'center', justifyContent: 'center' }}>
+                        <Text style={{ color: '#fff', fontSize: 26, fontWeight: '700' }}>
+                          {String(item.name || item.username || 'U').trim().charAt(0).toUpperCase()}
+                        </Text>
+                      </View>
+                    ) : (
+                      <ExpoImage 
+                        source={{ uri: item.avatar }} 
+                        style={{ width: 56, height: 56, borderRadius: 28 }}
+                        contentFit="cover"
+                        cachePolicy="memory-disk"
+                        transition={150}
+                      />
+                    )}
+                  </View>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginTop: 4, maxWidth: 66 }}>
+                    <Text 
+                      style={{ fontSize: 11, color: '#262626', textAlign: 'center' }} 
+                      numberOfLines={1}
+                    >
+                      {item.username || item.name}
+                    </Text>
+                    {isVerifiedUser && (
+                      <View style={{ marginLeft: 2 }}>
+                        <VerifiedBadge size={11} />
+                      </View>
+                    )}
+                  </View>
+                </TouchableOpacity>
+              );
+            }}
+            ListEmptyComponent={null}
+          />
+        )}
       </View>
-      )}
 
       <View style={styles.tabsWrap}>
         <TouchableOpacity
@@ -1166,7 +1178,7 @@ function Inbox() {
         setConfirmDeleteVisible={setConfirmDeleteVisible}
         handleDelete={handleDelete}
       />
-    </SafeAreaView>
+    </View>
   );
 }
 
